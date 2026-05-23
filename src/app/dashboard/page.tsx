@@ -1,0 +1,117 @@
+"use client";
+
+import Link from "next/link";
+import { Bell, CalendarCheck, CalendarDays, CheckCircle2, FileText, HeartHandshake, LayoutGrid, PlayCircle, Users } from "lucide-react";
+import { AppShell } from "@/components/app-shell";
+import { useAuth } from "@/components/auth-provider";
+import { CareTaskCard } from "@/components/care-task-card";
+import { MetricCard } from "@/components/metric-card";
+import { ProgressBar } from "@/components/progress-bar";
+import { SectionHeader } from "@/components/section-header";
+import { getVisibleCareTasks, getVisibleCells, getVisiblePeople } from "@/lib/access-control";
+import { careTasks } from "@/lib/data";
+import { useCells, useLocalPeople } from "@/lib/local-store";
+
+export default function DashboardPage() {
+  const { currentUser } = useAuth();
+  const { people } = useLocalPeople();
+  const { cells } = useCells();
+  const visiblePeople = getVisiblePeople(currentUser, people);
+  const visibleCells = getVisibleCells(currentUser, cells);
+  const visibleCareTasks = getVisibleCareTasks(currentUser, careTasks, people);
+  const present = visiblePeople.filter((person) => person.cellAbsences === 0).length;
+  const servicePresent = visiblePeople.filter((person) => person.servicePresent).length;
+  const averageProgress = visiblePeople.length
+    ? Math.round(visiblePeople.reduce((sum, person) => sum + person.progress, 0) / visiblePeople.length)
+    : 0;
+
+  return (
+    <AppShell>
+      <section className="animate-enter space-y-5">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <MetricCard icon={LayoutGrid} label="Celulas" value={String(visibleCells.length)} accent="bg-emerald-500" />
+          <MetricCard icon={Users} label="Pessoas" value={String(visiblePeople.length)} accent="bg-sky-500" />
+          <MetricCard icon={CheckCircle2} label="Presentes" value={String(present)} accent="bg-sky-500" />
+          <MetricCard icon={Bell} label="Cuidados" value={String(visibleCareTasks.length)} accent="bg-amber-500" />
+        </div>
+
+        <div className="rounded-lg border border-white/80 bg-slate-950 p-5 text-white shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase text-emerald-200">Hoje</p>
+              <h2 className="mt-1 text-2xl font-semibold">Cuidado pastoral em movimento</h2>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">
+                O painel prioriza pessoas, presenca e discipulado para o lider agir rapido pelo celular.
+              </p>
+            </div>
+            <CalendarCheck className="hidden text-emerald-200 sm:block" size={32} />
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg bg-white/10 p-3">
+              <p className="text-xs text-slate-300">Culto</p>
+              <p className="mt-1 text-lg font-semibold">{servicePresent} confirmados</p>
+            </div>
+            <div className="rounded-lg bg-white/10 p-3">
+              <p className="text-xs text-slate-300">Trilha ativa</p>
+              <p className="mt-1 text-lg font-semibold">Primeiros Passos</p>
+            </div>
+            <div className="rounded-lg bg-white/10 p-3">
+              <p className="text-xs text-slate-300">Proxima celula</p>
+              <p className="mt-1 text-lg font-semibold">Terca, 20h</p>
+            </div>
+          </div>
+        </div>
+
+        <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {[
+            { href: "/celulas", label: "Celulas", icon: LayoutGrid },
+            { href: "/relatorios/novo", label: "Relatorio", icon: FileText },
+            { href: "/agenda", label: "Agenda", icon: CalendarDays },
+            { href: "/videos", label: "Videos", icon: PlayCircle },
+            { href: "/cuidados", label: "Cuidados", icon: HeartHandshake },
+          ].map(({ href, label, icon: Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              className="rounded-lg border border-white/80 bg-white/90 p-4 text-center text-sm font-bold text-slate-700 shadow-sm hover:border-emerald-200"
+            >
+              <Icon className="mx-auto mb-2 text-emerald-800" size={22} />
+              {label}
+            </Link>
+          ))}
+        </section>
+
+        <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+          <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+            <SectionHeader eyebrow="Acoes" title="Cuidados recomendados" />
+            <div className="grid gap-3 lg:grid-cols-2">
+              {visibleCareTasks.slice(0, 4).map((task) => (
+                <CareTaskCard key={task.id} task={task} />
+              ))}
+              {visibleCareTasks.length === 0 && (
+                <p className="rounded-lg bg-slate-50 p-4 text-sm font-medium text-slate-500">
+                  Nenhum cuidado pendente para este perfil.
+                </p>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+            <SectionHeader eyebrow="Discipulado" title={`Progresso medio: ${averageProgress}%`} />
+            <div className="space-y-4">
+              {visiblePeople.map((person) => (
+                <div key={person.id}>
+                  <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                    <span className="truncate font-medium text-slate-700">{person.name}</span>
+                    <span className="font-semibold text-emerald-700">{person.progress}%</span>
+                  </div>
+                  <ProgressBar value={person.progress} />
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </section>
+    </AppShell>
+  );
+}

@@ -1,0 +1,58 @@
+{
+  "name": "Ovelhas",
+  "short_name": "Ovelhas",
+  "description": "Cuidado pastoral, celulas e discipulado em video. By Savio Cipriano.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f8f3",
+  "theme_color": "#064e3b",
+  "categories": ["productivity", "education"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Cuidados",
+      "short_name": "Cuidados",
+      "url": "/cuidados",
+      "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Presenca",
+      "short_name": "Presenca",
+      "url": "/presenca",
+      "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Agenda",
+      "short_name": "Agenda",
+      "url": "/agenda",
+      "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Alertas",
+      "short_name": "Alertas",
+      "url": "/notificacoes",
+      "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Celulas",
+      "short_name": "Celulas",
+      "url": "/celulas",
+      "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Relatorios",
+      "short_name": "Relatorios",
+      "url": "/relatorios",
+      "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ]
+}
