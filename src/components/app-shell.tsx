@@ -24,11 +24,13 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Smartphone,
   UserRound,
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { NotificationBridge } from "@/components/notification-bridge";
 import { PwaStatus } from "@/components/pwa-status";
 import { roleLabels } from "@/lib/data";
 import { usePastoralNotifications } from "@/lib/use-pastoral-notifications";
@@ -50,6 +52,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/atividades", label: "Atividades", icon: Activity },
   { href: "/relatorios", label: "Relatorios", icon: ChartNoAxesCombined },
   { href: "/configuracoes", label: "Ajustes", icon: Settings },
+  { href: "/instalar", label: "Instalar", icon: Smartphone },
 ];
 
 const mobileNavItems: { href: string; label: string; icon: LucideIcon }[] = [
@@ -186,6 +189,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </main>
 
       <PwaStatus />
+      <NotificationBridge />
 
       <nav className="fixed inset-x-3 bottom-3 z-40 rounded-[22px] border border-white/75 bg-white/90 p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-2xl shadow-slate-900/10 backdrop-blur-xl lg:hidden">
         <div className="grid grid-cols-5 gap-1">

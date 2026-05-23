@@ -1,8 +1,10 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { Copy, Link2, MessageCircle, Send, UserPlus } from "lucide-react";
+import { Copy, Link2, MessageCircle, QrCode, Send, Share2, UserPlus } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
@@ -57,6 +59,22 @@ export default function InvitesPage() {
   async function copyLink(link: string) {
     await navigator.clipboard?.writeText(link);
     setFeedback("Link copiado.");
+  }
+
+  async function shareInvite(link: string, inviteName = "novo acesso") {
+    const text = `Aqui esta seu convite para entrar no Ovelhas: ${link}`;
+
+    if (navigator.share) {
+      await navigator.share({
+        title: `Convite Ovelhas - ${inviteName}`,
+        text,
+        url: link,
+      });
+      return;
+    }
+
+    await navigator.clipboard?.writeText(text);
+    setFeedback("Mensagem do convite copiada.");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -163,11 +181,22 @@ export default function InvitesPage() {
               <SectionHeader eyebrow="Compartilhar" title="Ultimo convite" />
               {lastLink ? (
                 <div className="space-y-3">
+                  <div className="flex justify-center rounded-lg bg-slate-50 p-4">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(lastLink)}`}
+                      alt="QR Code do convite"
+                      className="h-36 w-36 rounded-lg bg-white p-2"
+                    />
+                  </div>
                   <div className="break-all rounded-lg bg-slate-50 p-4 text-sm font-semibold text-slate-700">{lastLink}</div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button onClick={() => copyLink(lastLink)} className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white">
                       <Copy size={17} />
                       Copiar
+                    </button>
+                    <button onClick={() => shareInvite(lastLink)} className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-sky-700 px-4 text-sm font-bold text-white">
+                      <Share2 size={17} />
+                      Enviar
                     </button>
                     <a
                       href={whatsappLink("", `Aqui esta seu convite para entrar no Ovelhas: ${lastLink}`)}
@@ -215,11 +244,28 @@ export default function InvitesPage() {
                       <Link2 size={15} />
                       Copiar link
                     </button>
+                    <button onClick={() => shareInvite(link, invite.name || roleLabels[invite.role])} className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-sky-700 px-3 text-xs font-bold text-white">
+                      <Share2 size={15} />
+                      Enviar
+                    </button>
                     <a href={`/convite/${invite.token}`} className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-900 px-3 text-xs font-bold text-white">
                       <Send size={15} />
                       Abrir
                     </a>
                   </div>
+                  <details className="mt-2">
+                    <summary className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-500">
+                      <QrCode size={14} />
+                      Mostrar QR Code
+                    </summary>
+                    <div className="mt-3 flex justify-center rounded-lg bg-white p-3">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(link)}`}
+                        alt="QR Code do convite"
+                        className="h-32 w-32"
+                      />
+                    </div>
+                  </details>
                 </article>
               );
             })}

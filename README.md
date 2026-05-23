@@ -50,11 +50,15 @@ Essa tela cria a primeira igreja e promove seu usuario para administrador.
 ## Rotas principais
 
 - `/dashboard`
+- `/instalar`
 - `/celulas`
 - `/pessoas`
 - `/presenca`
+- `/checkin`
 - `/cuidados`
 - `/videos`
+- `/biblioteca`
+- `/notificacoes`
 - `/relatorios`
 - `/relatorios/novo`
 - `/supervisao`
@@ -70,3 +74,17 @@ Essa tela cria a primeira igreja e promove seu usuario para administrador.
 - Supervisor
 - Lider
 - Membro
+
+## App no telefone
+
+O Ovelhas ja pode ser instalado como PWA pela rota:
+
+```txt
+/instalar
+```
+
+Tambem existe preparo para app nativo com Capacitor. Veja:
+
+```txt
+NATIVE_APP.md
+```

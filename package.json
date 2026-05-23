@@ -6,9 +6,21 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "native:sync": "cap sync",
+    "native:add:android": "cap add android",
+    "native:open:android": "cap open android",
+    "native:add:ios": "cap add ios",
+    "native:open:ios": "cap open ios",
+    "native:doctor": "cap doctor"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/ios": "^8.3.4",
+    "@capacitor/local-notifications": "^8.0.1",
+    "@capacitor/local-notifications": "^8.2.0",
     "@supabase/supabase-js": "^2.106.1",
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.16.0",

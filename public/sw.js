@@ -1,4 +1,4 @@
-const CACHE_NAME = "ovelhas-v2";
+const CACHE_NAME = "ovelhas-v3";
 const APP_SHELL = [
   "/",
   "/dashboard",
@@ -12,6 +12,10 @@ const APP_SHELL = [
   "/gestao",
   "/convites",
   "/notificacoes",
+  "/biblioteca",
+  "/checkin",
+  "/configuracoes",
+  "/instalar",
   "/atividades",
   "/relatorios",
   "/relatorios/novo",
@@ -28,6 +32,24 @@ self.addEventListener("install", (event) => {
       .open(CACHE_NAME)
       .then((cache) => cache.addAll(APP_SHELL))
       .then(() => self.skipWaiting()),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || "/notificacoes";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ("focus" in client) {
+          client.navigate(targetUrl);
+          return client.focus();
+        }
+      }
+
+      return self.clients.openWindow(targetUrl);
+    }),
   );
 });
 

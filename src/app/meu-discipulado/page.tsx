@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Lock, MessageCircle, PlayCircle } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, CheckCircle2, ExternalLink, Lock, MessageCircle, PlayCircle, Save } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { useActivityEvents, useDiscipleship, useLocalPeople } from "@/lib/local-store";
+import { getVideoEmbedUrl, isEmbeddableVideo } from "@/lib/video";
 
 function formatDuration(seconds: number) {
   const minutes = Math.max(1, Math.round(seconds / 60));
@@ -21,6 +22,8 @@ export default function MemberDiscipleshipPage() {
   const { tracks, videos, accesses, progress, updateVideoProgress } = useDiscipleship();
   const { addEvent } = useActivityEvents();
   const [feedback, setFeedback] = useState("");
+  const [selectedVideoId, setSelectedVideoId] = useState("");
+  const [reflection, setReflection] = useState("");
   const member =
     people.find((person) => person.personUserId === currentUser.id || person.id === currentUser.personId) ??
     people[1];
@@ -39,8 +42,20 @@ export default function MemberDiscipleshipPage() {
     : 0;
   const nextVideo =
     trackVideos.find((video) => (progressByVideo.get(video.id)?.progressPercent ?? 0) < 100) ?? trackVideos[0];
+  const selectedVideo = trackVideos.find((video) => video.id === selectedVideoId) ?? nextVideo;
+  const selectedProgress = selectedVideo ? progressByVideo.get(selectedVideo.id)?.progressPercent ?? 0 : 0;
 
-  async function completeVideo(videoId: string) {
+  useEffect(() => {
+    if (!selectedVideo?.id || typeof window === "undefined") {
+      return;
+    }
+
+    queueMicrotask(() => {
+      setReflection(window.localStorage.getItem(`ovelhas:reflection:${member.id}:${selectedVideo.id}`) ?? "");
+    });
+  }, [member.id, selectedVideo?.id]);
+
+  async function saveVideoProgress(videoId: string, progressPercent: number) {
     const video = trackVideos.find((item) => item.id === videoId);
     if (!video) {
       return;
@@ -49,7 +64,7 @@ export default function MemberDiscipleshipPage() {
     const result = await updateVideoProgress({
       personId: member.id,
       videoId,
-      progressPercent: 100,
+      progressPercent,
       persistToSupabase: !isDemoMode,
     });
 
@@ -58,23 +73,34 @@ export default function MemberDiscipleshipPage() {
       return;
     }
 
-    await addEvent({
-      churchId: member.churchId,
-      actorUserId: currentUser.id,
-      actorName: member.name,
-      actorRole: currentUser.role,
-      action: "Concluiu video",
-      description: `${member.name} concluiu a aula ${video.title}.`,
-      targetType: "video",
-      targetId: video.id,
-      targetName: video.title,
-      personId: member.id,
-      cellId: member.cellId,
-      visibility: "cell",
-      persistToSupabase: !isDemoMode,
-    });
+    if (progressPercent >= 100) {
+      await addEvent({
+        churchId: member.churchId,
+        actorUserId: currentUser.id,
+        actorName: member.name,
+        actorRole: currentUser.role,
+        action: "Concluiu video",
+        description: `${member.name} concluiu a aula ${video.title}.`,
+        targetType: "video",
+        targetId: video.id,
+        targetName: video.title,
+        personId: member.id,
+        cellId: member.cellId,
+        visibility: "cell",
+        persistToSupabase: !isDemoMode,
+      });
+    }
 
-    setFeedback(`Aula concluida: ${video.title}.`);
+    setFeedback(progressPercent >= 100 ? `Aula concluida: ${video.title}.` : `Progresso salvo em ${progressPercent}%.`);
+  }
+
+  function saveReflection() {
+    if (!selectedVideo || typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(`ovelhas:reflection:${member.id}:${selectedVideo.id}`, reflection);
+    setFeedback("Resposta salva no aparelho.");
   }
 
   return (
@@ -110,22 +136,75 @@ export default function MemberDiscipleshipPage() {
         {activeTrack && nextVideo ? (
           <>
             <section className="mt-5 rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
-              <SectionHeader eyebrow="Proximo video" title={nextVideo.title} />
-              <div className="aspect-video rounded-lg bg-[linear-gradient(135deg,#0f766e,#2563eb)] p-5 text-white">
-                <div className="flex h-full flex-col justify-between">
-                  <PlayCircle size={42} className="animate-soft-pulse" />
-                  <div>
-                    <p className="text-sm font-semibold">{nextVideo.description}</p>
-                    <p className="mt-2 text-xs font-bold text-emerald-100">{formatDuration(nextVideo.durationSeconds)}</p>
+              <SectionHeader eyebrow={selectedVideo?.id === nextVideo.id ? "Proximo video" : "Aula selecionada"} title={selectedVideo?.title ?? nextVideo.title} />
+              {selectedVideo && isEmbeddableVideo(selectedVideo.videoUrl) ? (
+                <iframe
+                  src={getVideoEmbedUrl(selectedVideo.videoUrl)}
+                  title={selectedVideo.title}
+                  className="aspect-video w-full rounded-lg border-0 bg-slate-950"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              ) : (
+                <div className="aspect-video rounded-lg bg-[linear-gradient(135deg,#0f766e,#2563eb)] p-5 text-white">
+                  <div className="flex h-full flex-col justify-between">
+                    <PlayCircle size={42} className="animate-soft-pulse" />
+                    <div>
+                      <p className="text-sm font-semibold">{selectedVideo?.description ?? nextVideo.description}</p>
+                      <p className="mt-2 text-xs font-bold text-emerald-100">{formatDuration(selectedVideo?.durationSeconds ?? nextVideo.durationSeconds)}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
+              {selectedVideo && (
+                <>
+                  <div className="mt-4">
+                    <div className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-600">
+                      <span>Seu progresso</span>
+                      <span>{selectedProgress}%</span>
+                    </div>
+                    <ProgressBar value={selectedProgress} />
+                  </div>
+                  <div className="mt-4 grid grid-cols-4 gap-2">
+                    {[25, 50, 75, 100].map((percent) => (
+                      <button
+                        key={percent}
+                        onClick={() => saveVideoProgress(selectedVideo.id, percent)}
+                        className={`min-h-11 rounded-lg text-sm font-bold ${
+                          percent === 100 ? "bg-emerald-900 text-white" : "bg-slate-100 text-slate-700"
+                        }`}
+                      >
+                        {percent === 100 ? "Concluir" : `${percent}%`}
+                      </button>
+                    ))}
+                  </div>
+                  <a
+                    href={selectedVideo.videoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-3 flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700"
+                  >
+                    <ExternalLink size={17} />
+                    Abrir video fora do app
+                  </a>
+                </>
+              )}
+            </section>
+
+            <section className="mt-5 rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+              <SectionHeader eyebrow="Reflexao" title="O que voce aprendeu?" />
+              <textarea
+                value={reflection}
+                onChange={(event) => setReflection(event.target.value)}
+                placeholder="Escreva uma resposta, duvida ou decisao para conversar com seu lider."
+                className="min-h-28 w-full rounded-lg border border-slate-200 bg-white p-3 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+              />
               <button
-                onClick={() => completeVideo(nextVideo.id)}
-                className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-900 px-4 text-sm font-bold text-white"
+                onClick={saveReflection}
+                className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white"
               >
-                <CheckCircle2 size={18} />
-                Marcar aula como concluida
+                <Save size={17} />
+                Salvar reflexao
               </button>
             </section>
 
@@ -137,7 +216,15 @@ export default function MemberDiscipleshipPage() {
                   const isLocked = index > 0 && (progressByVideo.get(trackVideos[index - 1]?.id)?.progressPercent ?? 0) < 100;
 
                   return (
-                    <div key={video.id} className="rounded-lg bg-slate-50 p-4">
+                    <button
+                      key={video.id}
+                      onClick={() => {
+                        if (!isLocked) {
+                          setSelectedVideoId(video.id);
+                        }
+                      }}
+                      className={`w-full rounded-lg p-4 text-left ${selectedVideo?.id === video.id ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-slate-50"}`}
+                    >
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
                           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-800">
@@ -151,7 +238,7 @@ export default function MemberDiscipleshipPage() {
                         <span className="text-xs font-bold text-emerald-700">{itemProgress}%</span>
                       </div>
                       <ProgressBar value={itemProgress} />
-                    </div>
+                    </button>
                   );
                 })}
               </div>

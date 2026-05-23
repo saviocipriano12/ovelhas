@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import {
   Bell,
+  BellRing,
   CalendarDays,
   CheckCheck,
   CheckCircle2,
@@ -18,6 +19,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { SectionHeader } from "@/components/section-header";
+import { notificationsEnabled, requestDeviceNotificationPermission } from "@/lib/device-notifications";
 import type { PastoralNotification } from "@/lib/notifications";
 import { usePastoralNotifications } from "@/lib/use-pastoral-notifications";
 
@@ -67,6 +69,15 @@ function typeLabel(type: PastoralNotification["type"]) {
 export default function NotificationsPage() {
   const { notifications, unread, readSet, markRead, markUnread, markAllRead } = usePastoralNotifications();
   const [filter, setFilter] = useState<"all" | "unread" | PastoralNotification["priority"]>("unread");
+  const [deviceEnabled, setDeviceEnabled] = useState(() => notificationsEnabled());
+  const [feedback, setFeedback] = useState("");
+
+  async function enableDeviceNotifications() {
+    const result = await requestDeviceNotificationPermission();
+    setDeviceEnabled(result.ok);
+    setFeedback(result.ok ? "Avisos do aparelho ativados." : "Nao consegui ativar os avisos neste aparelho.");
+  }
+
   const filteredNotifications = notifications.filter((notification) => {
     if (filter === "all") {
       return true;
@@ -88,15 +99,28 @@ export default function NotificationsPage() {
           eyebrow="Central inteligente"
           title="Notificacoes"
           action={
-            <button
-              onClick={() => markAllRead(notifications.map((notification) => notification.id))}
-              className="flex min-h-10 items-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-bold text-white"
-            >
-              <CheckCheck size={16} />
-              Ler tudo
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={enableDeviceNotifications}
+                className={`flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-bold ${
+                  deviceEnabled ? "bg-emerald-50 text-emerald-800" : "bg-amber-100 text-amber-950"
+                }`}
+              >
+                <BellRing size={16} />
+                {deviceEnabled ? "Aparelho ativo" : "Ativar aparelho"}
+              </button>
+              <button
+                onClick={() => markAllRead(notifications.map((notification) => notification.id))}
+                className="flex min-h-10 items-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-bold text-white"
+              >
+                <CheckCheck size={16} />
+                Ler tudo
+              </button>
+            </div>
           }
         />
+
+        {feedback && <p className="rounded-lg bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{feedback}</p>}
 
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-lg bg-slate-950 p-4 text-white">

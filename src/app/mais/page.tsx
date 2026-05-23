@@ -22,6 +22,7 @@ import {
   Bell,
   BookOpen,
   QrCode,
+  Smartphone,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -39,6 +40,7 @@ const menuItems: { href: string; title: string; description: string; icon: Lucid
   { href: "/oracao", title: "Oracao", description: "Pedidos de oracao com privacidade por nivel.", icon: Heart },
   { href: "/biblioteca", title: "Biblioteca", description: "Materiais, devocionais e certificados.", icon: BookOpen },
   { href: "/notificacoes", title: "Notificacoes", description: "Alertas de ausencia, videos, relatorios e supervisao.", icon: Bell },
+  { href: "/instalar", title: "Instalar app", description: "PWA, notificacoes e preparo para Android/iOS.", icon: Smartphone },
   { href: "/supervisao", title: "Supervisao", description: "Marcar visitas e acompanhar celulas da semana.", icon: Eye },
   { href: "/gestao", title: "Gestao", description: "Ver supervisores, lideres e lacunas de responsabilidade.", icon: Network },
   { href: "/atividades", title: "Atividades", description: "Ver o que lideres, supervisores e membros fizeram.", icon: Activity },

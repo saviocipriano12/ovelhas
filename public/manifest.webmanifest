@@ -43,6 +43,12 @@
       "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
     },
     {
+      "name": "Instalar",
+      "short_name": "Instalar",
+      "url": "/instalar",
+      "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
       "name": "Celulas",
       "short_name": "Celulas",
       "url": "/celulas",

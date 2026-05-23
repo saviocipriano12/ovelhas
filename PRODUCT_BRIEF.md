@@ -38,6 +38,8 @@ O app nao deve parecer apenas um sistema administrativo. A experiencia precisa s
 - Estrutura Next.js com rotas reais.
 - Layout mobile-first com navegacao inferior.
 - PWA instalavel no telefone.
+- Preparacao de app nativo com Capacitor.
+- Central de instalacao, compartilhamento e notificacoes do aparelho.
 - Modo offline para presenca.
 - Dashboard do lider.
 - Lista de pessoas.
@@ -50,7 +52,9 @@ O app nao deve parecer apenas um sistema administrativo. A experiencia precisa s
 - Pedidos de oracao.
 - Agenda pastoral.
 - Notificacoes internas inteligentes.
+- Notificacoes locais para alertas urgentes/altos.
 - Painel do novo membro.
+- Player de video embutido com progresso e reflexao.
 - Configuracoes, LGPD, auditoria e exportacao.
 - Componentes reutilizaveis e dados mockados centralizados.
 

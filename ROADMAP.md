@@ -5,6 +5,8 @@
 O app ja tem uma base mobile-first com:
 
 - PWA instalavel.
+- Base nativa com Capacitor para Android/iOS.
+- Central `/instalar` para PWA, compartilhamento e permissao de notificacoes.
 - Modo offline com fila local para presenca.
 - Navegacao inferior para uso no telefone.
 - Rotas reais para dashboard, pessoas, perfil, presencas, videos, cuidados e meu discipulado.
@@ -63,6 +65,8 @@ O app ja tem uma base mobile-first com:
 - Lider gera QR de check-in.
 - Pastor/admin cadastra materiais e emite certificados.
 - Admin/pastor exporta backup e acompanha auditoria.
+- Lider ou membro instala o app e ativa avisos do aparelho.
+- Membro assiste video embutido, salva progresso e registra reflexao.
 
 ## Automacoes
 
@@ -81,3 +85,4 @@ O app ja tem uma base mobile-first com:
 - Presenca deve ser marcada em menos de 30 segundos.
 - WhatsApp deve estar sempre a um toque de distancia.
 - O app deve funcionar bem como PWA instalado no Android e iOS.
+- O empacotamento nativo deve manter a mesma experiencia mobile do PWA.
