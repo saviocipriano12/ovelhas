@@ -44,8 +44,8 @@ export default function InvitesPage() {
   const [cellId, setCellId] = useState(visibleCells[0]?.id ?? "");
   const [feedback, setFeedback] = useState("");
   const [lastLink, setLastLink] = useState("");
-  const canInviteLeadership = currentUser.role === "admin" || currentUser.role === "pastor";
-  const canInviteMember = currentUser.role === "admin" || currentUser.role === "pastor" || currentUser.role === "leader";
+  const canInviteLeadership = currentUser.role === "admin";
+  const canInviteMember = currentUser.role === "admin" || currentUser.role === "leader";
   const allowedRoles = useMemo<UserRole[]>(() => {
     if (canInviteLeadership) {
       return ["pastor", "supervisor", "leader", "member"];

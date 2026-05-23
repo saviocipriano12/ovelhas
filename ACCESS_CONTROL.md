@@ -122,10 +122,32 @@ O membro ve apenas:
 - seu lider;
 - videos liberados;
 - progresso no discipulado;
+- confirmacao de presenca da semana;
+- biblioteca liberada para membros;
+- pedidos de oracao permitidos;
+- notificacoes proprias;
 - historico permitido;
 - botao para falar com o lider.
 
 O membro nao ve lista de pessoas, relatorios, notas privadas ou informacoes de outros membros.
+
+## Entrada de usuarios
+
+O fluxo correto e por convite:
+
+1. Administrador cria pastor, supervisor e lider.
+2. Lider ou administrador cria convite para membro.
+3. A pessoa abre o link, cria/entra na conta e aceita o convite.
+4. O convite vincula igreja, papel e celula.
+
+Conta criada diretamente em `/login` fica pendente:
+
+- sem `church_id`;
+- sem pessoa vinculada;
+- sem acesso a rotas operacionais;
+- redirecionada para `/aguardando`.
+
+Essa conta so passa a ver o app quando aceita um convite ou quando o administrador vincula corretamente.
 
 ## Campos de acesso usados no prototipo
 
@@ -225,7 +247,10 @@ O membro nunca deve acessar notas privadas da lideranca.
 O app ja tem:
 
 - usuarios mockados e perfis reais vindos de `profiles` no Supabase;
-- seletor de perfil em `/acesso`;
+- bloqueio de rota por perfil;
+- menu filtrado por perfil;
+- contas sem convite tratadas como pendentes;
+- seletor de perfil restrito ao fluxo administrativo/demonstração;
 - papeis alinhados a administrador, pastor, supervisor, lider e membro;
 - filtragem por perfil em dashboard, pessoas, presenca, videos, cuidados e perfil;
 - criacao local de pessoas com `createdByUserId` e `leaderUserId`;

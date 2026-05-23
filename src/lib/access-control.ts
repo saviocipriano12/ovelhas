@@ -8,7 +8,106 @@ import type {
   Person,
   PrayerRequest,
   SupervisorVisit,
+  UserRole,
 } from "@/lib/data";
+
+const roleRoutes: Record<UserRole, string[]> = {
+  admin: ["*"],
+  pastor: [
+    "/dashboard",
+    "/celulas",
+    "/pessoas",
+    "/presenca",
+    "/checkin",
+    "/agenda",
+    "/cuidados",
+    "/oracao",
+    "/biblioteca",
+    "/notificacoes",
+    "/supervisao",
+    "/atividades",
+    "/relatorios",
+    "/relatorios/novo",
+    "/videos",
+    "/instalar",
+    "/mais",
+  ],
+  supervisor: [
+    "/dashboard",
+    "/celulas",
+    "/pessoas",
+    "/agenda",
+    "/cuidados",
+    "/oracao",
+    "/biblioteca",
+    "/notificacoes",
+    "/supervisao",
+    "/atividades",
+    "/relatorios",
+    "/instalar",
+    "/mais",
+  ],
+  leader: [
+    "/dashboard",
+    "/celulas",
+    "/pessoas",
+    "/presenca",
+    "/checkin",
+    "/agenda",
+    "/cuidados",
+    "/oracao",
+    "/biblioteca",
+    "/notificacoes",
+    "/convites",
+    "/relatorios",
+    "/relatorios/novo",
+    "/videos",
+    "/instalar",
+    "/mais",
+  ],
+  member: ["/meu-discipulado", "/oracao", "/biblioteca", "/notificacoes", "/instalar", "/mais"],
+};
+
+export function isPendingAccount(user: AppUser) {
+  return user.churchId === "sem-igreja" || (user.role === "member" && !user.personId);
+}
+
+export function getDefaultRoute(user: AppUser) {
+  if (isPendingAccount(user)) {
+    return "/aguardando";
+  }
+
+  if (user.role === "member") {
+    return "/meu-discipulado";
+  }
+
+  return "/dashboard";
+}
+
+export function canAccessRoute(user: AppUser, pathname: string) {
+  if (pathname === "/aguardando") {
+    return isPendingAccount(user);
+  }
+
+  if (pathname === "/configuracao") {
+    return user.role === "admin" && !isPendingAccount(user);
+  }
+
+  if (isPendingAccount(user)) {
+    return false;
+  }
+
+  if (pathname === "/") {
+    return true;
+  }
+
+  const allowedRoutes = roleRoutes[user.role];
+  if (allowedRoutes.includes("*")) {
+    return true;
+  }
+
+  return allowedRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+}
 
 export function canManagePeople(user: AppUser) {
   return user.role === "admin" || user.role === "pastor" || user.role === "leader";

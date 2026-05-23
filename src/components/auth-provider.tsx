@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { canAccessRoute, getDefaultRoute } from "@/lib/access-control";
 import type { AppUser } from "@/lib/data";
 import { users, type UserRole } from "@/lib/data";
 import { supabase } from "@/lib/supabase/client";
@@ -138,7 +139,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    router.replace("/dashboard");
+    router.replace(getDefaultRoute(supabaseUser));
+  }, [isLoadingAuth, pathname, router, supabaseUser]);
+
+  useEffect(() => {
+    if (isLoadingAuth || !supabaseUser || isPublicRoute(pathname)) {
+      return;
+    }
+
+    if (!canAccessRoute(supabaseUser, pathname)) {
+      router.replace(getDefaultRoute(supabaseUser));
+    }
   }, [isLoadingAuth, pathname, router, supabaseUser]);
 
   const demoUser = users.find((user) => user.id === currentUserId) ?? users[3];
@@ -161,17 +172,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const blockedProtectedRoute = !isLoadingAuth && !supabaseUser && !isPublicRoute(pathname);
+  const blockedByRole = !isLoadingAuth && Boolean(supabaseUser) && !isPublicRoute(pathname) && !canAccessRoute(currentUser, pathname);
 
   return (
     <AuthContext.Provider value={value}>
-      {isLoadingAuth || blockedProtectedRoute ? (
+      {isLoadingAuth || blockedProtectedRoute || blockedByRole ? (
         <main className="flex min-h-screen items-center justify-center bg-[#f7f8f3] px-6 text-center text-slate-900">
           <div>
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-900 text-xl font-black text-white shadow-lg shadow-emerald-900/20">
               O
             </div>
             <p className="mt-4 text-sm font-bold text-emerald-800">Ovelhas</p>
-            <p className="mt-2 text-sm text-slate-500">{isLoadingAuth ? "Verificando acesso..." : "Redirecionando para login..."}</p>
+            <p className="mt-2 text-sm text-slate-500">
+              {isLoadingAuth ? "Verificando acesso..." : blockedByRole ? "Ajustando area permitida..." : "Redirecionando para login..."}
+            </p>
           </div>
         </main>
       ) : (

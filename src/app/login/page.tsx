@@ -94,11 +94,11 @@ export default function LoginPage() {
     }
 
     if (data.session) {
-      setMessage("Conta criada. Voce ja pode continuar no app.");
-      router.push(nextPath.startsWith("/") ? nextPath : "/dashboard");
+      setMessage("Conta criada. Agora use um convite da igreja ou aguarde sua lideranca liberar o acesso.");
+      router.push("/aguardando");
       router.refresh();
     } else {
-      setMessage("Conta criada. Verifique seu email para confirmar o acesso e depois volte para entrar.");
+      setMessage("Conta criada. Verifique seu email e depois use o convite da sua igreja para liberar o acesso.");
     }
 
     setLoading(false);

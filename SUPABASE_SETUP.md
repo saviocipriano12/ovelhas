@@ -25,6 +25,8 @@ src/lib/supabase/signup-profile.sql
 ```
 
 Esse complemento cria automaticamente um registro em `profiles` quando alguem se cadastra pelo Supabase Auth.
+Esse cadastro nasce sem `church_id`; no app isso fica como conta aguardando liberacao.
+O acesso real deve ser liberado por convite.
 
 Para liberar a primeira configuracao pelo app, rode tambem:
 
@@ -113,6 +115,9 @@ Ja existe:
 - login real em `/login`;
 - cadastro real via Supabase Auth;
 - bloqueio de rotas para quem nao esta autenticado;
+- bloqueio de rotas por papel;
+- menu filtrado por administrador, pastor, supervisor, lider e membro;
+- contas criadas sem convite ficam em `/aguardando`;
 - tela `/configuracao`;
 - leitura inicial de `people` do Supabase quando houver dados.
 - supervisao semanal de celulas;
@@ -137,7 +142,8 @@ Ainda falta conectar escrita real para:
 
 - upload de arquivos no Storage;
 - notificacoes push;
-- upload final de videos no Storage.
+- upload final de videos no Storage;
+- push remoto real.
 
 Esse SQL cria:
 

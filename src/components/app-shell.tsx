@@ -35,6 +35,7 @@ import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { NotificationBridge } from "@/components/notification-bridge";
 import { PwaStatus } from "@/components/pwa-status";
+import { canAccessRoute, getDefaultRoute } from "@/lib/access-control";
 import { roleLabels } from "@/lib/data";
 import { usePastoralNotifications } from "@/lib/use-pastoral-notifications";
 
@@ -66,6 +67,14 @@ const mobileNavItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/mais", label: "Mais", icon: MoreHorizontal },
 ];
 
+const memberMobileNavItems: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/meu-discipulado", label: "Meu", icon: UserRound },
+  { href: "/oracao", label: "Oracao", icon: Heart },
+  { href: "/biblioteca", label: "Biblia", icon: BookOpen },
+  { href: "/notificacoes", label: "Alertas", icon: Bell },
+  { href: "/mais", label: "Mais", icon: MoreHorizontal },
+];
+
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -75,13 +84,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { currentUser, isDemoMode, signOut } = useAuth();
   const { unread } = usePastoralNotifications();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const visibleNavItems = navItems.filter((item) => canAccessRoute(currentUser, item.href));
+  const visibleMobileNavItems = (currentUser.role === "member" ? memberMobileNavItems : mobileNavItems).filter((item) =>
+    canAccessRoute(currentUser, item.href),
+  );
+  const homeHref = getDefaultRoute(currentUser);
 
   return (
     <div className="min-h-screen bg-[#f7f8f3] text-slate-900">
       <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,#d9f4e5_0,transparent_32%),radial-gradient(circle_at_top_right,#dbeafe_0,transparent_30%),linear-gradient(135deg,#f7f8f3_0%,#eef6f0_45%,#f8fafc_100%)]" />
 
       <aside className="fixed left-0 top-0 hidden h-screen w-72 border-r border-white/70 bg-white/70 p-5 shadow-sm backdrop-blur-xl lg:block">
-        <Link href="/dashboard" className="flex items-center gap-3">
+        <Link href={homeHref} className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-900 text-lg font-black text-white">
             O
           </div>
@@ -93,7 +107,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Link>
 
         <nav className="mt-8 space-y-2">
-          {navItems.map(({ href, label, icon: Icon }) => {
+          {visibleNavItems.map(({ href, label, icon: Icon }) => {
             const active = isActive(pathname, href);
             return (
               <Link
@@ -133,7 +147,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="relative overflow-hidden rounded-[24px] border border-white/70 bg-slate-950/90 p-3 text-white shadow-2xl shadow-slate-900/15 backdrop-blur-2xl">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,#34d39955_0,transparent_38%),linear-gradient(135deg,#02061700,#064e3b55)]" />
             <div className="relative flex items-center justify-between gap-3">
-              <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
+              <Link href={homeHref} className="flex min-w-0 items-center gap-3">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-lg font-black text-emerald-950">
                   O
                 </span>
@@ -174,7 +188,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   { href: "/meu-discipulado", label: "Meu discipulado", icon: UserRound },
                   { href: "/instalar", label: "Instalar app", icon: Smartphone },
                   { href: "/acesso", label: "Meu acesso", icon: ShieldCheck },
-                ].map(({ href, label, icon: Icon }) => (
+                ].filter((item) => canAccessRoute(currentUser, item.href)).map(({ href, label, icon: Icon }) => (
                   <Link
                     key={href}
                     href={href}
@@ -238,7 +252,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Link>
               <Link
                 href="/acesso"
-                className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-950 text-white shadow-sm"
+                className={`h-11 w-11 items-center justify-center rounded-lg bg-slate-950 text-white shadow-sm ${canAccessRoute(currentUser, "/acesso") ? "flex" : "hidden"}`}
                 aria-label="Trocar acesso"
               >
                 <ShieldCheck size={19} />
@@ -262,7 +276,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
               <Link
                 href="/meu-discipulado"
-                className="hidden h-11 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white md:flex"
+                className={`h-11 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white ${canAccessRoute(currentUser, "/meu-discipulado") ? "hidden md:flex" : "hidden"}`}
               >
                 <UserRound size={17} />
                 Membro
@@ -279,7 +293,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <nav className="fixed inset-x-3 bottom-3 z-40 rounded-[22px] border border-white/75 bg-white/90 p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-2xl shadow-slate-900/10 backdrop-blur-xl lg:hidden">
         <div className="grid grid-cols-5 gap-1">
-          {mobileNavItems.map(({ href, label, icon: Icon }) => {
+          {visibleMobileNavItems.map(({ href, label, icon: Icon }) => {
             const active = isActive(pathname, href);
             return (
               <Link

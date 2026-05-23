@@ -28,6 +28,7 @@ import type { LucideIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
+import { canAccessRoute } from "@/lib/access-control";
 import { roleLabels } from "@/lib/data";
 
 const menuItems: { href: string; title: string; description: string; icon: LucideIcon }[] = [
@@ -57,6 +58,7 @@ const menuItems: { href: string; title: string; description: string; icon: Lucid
 
 export default function MorePage() {
   const { currentUser } = useAuth();
+  const visibleMenuItems = menuItems.filter((item) => item.href !== "/login" && canAccessRoute(currentUser, item.href));
 
   return (
     <AppShell>
@@ -71,7 +73,7 @@ export default function MorePage() {
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">
-          {menuItems.map(({ href, title, description, icon: Icon }) => (
+          {visibleMenuItems.map(({ href, title, description, icon: Icon }) => (
             <Link key={href} href={href} className="rounded-lg border border-white/80 bg-white/90 p-4 shadow-sm hover:border-emerald-200">
               <div className="flex gap-3">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">

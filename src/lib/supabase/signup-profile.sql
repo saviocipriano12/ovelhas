@@ -1,5 +1,8 @@
 -- Ovelhas - complemento para cadastro via Supabase Auth
 -- Rode no SQL Editor depois do schema.sql.
+-- Contas criadas diretamente ficam sem church_id.
+-- No app isso significa "aguardando liberacao": a pessoa nao acessa dados da igreja
+-- ate aceitar um convite ou ser vinculada por um administrador.
 
 create or replace function public.handle_new_user()
 returns trigger
