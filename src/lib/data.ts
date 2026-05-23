@@ -168,6 +168,57 @@ export type PrayerRequest = {
   updatedAt?: string;
 };
 
+export type ChurchSettings = {
+  churchId: string;
+  churchName: string;
+  city: string;
+  state: string;
+  logoUrl: string;
+  primaryColor: string;
+  welcomeMessage: string;
+  absenceMessage: string;
+  discipleshipMessage: string;
+  privacyContact: string;
+  termsText: string;
+  updatedAt: string;
+};
+
+export type LibraryMaterial = {
+  id: string;
+  churchId: string;
+  trackId?: string;
+  title: string;
+  description: string;
+  materialType: "pdf" | "link" | "video" | "image" | "devotional";
+  url: string;
+  audience: "member" | "leader" | "leadership";
+  active: boolean;
+  createdBy: string;
+  createdAt: string;
+};
+
+export type CertificateRecord = {
+  id: string;
+  churchId: string;
+  personId: string;
+  trackId: string;
+  title: string;
+  issuedBy: string;
+  issuedByName: string;
+  issuedAt: string;
+};
+
+export type CheckInEvent = {
+  id: string;
+  churchId: string;
+  cellId: string;
+  personId?: string;
+  personName: string;
+  checkinType: "cell" | "service";
+  checkinDate: string;
+  createdAt: string;
+};
+
 export type CareTask = {
   id: string;
   personId: string;
@@ -708,6 +759,79 @@ export const seedPrayerRequests: PrayerRequest[] = [
     createdByName: "Rafael Lima",
     createdAt: "2026-05-22T11:00:00.000Z",
     updatedAt: "2026-05-22T19:00:00.000Z",
+  },
+];
+
+export const seedChurchSettings: ChurchSettings = {
+  churchId: "igreja-central",
+  churchName: "Igreja Central",
+  city: "",
+  state: "",
+  logoUrl: "",
+  primaryColor: "#064e3b",
+  welcomeMessage:
+    "Ola, {nome}! Que alegria ter voce conosco. Queremos caminhar com voce e te ajudar nos proximos passos.",
+  absenceMessage:
+    "Ola, {nome}! Sentimos sua falta na celula. Esta tudo bem? Estamos aqui para caminhar com voce.",
+  discipleshipMessage:
+    "Ola, {nome}! Vi seu progresso no discipulado. Como esta sendo essa caminhada para voce?",
+  privacyContact: "Savio Cipriano",
+  termsText:
+    "Os dados cadastrados no Ovelhas sao usados para cuidado pastoral, discipulado, presenca, comunicacao e acompanhamento interno da igreja.",
+  updatedAt: "2026-05-23T12:00:00.000Z",
+};
+
+export const seedLibraryMaterials: LibraryMaterial[] = [
+  {
+    id: "material-primeiros-passos-devocional",
+    churchId: "igreja-central",
+    trackId: "track-primeiros-passos",
+    title: "Devocional Primeiros Passos",
+    description: "Leitura de apoio para a primeira semana de discipulado.",
+    materialType: "devotional",
+    url: "https://ovelhas.vercel.app/meu-discipulado",
+    audience: "member",
+    active: true,
+    createdBy: "pastor-daniel",
+    createdAt: "2026-05-20T10:00:00.000Z",
+  },
+  {
+    id: "material-lider-cuidado",
+    churchId: "igreja-central",
+    title: "Guia rapido de acompanhamento",
+    description: "Orientacoes para lideres cuidarem de ausencias e novos membros.",
+    materialType: "link",
+    url: "https://ovelhas.vercel.app/cuidados",
+    audience: "leader",
+    active: true,
+    createdBy: "pastor-daniel",
+    createdAt: "2026-05-20T11:00:00.000Z",
+  },
+];
+
+export const seedCertificateRecords: CertificateRecord[] = [
+  {
+    id: "certificate-joao-primeiros-passos",
+    churchId: "igreja-central",
+    personId: "joao-pedro",
+    trackId: "track-primeiros-passos",
+    title: "Primeiros Passos",
+    issuedBy: "leader-rafael",
+    issuedByName: "Rafael Lima",
+    issuedAt: "2026-05-23T12:00:00.000Z",
+  },
+];
+
+export const seedCheckIns: CheckInEvent[] = [
+  {
+    id: "checkin-maria-casa-da-paz",
+    churchId: "igreja-central",
+    cellId: "cell-casa-da-paz",
+    personId: "maria-clara",
+    personName: "Maria Clara",
+    checkinType: "cell",
+    checkinDate: "2026-05-23",
+    createdAt: "2026-05-23T20:00:00.000Z",
   },
 ];
 

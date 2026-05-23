@@ -82,6 +82,24 @@ Para ativar pedidos de oracao com niveis de privacidade, rode:
 src/lib/supabase/prayer-requests.sql
 ```
 
+Para ativar configuracoes avancadas da igreja, mensagens, LGPD e identidade visual, rode:
+
+```txt
+src/lib/supabase/church-settings.sql
+```
+
+Para ativar biblioteca de materiais e certificados, rode:
+
+```txt
+src/lib/supabase/library-certificates.sql
+```
+
+Para ativar check-in por QR/codigo, rode:
+
+```txt
+src/lib/supabase/checkins.sql
+```
+
 ## Estado da integracao no app
 
 Ja existe:
@@ -104,6 +122,9 @@ Ja existe:
 - notas pastorais privadas por nivel de acesso.
 - agenda pastoral com lembretes, visitas e proximos passos.
 - pedidos de oracao com privacidade por lider, lideranca, pastor ou celula.
+- configuracoes da igreja, mensagens padrao, LGPD, auditoria e backup.
+- biblioteca de materiais, devocionais e certificados baixaveis.
+- check-in por QR/codigo para celula e culto.
 
 Ainda falta conectar escrita real para:
 

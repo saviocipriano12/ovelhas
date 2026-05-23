@@ -5,9 +5,10 @@
 O app ja tem uma base mobile-first com:
 
 - PWA instalavel.
+- Modo offline com fila local para presenca.
 - Navegacao inferior para uso no telefone.
 - Rotas reais para dashboard, pessoas, perfil, presencas, videos, cuidados e meu discipulado.
-- Rotas de celulas, relatorios e menu Mais para mobile.
+- Rotas de celulas, relatorios, agenda, notificacoes, oracao, biblioteca, check-in e menu Mais para mobile.
 - Componentes reutilizaveis.
 - Dados mockados centralizados.
 - Design responsivo com foco em lider de celula usando no celular.
@@ -39,6 +40,12 @@ O app ja tem uma base mobile-first com:
 - follow_ups
 - pastoral_notes
 - timeline_events
+- prayer_requests
+- pastoral_reminders
+- library_materials
+- certificates
+- checkins
+- church_settings
 
 ## Fluxos essenciais
 
@@ -52,6 +59,10 @@ O app ja tem uma base mobile-first com:
 - Sistema registra progresso.
 - Sistema gera cuidados automaticos.
 - Lider abre WhatsApp com mensagem pronta.
+- Membro registra pedido de oracao.
+- Lider gera QR de check-in.
+- Pastor/admin cadastra materiais e emite certificados.
+- Admin/pastor exporta backup e acompanha auditoria.
 
 ## Automacoes
 

@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import {
   Bell,
+  BookOpen,
   CalendarDays,
   CalendarCheck,
   ChartNoAxesCombined,
@@ -19,7 +20,9 @@ import {
   Eye,
   LayoutGrid,
   MoreHorizontal,
+  QrCode,
   Search,
+  Settings,
   ShieldCheck,
   UserRound,
   Users,
@@ -35,15 +38,18 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/celulas", label: "Celulas", icon: LayoutGrid },
   { href: "/pessoas", label: "Pessoas", icon: Users },
   { href: "/presenca", label: "Presenca", icon: CalendarCheck },
+  { href: "/checkin", label: "Check-in", icon: QrCode },
   { href: "/agenda", label: "Agenda", icon: CalendarDays },
   { href: "/cuidados", label: "Cuidados", icon: HeartHandshake },
   { href: "/oracao", label: "Oracao", icon: Heart },
+  { href: "/biblioteca", label: "Biblioteca", icon: BookOpen },
   { href: "/notificacoes", label: "Alertas", icon: Bell },
   { href: "/supervisao", label: "Supervisao", icon: Eye },
   { href: "/gestao", label: "Gestao", icon: Network },
   { href: "/convites", label: "Convites", icon: UserPlus },
   { href: "/atividades", label: "Atividades", icon: Activity },
   { href: "/relatorios", label: "Relatorios", icon: ChartNoAxesCombined },
+  { href: "/configuracoes", label: "Ajustes", icon: Settings },
 ];
 
 const mobileNavItems: { href: string; label: string; icon: LucideIcon }[] = [

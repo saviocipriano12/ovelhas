@@ -14,11 +14,14 @@ import {
   LayoutGrid,
   PlayCircle,
   ShieldCheck,
+  Settings,
   LogIn,
   UserRound,
   Users,
   UserPlus,
   Bell,
+  BookOpen,
+  QrCode,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -30,9 +33,11 @@ const menuItems: { href: string; title: string; description: string; icon: Lucid
   { href: "/celulas", title: "Celulas", description: "Acompanhar lideres, bairros e frequencia.", icon: LayoutGrid },
   { href: "/pessoas", title: "Pessoas", description: "Membros, visitantes e novos cuidados.", icon: Users },
   { href: "/presenca", title: "Presenca", description: "Marcar celula e culto rapidamente.", icon: CalendarCheck },
+  { href: "/checkin", title: "Check-in", description: "QR Code para presenca em celula e culto.", icon: QrCode },
   { href: "/agenda", title: "Agenda", description: "Lembretes, visitas, discipulados e aniversarios.", icon: CalendarDays },
   { href: "/cuidados", title: "Cuidados", description: "Fila de mensagens e acompanhamentos.", icon: HeartHandshake },
   { href: "/oracao", title: "Oracao", description: "Pedidos de oracao com privacidade por nivel.", icon: Heart },
+  { href: "/biblioteca", title: "Biblioteca", description: "Materiais, devocionais e certificados.", icon: BookOpen },
   { href: "/notificacoes", title: "Notificacoes", description: "Alertas de ausencia, videos, relatorios e supervisao.", icon: Bell },
   { href: "/supervisao", title: "Supervisao", description: "Marcar visitas e acompanhar celulas da semana.", icon: Eye },
   { href: "/gestao", title: "Gestao", description: "Ver supervisores, lideres e lacunas de responsabilidade.", icon: Network },
@@ -44,6 +49,7 @@ const menuItems: { href: string; title: string; description: string; icon: Lucid
   { href: "/meu-discipulado", title: "Meu discipulado", description: "Visao do membro no aplicativo.", icon: UserRound },
   { href: "/login", title: "Login", description: "Entrar ou criar conta real pelo Supabase.", icon: LogIn },
   { href: "/configuracao", title: "Configuracao inicial", description: "Criar igreja e preparar o primeiro administrador.", icon: Building2 },
+  { href: "/configuracoes", title: "Configuracoes", description: "Marca, mensagens, LGPD, auditoria e backup.", icon: Settings },
   { href: "/acesso", title: "Acesso", description: "Testar administrador, pastor, supervisor, lider e membro.", icon: ShieldCheck },
 ];
 

@@ -38,13 +38,20 @@ O app nao deve parecer apenas um sistema administrativo. A experiencia precisa s
 - Estrutura Next.js com rotas reais.
 - Layout mobile-first com navegacao inferior.
 - PWA instalavel no telefone.
+- Modo offline para presenca.
 - Dashboard do lider.
 - Lista de pessoas.
 - Perfil da pessoa.
 - Marcacao de presenca.
+- Check-in por QR/codigo.
 - Area de videos.
+- Biblioteca de materiais e certificados.
 - Fila de cuidados.
+- Pedidos de oracao.
+- Agenda pastoral.
+- Notificacoes internas inteligentes.
 - Painel do novo membro.
+- Configuracoes, LGPD, auditoria e exportacao.
 - Componentes reutilizaveis e dados mockados centralizados.
 
 ## Regras de cuidado
@@ -68,7 +75,13 @@ O app nao deve parecer apenas um sistema administrativo. A experiencia precisa s
 - `/discipulado`
 - `/discipulado/trilhas`
 - `/cuidados`
+- `/agenda`
+- `/notificacoes`
+- `/oracao`
+- `/biblioteca`
+- `/checkin`
 - `/relatorios`
+- `/configuracoes`
 - `/meu-discipulado`
 
 ## Direcao visual

@@ -7,9 +7,13 @@ import type {
   CareTask,
   Cell,
   CellReport,
+  CheckInEvent,
+  ChurchSettings,
+  CertificateRecord,
   DiscipleshipTrack,
   DiscipleshipVideo,
   Invite,
+  LibraryMaterial,
   PastoralNote,
   PastoralReminder,
   Person,
@@ -27,8 +31,12 @@ import {
   people as seedPeople,
   personTrackAccesses as seedPersonTrackAccesses,
   seedActivityEvents,
+  seedCertificateRecords,
+  seedCheckIns,
   seedCellReports,
+  seedChurchSettings,
   seedInvites,
+  seedLibraryMaterials,
   seedPastoralNotes,
   seedPastoralReminders,
   seedPrayerRequests,
@@ -56,6 +64,10 @@ const INVITES_KEY = "ovelhas:invites";
 const PASTORAL_NOTES_KEY = "ovelhas:pastoral-notes";
 const PASTORAL_REMINDERS_KEY = "ovelhas:pastoral-reminders";
 const PRAYER_REQUESTS_KEY = "ovelhas:prayer-requests";
+const CHURCH_SETTINGS_KEY = "ovelhas:church-settings";
+const LIBRARY_MATERIALS_KEY = "ovelhas:library-materials";
+const CERTIFICATES_KEY = "ovelhas:certificates";
+const CHECKINS_KEY = "ovelhas:checkins";
 const NOTIFICATION_READS_KEY = "ovelhas:notification-reads";
 
 function readJson<T>(key: string, fallback: T): T {
@@ -1571,6 +1583,384 @@ export function usePrayerRequests() {
   }
 
   return { requests, addPrayerRequest, updatePrayerStatus };
+}
+
+export function useChurchSettings(churchId: string) {
+  const storageKey = `${CHURCH_SETTINGS_KEY}:${churchId || "demo"}`;
+  const [settings, setSettings] = useState<ChurchSettings>({ ...seedChurchSettings, churchId });
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setSettings(readJson<ChurchSettings>(storageKey, { ...seedChurchSettings, churchId }));
+      setHydrated(true);
+    });
+  }, [churchId, storageKey]);
+
+  useEffect(() => {
+    if (hydrated) {
+      writeJson(storageKey, settings);
+    }
+  }, [hydrated, settings, storageKey]);
+
+  useEffect(() => {
+    async function loadSupabaseSettings() {
+      if (!churchId || churchId === "igreja-central") {
+        return;
+      }
+
+      const [{ data: church }, { data: churchSettings }] = await Promise.all([
+        supabase.from("churches").select("id, name, city, state").eq("id", churchId).maybeSingle(),
+        supabase
+          .from("church_settings")
+          .select("church_id, logo_url, primary_color, welcome_message, absence_message, discipleship_message, privacy_contact, terms_text, updated_at")
+          .eq("church_id", churchId)
+          .maybeSingle(),
+      ]);
+
+      if (church || churchSettings) {
+        setSettings((current) => ({
+          ...current,
+          churchId,
+          churchName: church?.name ?? current.churchName,
+          city: church?.city ?? current.city,
+          state: church?.state ?? current.state,
+          logoUrl: churchSettings?.logo_url ?? current.logoUrl,
+          primaryColor: churchSettings?.primary_color ?? current.primaryColor,
+          welcomeMessage: churchSettings?.welcome_message ?? current.welcomeMessage,
+          absenceMessage: churchSettings?.absence_message ?? current.absenceMessage,
+          discipleshipMessage: churchSettings?.discipleship_message ?? current.discipleshipMessage,
+          privacyContact: churchSettings?.privacy_contact ?? current.privacyContact,
+          termsText: churchSettings?.terms_text ?? current.termsText,
+          updatedAt: churchSettings?.updated_at ?? current.updatedAt,
+        }));
+      }
+    }
+
+    loadSupabaseSettings();
+  }, [churchId]);
+
+  async function updateSettings(input: Partial<ChurchSettings> & { persistToSupabase?: boolean }) {
+    const nextSettings: ChurchSettings = {
+      ...settings,
+      ...input,
+      churchId,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (input.persistToSupabase && churchId) {
+      const { error: churchError } = await supabase
+        .from("churches")
+        .update({
+          name: nextSettings.churchName,
+          city: nextSettings.city || null,
+          state: nextSettings.state || null,
+        })
+        .eq("id", churchId);
+
+      if (churchError) {
+        return { ok: false, error: churchError.message };
+      }
+
+      const { error: settingsError } = await supabase.from("church_settings").upsert(
+        {
+          church_id: churchId,
+          logo_url: nextSettings.logoUrl || null,
+          primary_color: nextSettings.primaryColor,
+          welcome_message: nextSettings.welcomeMessage,
+          absence_message: nextSettings.absenceMessage,
+          discipleship_message: nextSettings.discipleshipMessage,
+          privacy_contact: nextSettings.privacyContact,
+          terms_text: nextSettings.termsText,
+          updated_at: nextSettings.updatedAt,
+        },
+        { onConflict: "church_id" },
+      );
+
+      if (settingsError) {
+        return { ok: false, error: settingsError.message };
+      }
+    }
+
+    setSettings(nextSettings);
+    return { ok: true, settings: nextSettings };
+  }
+
+  return { settings, updateSettings };
+}
+
+export function useLibraryMaterials(churchId: string) {
+  const storageKey = `${LIBRARY_MATERIALS_KEY}:${churchId || "demo"}`;
+  const [materials, setMaterials] = useState<LibraryMaterial[]>(seedLibraryMaterials);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setMaterials(readJson<LibraryMaterial[]>(storageKey, seedLibraryMaterials));
+      setHydrated(true);
+    });
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (hydrated) {
+      writeJson(storageKey, materials);
+    }
+  }, [hydrated, materials, storageKey]);
+
+  useEffect(() => {
+    async function loadSupabaseMaterials() {
+      const { data, error } = await supabase
+        .from("library_materials")
+        .select("id, church_id, track_id, title, description, material_type, url, audience, active, created_by, created_at")
+        .order("created_at", { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        setMaterials(
+          data.map((material) => ({
+            id: material.id,
+            churchId: material.church_id,
+            trackId: material.track_id ?? undefined,
+            title: material.title,
+            description: material.description ?? "",
+            materialType: material.material_type as LibraryMaterial["materialType"],
+            url: material.url,
+            audience: material.audience as LibraryMaterial["audience"],
+            active: material.active,
+            createdBy: material.created_by ?? "",
+            createdAt: material.created_at,
+          })),
+        );
+      }
+    }
+
+    loadSupabaseMaterials();
+  }, []);
+
+  async function addMaterial(input: Omit<LibraryMaterial, "id" | "createdAt" | "active"> & { persistToSupabase?: boolean }) {
+    const localMaterial: LibraryMaterial = {
+      ...input,
+      id: `material-${Date.now()}`,
+      active: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (input.persistToSupabase) {
+      const { data, error } = await supabase
+        .from("library_materials")
+        .insert({
+          church_id: input.churchId,
+          track_id: input.trackId || null,
+          title: input.title,
+          description: input.description || null,
+          material_type: input.materialType,
+          url: input.url,
+          audience: input.audience,
+          active: true,
+          created_by: input.createdBy,
+        })
+        .select("id, created_at")
+        .single();
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+
+      if (data) {
+        localMaterial.id = data.id;
+        localMaterial.createdAt = data.created_at;
+      }
+    }
+
+    setMaterials((current) => [localMaterial, ...current]);
+    return { ok: true, material: localMaterial };
+  }
+
+  return { materials, addMaterial };
+}
+
+export function useCertificates(churchId: string) {
+  const storageKey = `${CERTIFICATES_KEY}:${churchId || "demo"}`;
+  const [certificates, setCertificates] = useState<CertificateRecord[]>(seedCertificateRecords);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setCertificates(readJson<CertificateRecord[]>(storageKey, seedCertificateRecords));
+      setHydrated(true);
+    });
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (hydrated) {
+      writeJson(storageKey, certificates);
+    }
+  }, [certificates, hydrated, storageKey]);
+
+  useEffect(() => {
+    async function loadSupabaseCertificates() {
+      const { data, error } = await supabase
+        .from("certificates")
+        .select("id, church_id, person_id, track_id, title, issued_by, issued_by_name, issued_at")
+        .order("issued_at", { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        setCertificates(
+          data.map((certificate) => ({
+            id: certificate.id,
+            churchId: certificate.church_id,
+            personId: certificate.person_id,
+            trackId: certificate.track_id,
+            title: certificate.title,
+            issuedBy: certificate.issued_by ?? "",
+            issuedByName: certificate.issued_by_name ?? "Lideranca",
+            issuedAt: certificate.issued_at,
+          })),
+        );
+      }
+    }
+
+    loadSupabaseCertificates();
+  }, []);
+
+  async function issueCertificate(input: Omit<CertificateRecord, "id" | "issuedAt"> & { persistToSupabase?: boolean }) {
+    const existing = certificates.find(
+      (certificate) => certificate.personId === input.personId && certificate.trackId === input.trackId,
+    );
+
+    if (existing) {
+      return { ok: true, certificate: existing };
+    }
+
+    const localCertificate: CertificateRecord = {
+      ...input,
+      id: `certificate-${Date.now()}`,
+      issuedAt: new Date().toISOString(),
+    };
+
+    if (input.persistToSupabase) {
+      const { data, error } = await supabase
+        .from("certificates")
+        .insert({
+          church_id: input.churchId,
+          person_id: input.personId,
+          track_id: input.trackId,
+          title: input.title,
+          issued_by: input.issuedBy,
+          issued_by_name: input.issuedByName,
+          issued_at: localCertificate.issuedAt,
+        })
+        .select("id, issued_at")
+        .single();
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+
+      if (data) {
+        localCertificate.id = data.id;
+        localCertificate.issuedAt = data.issued_at;
+      }
+    }
+
+    setCertificates((current) => [localCertificate, ...current]);
+    return { ok: true, certificate: localCertificate };
+  }
+
+  return { certificates, issueCertificate };
+}
+
+export function useCheckIns(churchId: string) {
+  const storageKey = `${CHECKINS_KEY}:${churchId || "demo"}`;
+  const [checkIns, setCheckIns] = useState<CheckInEvent[]>(seedCheckIns);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setCheckIns(readJson<CheckInEvent[]>(storageKey, seedCheckIns));
+      setHydrated(true);
+    });
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (hydrated) {
+      writeJson(storageKey, checkIns);
+    }
+  }, [checkIns, hydrated, storageKey]);
+
+  useEffect(() => {
+    async function loadSupabaseCheckIns() {
+      const { data, error } = await supabase
+        .from("checkins")
+        .select("id, church_id, cell_id, person_id, person_name, checkin_type, checkin_date, created_at")
+        .order("created_at", { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        setCheckIns(
+          data.map((checkin) => ({
+            id: checkin.id,
+            churchId: checkin.church_id,
+            cellId: checkin.cell_id,
+            personId: checkin.person_id ?? undefined,
+            personName: checkin.person_name,
+            checkinType: checkin.checkin_type as CheckInEvent["checkinType"],
+            checkinDate: checkin.checkin_date,
+            createdAt: checkin.created_at,
+          })),
+        );
+      }
+    }
+
+    loadSupabaseCheckIns();
+  }, []);
+
+  async function addCheckIn(input: Omit<CheckInEvent, "id" | "createdAt"> & { persistToSupabase?: boolean }) {
+    const todayAlready = checkIns.find(
+      (checkin) =>
+        checkin.cellId === input.cellId &&
+        checkin.checkinDate === input.checkinDate &&
+        checkin.checkinType === input.checkinType &&
+        ((input.personId && checkin.personId === input.personId) || checkin.personName === input.personName),
+    );
+
+    if (todayAlready) {
+      return { ok: true, checkIn: todayAlready };
+    }
+
+    const localCheckIn: CheckInEvent = {
+      ...input,
+      id: `checkin-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (input.persistToSupabase) {
+      const { data, error } = await supabase
+        .from("checkins")
+        .insert({
+          church_id: input.churchId,
+          cell_id: input.cellId,
+          person_id: input.personId || null,
+          person_name: input.personName,
+          checkin_type: input.checkinType,
+          checkin_date: input.checkinDate,
+        })
+        .select("id, created_at")
+        .single();
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+
+      if (data) {
+        localCheckIn.id = data.id;
+        localCheckIn.createdAt = data.created_at;
+      }
+    }
+
+    setCheckIns((current) => [localCheckIn, ...current]);
+    return { ok: true, checkIn: localCheckIn };
+  }
+
+  return { checkIns, addCheckIn };
 }
 
 export function useNotificationReads(userId: string) {
