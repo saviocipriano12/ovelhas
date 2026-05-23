@@ -219,6 +219,19 @@ export type CheckInEvent = {
   createdAt: string;
 };
 
+export type CellRsvp = {
+  id: string;
+  churchId: string;
+  cellId: string;
+  personId: string;
+  personName: string;
+  meetingDate: string;
+  response: "yes" | "no" | "maybe";
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CareTask = {
   id: string;
   personId: string;
@@ -834,6 +847,8 @@ export const seedCheckIns: CheckInEvent[] = [
     createdAt: "2026-05-23T20:00:00.000Z",
   },
 ];
+
+export const seedCellRsvps: CellRsvp[] = [];
 
 export const careTasks: CareTask[] = [
   {

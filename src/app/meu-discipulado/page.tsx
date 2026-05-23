@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, ExternalLink, Lock, MessageCircle, PlayCircle, Save } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, CalendarCheck, CheckCircle2, ExternalLink, Lock, MessageCircle, PlayCircle, Save, X } from "lucide-react";
+import { useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
 import { WhatsAppButton } from "@/components/whatsapp-button";
-import { useActivityEvents, useDiscipleship, useLocalPeople } from "@/lib/local-store";
+import { getNextMeetingDate, rsvpLabel, rsvpTone, shouldAskForRsvp } from "@/lib/cell-schedule";
+import { useActivityEvents, useCellRsvps, useCells, useDiscipleship, useLocalPeople } from "@/lib/local-store";
 import { getVideoEmbedUrl, isEmbeddableVideo } from "@/lib/video";
 
 function formatDuration(seconds: number) {
@@ -19,14 +20,42 @@ function formatDuration(seconds: number) {
 export default function MemberDiscipleshipPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { people } = useLocalPeople();
+  const { cells } = useCells();
   const { tracks, videos, accesses, progress, updateVideoProgress } = useDiscipleship();
   const { addEvent } = useActivityEvents();
+  const { rsvps, saveRsvp } = useCellRsvps(currentUser.churchId);
   const [feedback, setFeedback] = useState("");
   const [selectedVideoId, setSelectedVideoId] = useState("");
   const [reflection, setReflection] = useState("");
+  const [rsvpNote, setRsvpNote] = useState("");
+  const [rsvpPopupDismissed, setRsvpPopupDismissed] = useState(false);
   const member =
-    people.find((person) => person.personUserId === currentUser.id || person.id === currentUser.personId) ??
-    people[1];
+    people.find((person) => person.personUserId === currentUser.id || person.id === currentUser.personId);
+
+  if (!member) {
+    return (
+      <main className="min-h-screen bg-[#f7f8f3] px-4 pb-8 pt-4 text-slate-900">
+        <div className="mx-auto max-w-xl">
+          <section className="rounded-[24px] bg-slate-950 p-6 text-white shadow-xl shadow-slate-900/10">
+            <h1 className="text-2xl font-semibold leading-tight">Perfil de membro nao vinculado</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-300">
+              Sua conta entrou corretamente, mas ainda nao existe uma pessoa vinculada a este usuario. Peça para sua lideranca ajustar seu cadastro.
+            </p>
+            <Link href="/dashboard" className="mt-5 flex min-h-11 items-center justify-center rounded-lg bg-white px-4 text-sm font-bold text-slate-950">
+              Voltar
+            </Link>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
+  const memberCell = cells.find((cell) => cell.id === member.cellId);
+  const nextMeetingDate = memberCell ? getNextMeetingDate(memberCell.meetingDay) : "";
+  const currentRsvp = rsvps.find(
+    (rsvp) => rsvp.personId === member.id && rsvp.cellId === member.cellId && rsvp.meetingDate === nextMeetingDate,
+  );
+  const showRsvpPopup = Boolean(memberCell && nextMeetingDate && shouldAskForRsvp(nextMeetingDate) && !currentRsvp && !rsvpPopupDismissed);
   const memberAccesses = accesses.filter((access) => access.personId === member.id && access.status === "active");
   const activeAccess = memberAccesses[0];
   const activeTrack = tracks.find((track) => track.id === activeAccess?.trackId);
@@ -45,17 +74,11 @@ export default function MemberDiscipleshipPage() {
   const selectedVideo = trackVideos.find((video) => video.id === selectedVideoId) ?? nextVideo;
   const selectedProgress = selectedVideo ? progressByVideo.get(selectedVideo.id)?.progressPercent ?? 0 : 0;
 
-  useEffect(() => {
-    if (!selectedVideo?.id || typeof window === "undefined") {
+  async function saveVideoProgress(videoId: string, progressPercent: number) {
+    if (!member) {
       return;
     }
 
-    queueMicrotask(() => {
-      setReflection(window.localStorage.getItem(`ovelhas:reflection:${member.id}:${selectedVideo.id}`) ?? "");
-    });
-  }, [member.id, selectedVideo?.id]);
-
-  async function saveVideoProgress(videoId: string, progressPercent: number) {
     const video = trackVideos.find((item) => item.id === videoId);
     if (!video) {
       return;
@@ -95,12 +118,53 @@ export default function MemberDiscipleshipPage() {
   }
 
   function saveReflection() {
-    if (!selectedVideo || typeof window === "undefined") {
+    if (!member || !selectedVideo || typeof window === "undefined") {
       return;
     }
 
     window.localStorage.setItem(`ovelhas:reflection:${member.id}:${selectedVideo.id}`, reflection);
     setFeedback("Resposta salva no aparelho.");
+  }
+
+  async function respondRsvp(response: "yes" | "no" | "maybe") {
+    if (!member || !memberCell || !nextMeetingDate) {
+      return;
+    }
+
+    const result = await saveRsvp({
+      churchId: member.churchId,
+      cellId: member.cellId,
+      personId: member.id,
+      personName: member.name,
+      meetingDate: nextMeetingDate,
+      response,
+      note: rsvpNote,
+      persistToSupabase: !isDemoMode,
+    });
+
+    if (!result.ok) {
+      setFeedback(`Nao consegui salvar sua confirmacao: ${result.error}`);
+      return;
+    }
+
+    await addEvent({
+      churchId: member.churchId,
+      actorUserId: currentUser.id,
+      actorName: member.name,
+      actorRole: currentUser.role,
+      action: "Confirmou celula",
+      description: `${member.name}: ${rsvpLabel(response)} na celula ${memberCell.name}.`,
+      targetType: "cell",
+      targetId: memberCell.id,
+      targetName: memberCell.name,
+      personId: member.id,
+      cellId: member.cellId,
+      visibility: "cell",
+      persistToSupabase: !isDemoMode,
+    });
+
+    setFeedback(`Confirmacao salva: ${rsvpLabel(response)}.`);
+    setRsvpPopupDismissed(true);
   }
 
   return (
@@ -118,6 +182,42 @@ export default function MemberDiscipleshipPage() {
           <PersonAvatar person={member} size="sm" />
         </header>
 
+        {showRsvpPopup && (
+          <div className="fixed inset-0 z-50 flex items-end bg-slate-950/45 p-3 backdrop-blur-sm sm:items-center">
+            <section className="mx-auto w-full max-w-xl rounded-[28px] bg-white p-5 shadow-2xl shadow-slate-950/25">
+              <div className="flex items-start justify-between gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800">
+                  <CalendarCheck size={24} />
+                </span>
+                <button onClick={() => setRsvpPopupDismissed(true)} className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+                  <X size={18} />
+                </button>
+              </div>
+              <h2 className="mt-4 text-2xl font-semibold leading-tight text-slate-950">Voce vai estar na celula?</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                {memberCell?.name}, {memberCell?.meetingDay} as {memberCell?.meetingTime}. Sua resposta ajuda o lider a preparar a lista da semana.
+              </p>
+              <textarea
+                value={rsvpNote}
+                onChange={(event) => setRsvpNote(event.target.value)}
+                placeholder="Observacao opcional"
+                className="mt-4 min-h-20 w-full rounded-2xl border border-slate-200 p-3 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+              />
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <button onClick={() => respondRsvp("yes")} className="min-h-12 rounded-2xl bg-emerald-900 px-3 text-sm font-bold text-white">
+                  Vou
+                </button>
+                <button onClick={() => respondRsvp("maybe")} className="min-h-12 rounded-2xl bg-amber-100 px-3 text-sm font-bold text-amber-900">
+                  Talvez
+                </button>
+                <button onClick={() => respondRsvp("no")} className="min-h-12 rounded-2xl bg-rose-100 px-3 text-sm font-bold text-rose-800">
+                  Nao vou
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+
         <section className="rounded-lg bg-slate-950 p-5 text-white shadow-lg shadow-slate-900/10">
           <p className="text-sm font-semibold text-emerald-200">Ola, {member.name}</p>
           <h1 className="mt-2 text-3xl font-semibold leading-tight">Sua caminhada continua hoje.</h1>
@@ -132,6 +232,34 @@ export default function MemberDiscipleshipPage() {
             <ProgressBar value={trackProgress} />
           </div>
         </section>
+
+        {memberCell && (
+          <section className="mt-5 rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+            <SectionHeader eyebrow="Proxima celula" title={memberCell.name} />
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-600">
+                  {memberCell.meetingDay}, {memberCell.meetingTime}
+                </p>
+                <p className="mt-1 text-xs font-bold text-slate-400">{nextMeetingDate}</p>
+              </div>
+              <span className={`rounded-lg px-3 py-2 text-xs font-bold ${rsvpTone(currentRsvp?.response)}`}>
+                {rsvpLabel(currentRsvp?.response)}
+              </span>
+            </div>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <button onClick={() => respondRsvp("yes")} className="min-h-11 rounded-lg bg-emerald-900 text-sm font-bold text-white">
+                Vou
+              </button>
+              <button onClick={() => respondRsvp("maybe")} className="min-h-11 rounded-lg bg-amber-100 text-sm font-bold text-amber-900">
+                Talvez
+              </button>
+              <button onClick={() => respondRsvp("no")} className="min-h-11 rounded-lg bg-rose-100 text-sm font-bold text-rose-800">
+                Nao vou
+              </button>
+            </div>
+          </section>
+        )}
 
         {activeTrack && nextVideo ? (
           <>

@@ -1,17 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { CalendarDays, Check, Church, ClipboardCheck, UsersRound, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { PersonAvatar } from "@/components/person-avatar";
 import { SectionHeader } from "@/components/section-header";
 import { getVisibleCells, getVisiblePeople } from "@/lib/access-control";
+import { rsvpLabel, rsvpTone } from "@/lib/cell-schedule";
 import {
   saveCellAttendance,
   saveServiceAttendance,
   useActivityEvents,
   useCareTasks,
+  useCellRsvps,
   useCells,
   useLocalPeople,
 } from "@/lib/local-store";
@@ -26,6 +28,7 @@ export default function AttendancePage() {
   const { people, updatePeople } = useLocalPeople();
   const { addCareTask } = useCareTasks();
   const { addEvent } = useActivityEvents();
+  const { rsvps } = useCellRsvps(currentUser.churchId);
   const visibleCells = getVisibleCells(currentUser, cells);
   const visiblePeople = getVisiblePeople(currentUser, people);
   const [selectedCellId, setSelectedCellId] = useState(visibleCells[0]?.id ?? "");
@@ -38,15 +41,27 @@ export default function AttendancePage() {
   const cellPeople = visiblePeople.filter((person) => person.cellId === selectedCell?.id);
   const [cellPresence, setCellPresence] = useState<Record<string, boolean>>({});
   const [servicePresence, setServicePresence] = useState<Record<string, boolean>>({});
+  const rsvpsByPerson = new Map(
+    rsvps
+      .filter((rsvp) => rsvp.cellId === selectedCell?.id && rsvp.meetingDate === meetingDate)
+      .map((rsvp) => [rsvp.personId, rsvp]),
+  );
 
-  const presentCount = useMemo(
-    () => cellPeople.filter((person) => cellPresence[person.id] ?? person.cellAbsences === 0).length,
-    [cellPeople, cellPresence],
-  );
-  const serviceCount = useMemo(
-    () => cellPeople.filter((person) => servicePresence[person.id] ?? person.servicePresent).length,
-    [cellPeople, servicePresence],
-  );
+  function defaultCellPresence(personId: string, fallback: boolean) {
+    const rsvp = rsvpsByPerson.get(personId);
+    if (rsvp?.response === "yes") {
+      return true;
+    }
+
+    if (rsvp?.response === "no") {
+      return false;
+    }
+
+    return fallback;
+  }
+
+  const presentCount = cellPeople.filter((person) => cellPresence[person.id] ?? defaultCellPresence(person.id, person.cellAbsences === 0)).length;
+  const serviceCount = cellPeople.filter((person) => servicePresence[person.id] ?? person.servicePresent).length;
 
   function markAll(value: boolean, type: "cell" | "service") {
     const next = Object.fromEntries(cellPeople.map((person) => [person.id, value]));
@@ -66,7 +81,7 @@ export default function AttendancePage() {
 
     const absenceTasks = cellPeople
       .map((person) => {
-        const presentInCell = cellPresence[person.id] ?? person.cellAbsences === 0;
+        const presentInCell = cellPresence[person.id] ?? defaultCellPresence(person.id, person.cellAbsences === 0);
         const nextAbsences = presentInCell ? 0 : person.cellAbsences + 1;
         return { person, presentInCell, nextAbsences };
       })
@@ -82,7 +97,7 @@ export default function AttendancePage() {
         notes,
         records: cellPeople.map((person) => ({
           personId: person.id,
-          present: cellPresence[person.id] ?? person.cellAbsences === 0,
+          present: cellPresence[person.id] ?? defaultCellPresence(person.id, person.cellAbsences === 0),
         })),
       });
 
@@ -117,7 +132,7 @@ export default function AttendancePage() {
           return person;
         }
 
-        const presentInCell = cellPresence[person.id] ?? person.cellAbsences === 0;
+        const presentInCell = cellPresence[person.id] ?? defaultCellPresence(person.id, person.cellAbsences === 0);
         return {
           ...person,
           cellAbsences: presentInCell ? 0 : person.cellAbsences + 1,
@@ -218,6 +233,20 @@ export default function AttendancePage() {
             title="Presenca da celula"
             action={<span className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">{presentCount}/{cellPeople.length}</span>}
           />
+          <div className="mb-3 grid grid-cols-3 gap-2">
+            <div className="rounded-lg bg-emerald-50 p-3">
+              <p className="text-lg font-semibold text-emerald-900">{Array.from(rsvpsByPerson.values()).filter((rsvp) => rsvp.response === "yes").length}</p>
+              <p className="text-xs font-bold text-emerald-700">confirmaram</p>
+            </div>
+            <div className="rounded-lg bg-amber-50 p-3">
+              <p className="text-lg font-semibold text-amber-900">{Array.from(rsvpsByPerson.values()).filter((rsvp) => rsvp.response === "maybe").length}</p>
+              <p className="text-xs font-bold text-amber-700">talvez</p>
+            </div>
+            <div className="rounded-lg bg-rose-50 p-3">
+              <p className="text-lg font-semibold text-rose-900">{Array.from(rsvpsByPerson.values()).filter((rsvp) => rsvp.response === "no").length}</p>
+              <p className="text-xs font-bold text-rose-700">nao vao</p>
+            </div>
+          </div>
           <div className="mb-3 grid grid-cols-2 gap-2">
             <button onClick={() => markAll(true, "cell")} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-50 text-sm font-bold text-emerald-800">
               <Check size={17} />
@@ -230,27 +259,38 @@ export default function AttendancePage() {
           </div>
           <div className="space-y-3">
             {cellPeople.map((person) => (
-              <label
-                key={person.id}
-                className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50 p-4 hover:bg-white"
-              >
-                <span className="flex min-w-0 items-center gap-3">
-                  <PersonAvatar person={person} size="sm" />
-                  <span className="min-w-0">
-                    <span className="block truncate font-semibold text-slate-950">{person.name}</span>
-                    <span className="text-sm text-slate-500">{person.stage}</span>
-                  </span>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={cellPresence[person.id] ?? person.cellAbsences === 0}
-                  onChange={(event) =>
-                    setCellPresence((current) => ({ ...current, [person.id]: event.target.checked }))
-                  }
-                  className="h-7 w-7 shrink-0 accent-emerald-700"
-                  aria-label={`Presenca de ${person.name}`}
-                />
-              </label>
+              (() => {
+                const rsvp = rsvpsByPerson.get(person.id);
+
+                return (
+                  <label
+                    key={person.id}
+                    className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50 p-4 hover:bg-white"
+                  >
+                    <span className="flex min-w-0 items-center gap-3">
+                      <PersonAvatar person={person} size="sm" />
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold text-slate-950">{person.name}</span>
+                        <span className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                          <span>{person.stage}</span>
+                          <span className={`rounded-lg px-2 py-1 text-[11px] font-bold ${rsvpTone(rsvp?.response)}`}>
+                            {rsvpLabel(rsvp?.response)}
+                          </span>
+                        </span>
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={cellPresence[person.id] ?? defaultCellPresence(person.id, person.cellAbsences === 0)}
+                      onChange={(event) =>
+                        setCellPresence((current) => ({ ...current, [person.id]: event.target.checked }))
+                      }
+                      className="h-7 w-7 shrink-0 accent-emerald-700"
+                      aria-label={`Presenca de ${person.name}`}
+                    />
+                  </label>
+                );
+              })()
             ))}
           </div>
           <label className="mt-4 block space-y-2 text-sm font-semibold text-slate-700">

@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import type { AppUser } from "@/lib/data";
 import { users, type UserRole } from "@/lib/data";
 import { supabase } from "@/lib/supabase/client";
@@ -19,7 +20,15 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const publicRoutes = ["/login", "/convite", "/offline"];
+
+function isPublicRoute(pathname: string) {
+  return publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
   const [currentUserId, setCurrentUserIdState] = useState(users[3].id);
   const [supabaseUser, setSupabaseUser] = useState<AppUser | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
@@ -36,33 +45,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
 
-    async function loadProfile(userId: string) {
+    async function loadProfile(user: { id: string; email?: string | null; user_metadata?: { name?: string } }) {
       const { data } = await supabase
         .from("profiles")
         .select("id, church_id, name, role")
-        .eq("id", userId)
+        .eq("id", user.id)
         .maybeSingle();
 
       if (!active) {
         return;
       }
 
-      if (data) {
-        setSupabaseUser({
-          id: data.id,
-          name: data.name,
-          role: data.role as UserRole,
-          churchId: data.church_id ?? "sem-igreja",
-        });
-      } else {
-        setSupabaseUser(null);
+      const profileRole = (data?.role ?? "member") as UserRole;
+      const churchId = data?.church_id ?? "sem-igreja";
+      const [cellResult, personResult] = await Promise.all([
+        data?.church_id
+          ? supabase
+              .from("cells")
+              .select("id")
+              .or(`leader_id.eq.${user.id},supervisor_id.eq.${user.id}`)
+              .eq("church_id", data.church_id)
+          : Promise.resolve({ data: [] as { id: string }[] }),
+        data?.church_id
+          ? supabase
+              .from("people")
+              .select("id, cell_id")
+              .eq("person_user_id", user.id)
+              .eq("church_id", data.church_id)
+              .maybeSingle()
+          : Promise.resolve({ data: null as { id: string; cell_id: string | null } | null }),
+      ]);
+
+      if (!active) {
+        return;
       }
+
+      const cellIds = Array.from(
+        new Set([
+          ...((cellResult.data ?? []) as { id: string }[]).map((cell) => cell.id),
+          personResult.data?.cell_id ?? "",
+        ].filter(Boolean)),
+      );
+
+      setSupabaseUser({
+        id: user.id,
+        name: data?.name ?? user.user_metadata?.name ?? user.email?.split("@")[0] ?? "Usuario",
+        role: profileRole,
+        churchId,
+        cellIds,
+        personId: personResult.data?.id,
+      });
     }
 
     supabase.auth.getSession().then(({ data }) => {
       const user = data.session?.user;
       if (user) {
-        loadProfile(user.id).finally(() => active && setIsLoadingAuth(false));
+        loadProfile(user).finally(() => active && setIsLoadingAuth(false));
       } else {
         setSupabaseUser(null);
         setIsLoadingAuth(false);
@@ -74,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       const user = session?.user;
       if (user) {
-        loadProfile(user.id).finally(() => active && setIsLoadingAuth(false));
+        loadProfile(user).finally(() => active && setIsLoadingAuth(false));
       } else {
         setSupabaseUser(null);
         setIsLoadingAuth(false);
@@ -86,6 +124,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (isLoadingAuth || supabaseUser || isPublicRoute(pathname)) {
+      return;
+    }
+
+    router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+  }, [isLoadingAuth, pathname, router, supabaseUser]);
+
+  useEffect(() => {
+    if (isLoadingAuth || !supabaseUser || pathname !== "/login") {
+      return;
+    }
+
+    router.replace("/dashboard");
+  }, [isLoadingAuth, pathname, router, supabaseUser]);
 
   const demoUser = users.find((user) => user.id === currentUserId) ?? users[3];
   const currentUser = supabaseUser ?? demoUser;
@@ -106,7 +160,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [currentUser, isDemoMode, isLoadingAuth],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const blockedProtectedRoute = !isLoadingAuth && !supabaseUser && !isPublicRoute(pathname);
+
+  return (
+    <AuthContext.Provider value={value}>
+      {isLoadingAuth || blockedProtectedRoute ? (
+        <main className="flex min-h-screen items-center justify-center bg-[#f7f8f3] px-6 text-center text-slate-900">
+          <div>
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-900 text-xl font-black text-white shadow-lg shadow-emerald-900/20">
+              O
+            </div>
+            <p className="mt-4 text-sm font-bold text-emerald-800">Ovelhas</p>
+            <p className="mt-2 text-sm text-slate-500">{isLoadingAuth ? "Verificando acesso..." : "Redirecionando para login..."}</p>
+          </div>
+        </main>
+      ) : (
+        children
+      )}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

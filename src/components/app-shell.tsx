@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   Bell,
@@ -19,6 +20,7 @@ import {
   Home,
   Eye,
   LayoutGrid,
+  Menu,
   MoreHorizontal,
   QrCode,
   Search,
@@ -27,6 +29,7 @@ import {
   Smartphone,
   UserRound,
   Users,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
@@ -71,6 +74,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { currentUser, isDemoMode, signOut } = useAuth();
   const { unread } = usePastoralNotifications();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-[#f7f8f3] text-slate-900">
@@ -124,8 +128,90 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="mx-auto min-h-screen w-full max-w-7xl px-4 pb-28 pt-4 lg:pl-80 lg:pr-6">
-        <header className="sticky top-3 z-30 mb-5 rounded-lg border border-white/70 bg-white/85 p-3 shadow-sm backdrop-blur-xl">
+      <main className="mx-auto min-h-screen w-full max-w-7xl px-4 pb-28 pt-3 lg:pl-80 lg:pr-6 lg:pt-4">
+        <header className="sticky top-3 z-30 mb-4 lg:hidden">
+          <div className="relative overflow-hidden rounded-[24px] border border-white/70 bg-slate-950/90 p-3 text-white shadow-2xl shadow-slate-900/15 backdrop-blur-2xl">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,#34d39955_0,transparent_38%),linear-gradient(135deg,#02061700,#064e3b55)]" />
+            <div className="relative flex items-center justify-between gap-3">
+              <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-lg font-black text-emerald-950">
+                  O
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[11px] font-black uppercase tracking-wide text-emerald-200">
+                    {roleLabels[currentUser.role]}
+                  </span>
+                  <span className="block truncate text-base font-semibold leading-tight">{currentUser.name}</span>
+                </span>
+              </Link>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <Link
+                  href="/notificacoes"
+                  className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-white"
+                  aria-label="Notificacoes"
+                >
+                  <Bell size={19} />
+                  {unread.length > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-300 px-1 text-[10px] font-black text-slate-950 ring-2 ring-slate-950">
+                      {unread.length > 9 ? "9+" : unread.length}
+                    </span>
+                  )}
+                </Link>
+                <button
+                  onClick={() => setMobileMenuOpen((current) => !current)}
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-400 text-emerald-950 shadow-lg shadow-emerald-950/20"
+                  aria-label="Menu"
+                >
+                  {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+                </button>
+              </div>
+            </div>
+
+            {mobileMenuOpen && (
+              <div className="relative mt-3 grid grid-cols-2 gap-2 border-t border-white/10 pt-3">
+                {[
+                  { href: "/meu-discipulado", label: "Meu discipulado", icon: UserRound },
+                  { href: "/instalar", label: "Instalar app", icon: Smartphone },
+                  { href: "/acesso", label: "Meu acesso", icon: ShieldCheck },
+                ].map(({ href, label, icon: Icon }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex min-h-11 items-center gap-2 rounded-2xl bg-white/10 px-3 text-sm font-bold text-white"
+                  >
+                    <Icon size={17} />
+                    {label}
+                  </Link>
+                ))}
+                {isDemoMode ? (
+                  <Link
+                    href="/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex min-h-11 items-center gap-2 rounded-2xl bg-emerald-300 px-3 text-sm font-bold text-emerald-950"
+                  >
+                    <LogIn size={17} />
+                    Entrar
+                  </Link>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      signOut();
+                    }}
+                    className="flex min-h-11 items-center gap-2 rounded-2xl bg-white px-3 text-sm font-bold text-slate-950"
+                  >
+                    <LogOut size={17} />
+                    Sair
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </header>
+
+        <header className="sticky top-3 z-30 mb-5 hidden rounded-lg border border-white/70 bg-white/85 p-3 shadow-sm backdrop-blur-xl lg:block">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-emerald-700">{roleLabels[currentUser.role]}</p>

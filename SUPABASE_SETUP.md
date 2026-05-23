@@ -100,13 +100,19 @@ Para ativar check-in por QR/codigo, rode:
 src/lib/supabase/checkins.sql
 ```
 
+Para ativar confirmacao semanal de presenca pelo membro, rode:
+
+```txt
+src/lib/supabase/cell-rsvps.sql
+```
+
 ## Estado da integracao no app
 
 Ja existe:
 
 - login real em `/login`;
 - cadastro real via Supabase Auth;
-- fallback para modo demonstracao;
+- bloqueio de rotas para quem nao esta autenticado;
 - tela `/configuracao`;
 - leitura inicial de `people` do Supabase quando houver dados.
 - supervisao semanal de celulas;
@@ -125,12 +131,13 @@ Ja existe:
 - configuracoes da igreja, mensagens padrao, LGPD, auditoria e backup.
 - biblioteca de materiais, devocionais e certificados baixaveis.
 - check-in por QR/codigo para celula e culto.
+- confirmacao semanal do membro aparecendo para o lider na lista de presenca.
 
 Ainda falta conectar escrita real para:
 
 - upload de arquivos no Storage;
 - notificacoes push;
-- convites por link.
+- upload final de videos no Storage.
 
 Esse SQL cria:
 

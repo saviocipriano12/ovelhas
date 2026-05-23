@@ -7,6 +7,7 @@ import type {
   CareTask,
   Cell,
   CellReport,
+  CellRsvp,
   CheckInEvent,
   ChurchSettings,
   CertificateRecord,
@@ -33,6 +34,7 @@ import {
   seedActivityEvents,
   seedCertificateRecords,
   seedCheckIns,
+  seedCellRsvps,
   seedCellReports,
   seedChurchSettings,
   seedInvites,
@@ -68,6 +70,7 @@ const CHURCH_SETTINGS_KEY = "ovelhas:church-settings";
 const LIBRARY_MATERIALS_KEY = "ovelhas:library-materials";
 const CERTIFICATES_KEY = "ovelhas:certificates";
 const CHECKINS_KEY = "ovelhas:checkins";
+const CELL_RSVPS_KEY = "ovelhas:cell-rsvps";
 const NOTIFICATION_READS_KEY = "ovelhas:notification-reads";
 
 function readJson<T>(key: string, fallback: T): T {
@@ -1961,6 +1964,110 @@ export function useCheckIns(churchId: string) {
   }
 
   return { checkIns, addCheckIn };
+}
+
+export function useCellRsvps(churchId: string) {
+  const storageKey = `${CELL_RSVPS_KEY}:${churchId || "demo"}`;
+  const [rsvps, setRsvps] = useState<CellRsvp[]>(seedCellRsvps);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setRsvps(readJson<CellRsvp[]>(storageKey, seedCellRsvps));
+      setHydrated(true);
+    });
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (hydrated) {
+      writeJson(storageKey, rsvps);
+    }
+  }, [hydrated, rsvps, storageKey]);
+
+  useEffect(() => {
+    async function loadSupabaseRsvps() {
+      const { data, error } = await supabase
+        .from("cell_rsvps")
+        .select("id, church_id, cell_id, person_id, person_name, meeting_date, response, note, created_at, updated_at")
+        .eq("church_id", churchId)
+        .order("meeting_date", { ascending: true });
+
+      if (!error && data) {
+        setRsvps(
+          data.map((rsvp) => ({
+            id: rsvp.id,
+            churchId: rsvp.church_id,
+            cellId: rsvp.cell_id,
+            personId: rsvp.person_id,
+            personName: rsvp.person_name,
+            meetingDate: rsvp.meeting_date,
+            response: rsvp.response as CellRsvp["response"],
+            note: rsvp.note ?? undefined,
+            createdAt: rsvp.created_at,
+            updatedAt: rsvp.updated_at,
+          })),
+        );
+      }
+    }
+
+    if (churchId) {
+      loadSupabaseRsvps();
+    }
+  }, [churchId]);
+
+  async function saveRsvp(input: Omit<CellRsvp, "id" | "createdAt" | "updatedAt"> & { persistToSupabase?: boolean }) {
+    const now = new Date().toISOString();
+    const existing = rsvps.find(
+      (rsvp) => rsvp.personId === input.personId && rsvp.cellId === input.cellId && rsvp.meetingDate === input.meetingDate,
+    );
+    const localRsvp: CellRsvp = {
+      ...input,
+      id: existing?.id ?? `rsvp-${input.personId}-${input.meetingDate}`,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+
+    if (input.persistToSupabase) {
+      const { data, error } = await supabase
+        .from("cell_rsvps")
+        .upsert(
+          {
+            church_id: input.churchId,
+            cell_id: input.cellId,
+            person_id: input.personId,
+            person_name: input.personName,
+            meeting_date: input.meetingDate,
+            response: input.response,
+            note: input.note || null,
+            updated_at: now,
+          },
+          { onConflict: "person_id,cell_id,meeting_date" },
+        )
+        .select("id, created_at, updated_at")
+        .single();
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+
+      if (data) {
+        localRsvp.id = data.id;
+        localRsvp.createdAt = data.created_at;
+        localRsvp.updatedAt = data.updated_at;
+      }
+    }
+
+    setRsvps((current) => {
+      const others = current.filter(
+        (rsvp) => !(rsvp.personId === input.personId && rsvp.cellId === input.cellId && rsvp.meetingDate === input.meetingDate),
+      );
+      return [localRsvp, ...others];
+    });
+
+    return { ok: true, rsvp: localRsvp };
+  }
+
+  return { rsvps, saveRsvp };
 }
 
 export function useNotificationReads(userId: string) {
