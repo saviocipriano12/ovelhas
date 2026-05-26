@@ -10,6 +10,25 @@ import { acceptInvite, getInviteByToken } from "@/lib/local-store";
 import { supabase } from "@/lib/supabase/client";
 
 const PENDING_INVITE_KEY = "ovelhas:pending-invite-token";
+type InviteMode = "signup" | "signin";
+
+function friendlyInviteAuthError(message: string) {
+  const lower = message.toLowerCase();
+
+  if (lower.includes("invalid login credentials")) {
+    return "Email ou senha incorretos. Se voce acabou de criar a conta, confira se o email de confirmacao ja foi validado.";
+  }
+
+  if (lower.includes("email not confirmed")) {
+    return "Seu email ainda nao foi confirmado. Abra o link enviado pelo Supabase e tente entrar novamente.";
+  }
+
+  if (lower.includes("already")) {
+    return "Essa conta ja existe. Use a opcao Ja tenho conta para entrar e aceitar este convite.";
+  }
+
+  return message;
+}
 
 export default function InviteAcceptPage() {
   const router = useRouter();
@@ -20,6 +39,8 @@ export default function InviteAcceptPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [sessionEmail, setSessionEmail] = useState("");
+  const [mode, setMode] = useState<InviteMode>("signup");
 
   useEffect(() => {
     let active = true;
@@ -35,6 +56,27 @@ export default function InviteAcceptPage() {
       active = false;
     };
   }, [token]);
+
+  useEffect(() => {
+    let active = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (active) {
+        setSessionEmail(data.session?.user.email ?? "");
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSessionEmail(session?.user.email ?? "");
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   async function applyInvite() {
     if (typeof window !== "undefined") {
@@ -72,24 +114,29 @@ export default function InviteAcceptPage() {
 
     if (sessionData.session) {
       const sessionEmail = sessionData.session.user.email?.toLowerCase();
-      const inviteEmail = invite?.email?.toLowerCase();
+      const typedEmail = email.toLowerCase();
 
-      if (inviteEmail && sessionEmail && sessionEmail !== inviteEmail) {
-        await supabase.auth.signOut();
-      } else {
+      if (sessionEmail && sessionEmail === typedEmail) {
         await applyInvite();
         setLoading(false);
         return;
       }
+
+      await supabase.auth.signOut();
+      setSessionEmail("");
     }
 
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(PENDING_INVITE_KEY, token);
-    }
+    window.localStorage.setItem(PENDING_INVITE_KEY, token);
 
-    const { data: freshSession } = await supabase.auth.getSession();
+    if (mode === "signin") {
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (freshSession.session) {
+      if (signInError) {
+        setError(friendlyInviteAuthError(signInError.message));
+        setLoading(false);
+        return;
+      }
+
       await applyInvite();
       setLoading(false);
       return;
@@ -107,13 +154,13 @@ export default function InviteAcceptPage() {
     });
 
     if (signUpError) {
-      setError(signUpError.message);
+      setError(friendlyInviteAuthError(signUpError.message));
       setLoading(false);
       return;
     }
 
     if (!data.session) {
-      setMessage("Conta criada e convite preparado. Confirme seu email e depois entre no Ovelhas com esta conta.");
+      setMessage("Conta criada. Se o Supabase pedir confirmacao, abra o email recebido e depois volte neste convite usando a opcao Ja tenho conta.");
       setLoading(false);
       return;
     }
@@ -152,6 +199,28 @@ export default function InviteAcceptPage() {
             <div className="mb-4 rounded-lg bg-emerald-50 p-4">
               <p className="font-bold text-emerald-950">{invite.name || "Novo acesso"}</p>
               <p className="mt-1 text-sm text-emerald-800">{roleLabels[invite.role]}</p>
+              {sessionEmail && (
+                <p className="mt-3 rounded-lg bg-white p-3 text-xs font-semibold leading-5 text-emerald-900">
+                  Voce esta logado como {sessionEmail}. Se o email abaixo for diferente, vamos sair desta sessao antes de criar o novo acesso.
+                </p>
+              )}
+            </div>
+
+            <div className="mb-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
+              <button
+                type="button"
+                onClick={() => setMode("signup")}
+                className={`min-h-10 rounded-lg text-sm font-bold ${mode === "signup" ? "bg-white text-emerald-900 shadow-sm" : "text-slate-500"}`}
+              >
+                Criar conta
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("signin")}
+                className={`min-h-10 rounded-lg text-sm font-bold ${mode === "signin" ? "bg-white text-emerald-900 shadow-sm" : "text-slate-500"}`}
+              >
+                Ja tenho conta
+              </button>
             </div>
 
             <div className="space-y-3">
@@ -188,16 +257,19 @@ export default function InviteAcceptPage() {
               className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-900 px-4 text-sm font-bold text-white disabled:opacity-70"
             >
               {loading ? <Loader2 className="animate-spin" size={18} /> : <UserPlus size={18} />}
-              Aceitar convite
+              {mode === "signup" ? "Criar acesso" : "Entrar e aceitar"}
             </button>
 
             <button
               type="button"
-              onClick={applyInvite}
+              onClick={() => {
+                window.localStorage.setItem(PENDING_INVITE_KEY, token);
+                router.push(`/login?next=${encodeURIComponent(`/convite/${token}`)}`);
+              }}
               className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-100 px-4 text-sm font-bold text-slate-700"
             >
               <LogIn size={18} />
-              Ja estou logado
+              Ir para login
             </button>
           </form>
         ) : (
