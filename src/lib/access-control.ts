@@ -24,11 +24,14 @@ const roleRoutes: Record<UserRole, string[]> = {
     "/oracao",
     "/biblioteca",
     "/notificacoes",
+    "/convites",
     "/supervisao",
+    "/gestao",
     "/atividades",
     "/relatorios",
     "/relatorios/novo",
     "/videos",
+    "/configuracoes",
     "/instalar",
     "/mais",
   ],
@@ -38,12 +41,17 @@ const roleRoutes: Record<UserRole, string[]> = {
     "/pessoas",
     "/agenda",
     "/cuidados",
+    "/presenca",
+    "/checkin",
     "/oracao",
     "/biblioteca",
     "/notificacoes",
+    "/convites",
     "/supervisao",
     "/atividades",
     "/relatorios",
+    "/relatorios/novo",
+    "/videos",
     "/instalar",
     "/mais",
   ],
@@ -90,7 +98,7 @@ export function canAccessRoute(user: AppUser, pathname: string) {
   }
 
   if (pathname === "/configuracao") {
-    return user.role === "admin" && !isPendingAccount(user);
+    return user.role === "admin";
   }
 
   if (isPendingAccount(user)) {
@@ -110,7 +118,35 @@ export function canAccessRoute(user: AppUser, pathname: string) {
 }
 
 export function canManagePeople(user: AppUser) {
-  return user.role === "admin" || user.role === "pastor" || user.role === "leader";
+  return user.role === "admin" || user.role === "pastor" || user.role === "supervisor" || user.role === "leader";
+}
+
+export function canCreateCell(user: AppUser) {
+  return user.role === "admin" || user.role === "pastor" || user.role === "supervisor";
+}
+
+export function canAssignCellResponsibility(user: AppUser) {
+  return user.role === "admin" || user.role === "pastor" || user.role === "supervisor";
+}
+
+export function getInviteableRoles(user: AppUser): UserRole[] {
+  if (user.role === "admin") {
+    return ["admin", "pastor", "supervisor", "leader", "member"];
+  }
+
+  if (user.role === "pastor") {
+    return ["supervisor", "leader", "member"];
+  }
+
+  if (user.role === "supervisor") {
+    return ["leader", "member"];
+  }
+
+  if (user.role === "leader") {
+    return ["member"];
+  }
+
+  return [];
 }
 
 export function canViewPerson(user: AppUser, person: Person) {
@@ -188,7 +224,7 @@ export function getVisibleActivityEvents(user: AppUser, events: ActivityEvent[],
 
   return events.filter((event) => {
     if (user.role === "admin" || user.role === "pastor") {
-      return event.churchId === user.churchId && event.visibility === "leadership";
+      return event.churchId === user.churchId && event.visibility !== "member";
     }
 
     if (user.role === "supervisor") {

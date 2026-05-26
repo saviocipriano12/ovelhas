@@ -9,7 +9,7 @@ import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { getNextMeetingDate, rsvpLabel, rsvpTone, shouldAskForRsvp } from "@/lib/cell-schedule";
-import { useActivityEvents, useCellRsvps, useCells, useDiscipleship, useLocalPeople } from "@/lib/local-store";
+import { saveVideoReflection, useActivityEvents, useCellRsvps, useCells, useDiscipleship, useLocalPeople } from "@/lib/local-store";
 import { getVideoEmbedUrl, isEmbeddableVideo } from "@/lib/video";
 
 function formatDuration(seconds: number) {
@@ -117,13 +117,24 @@ export default function MemberDiscipleshipPage() {
     setFeedback(progressPercent >= 100 ? `Aula concluida: ${video.title}.` : `Progresso salvo em ${progressPercent}%.`);
   }
 
-  function saveReflection() {
-    if (!member || !selectedVideo || typeof window === "undefined") {
+  async function saveReflection() {
+    if (!member || !selectedVideo) {
       return;
     }
 
-    window.localStorage.setItem(`ovelhas:reflection:${member.id}:${selectedVideo.id}`, reflection);
-    setFeedback("Resposta salva no aparelho.");
+    if (isDemoMode && typeof window !== "undefined") {
+      window.localStorage.setItem(`ovelhas:reflection:${member.id}:${selectedVideo.id}`, reflection);
+      setFeedback("Resposta salva no aparelho.");
+      return;
+    }
+
+    const result = await saveVideoReflection({
+      personId: member.id,
+      videoId: selectedVideo.id,
+      answer: reflection,
+    });
+
+    setFeedback(result.ok ? "Resposta salva para sua lideranca acompanhar." : `Nao consegui salvar a resposta: ${result.error}`);
   }
 
   async function respondRsvp(response: "yes" | "no" | "maybe") {
@@ -293,7 +304,7 @@ export default function MemberDiscipleshipPage() {
                     </div>
                     <ProgressBar value={selectedProgress} />
                   </div>
-                  <div className="mt-4 grid grid-cols-4 gap-2">
+                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {[25, 50, 75, 100].map((percent) => (
                       <button
                         key={percent}

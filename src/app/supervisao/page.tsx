@@ -158,7 +158,8 @@ export default function SupervisionPage() {
               <div className="grid grid-cols-2 gap-3">
                 <input
                   name="visitDate"
-                  defaultValue={new Intl.DateTimeFormat("pt-BR").format(new Date())}
+                  type="date"
+                  defaultValue={new Date().toISOString().slice(0, 10)}
                   className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
                 />
                 <select

@@ -183,7 +183,7 @@ export default function ReportsPage() {
                     </div>
                     <BarChart3 size={20} className="text-emerald-700" />
                   </div>
-                  <div className="mt-4 grid grid-cols-4 gap-2 text-center">
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
                     <div>
                       <p className="text-lg font-semibold">{stats.total}</p>
                       <p className="text-[11px] font-medium text-slate-400">pessoas</p>

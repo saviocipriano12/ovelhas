@@ -97,7 +97,8 @@ export default function NewReportPage() {
               <span className="text-xs font-bold uppercase text-slate-400">Data da reuniao</span>
               <input
                 name="meetingDate"
-                defaultValue={new Intl.DateTimeFormat("pt-BR").format(new Date())}
+                type="date"
+                defaultValue={new Date().toISOString().slice(0, 10)}
                 className="mt-2 min-h-12 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
               />
             </label>

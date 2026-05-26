@@ -29,6 +29,7 @@ import {
   Smartphone,
   UserRound,
   Users,
+  Video,
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -49,6 +50,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/cuidados", label: "Cuidados", icon: HeartHandshake },
   { href: "/oracao", label: "Oracao", icon: Heart },
   { href: "/biblioteca", label: "Biblioteca", icon: BookOpen },
+  { href: "/videos", label: "Videos", icon: Video },
   { href: "/notificacoes", label: "Alertas", icon: Bell },
   { href: "/supervisao", label: "Supervisao", icon: Eye },
   { href: "/gestao", label: "Gestao", icon: Network },
@@ -57,6 +59,25 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/relatorios", label: "Relatorios", icon: ChartNoAxesCombined },
   { href: "/configuracoes", label: "Ajustes", icon: Settings },
   { href: "/instalar", label: "Instalar", icon: Smartphone },
+];
+
+const navGroups = [
+  {
+    label: "Cuidado",
+    hrefs: ["/dashboard", "/celulas", "/pessoas", "/presenca", "/checkin", "/agenda", "/cuidados"],
+  },
+  {
+    label: "Discipulado",
+    hrefs: ["/oracao", "/biblioteca", "/notificacoes", "/videos"],
+  },
+  {
+    label: "Lideranca",
+    hrefs: ["/supervisao", "/gestao", "/convites", "/atividades", "/relatorios"],
+  },
+  {
+    label: "Sistema",
+    hrefs: ["/configuracoes", "/instalar"],
+  },
 ];
 
 const mobileNavItems: { href: string; label: string; icon: LucideIcon }[] = [
@@ -85,6 +106,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { unread } = usePastoralNotifications();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const visibleNavItems = navItems.filter((item) => canAccessRoute(currentUser, item.href));
+  const groupedNavItems = navGroups
+    .map((group) => ({
+      ...group,
+      items: visibleNavItems.filter((item) => group.hrefs.includes(item.href)),
+    }))
+    .filter((group) => group.items.length > 0);
   const visibleMobileNavItems = (currentUser.role === "member" ? memberMobileNavItems : mobileNavItems).filter((item) =>
     canAccessRoute(currentUser, item.href),
   );
@@ -94,55 +121,75 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-[#f7f8f3] text-slate-900">
       <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,#d9f4e5_0,transparent_32%),radial-gradient(circle_at_top_right,#dbeafe_0,transparent_30%),linear-gradient(135deg,#f7f8f3_0%,#eef6f0_45%,#f8fafc_100%)]" />
 
-      <aside className="fixed left-0 top-0 hidden h-screen w-72 border-r border-white/70 bg-white/70 p-5 shadow-sm backdrop-blur-xl lg:block">
-        <Link href={homeHref} className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-900 text-lg font-black text-white">
-            O
-          </div>
-          <div>
-            <p className="text-lg font-semibold text-slate-950">Ovelhas</p>
-            <p className="text-xs font-medium text-slate-500">by Savio Cipriano</p>
-            <p className="text-xs font-medium text-emerald-700">{roleLabels[currentUser.role]}</p>
-          </div>
-        </Link>
+      <aside className="fixed left-0 top-0 hidden h-screen w-72 border-r border-white/70 bg-white/75 shadow-sm backdrop-blur-xl lg:flex lg:flex-col">
+        <div className="shrink-0 p-5 pb-3">
+          <Link href={homeHref} className="flex items-center gap-3 rounded-2xl p-1 hover:bg-white/60">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-900 text-lg font-black text-white shadow-lg shadow-emerald-900/15">
+              O
+            </div>
+            <div className="min-w-0">
+              <p className="text-lg font-semibold leading-tight text-slate-950">Ovelhas</p>
+              <p className="text-xs font-medium text-slate-500">by Savio Cipriano</p>
+              <p className="text-xs font-bold text-emerald-700">{roleLabels[currentUser.role]}</p>
+            </div>
+          </Link>
+        </div>
 
-        <nav className="mt-8 space-y-2">
-          {visibleNavItems.map(({ href, label, icon: Icon }) => {
-            const active = isActive(pathname, href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-semibold ${
-                  active
-                    ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/15"
-                    : "text-slate-600 hover:bg-white hover:text-slate-950"
-                }`}
-              >
-                <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                    active ? "bg-white/15" : "bg-emerald-50 text-emerald-800"
-                  }`}
-                >
-                  <Icon size={17} strokeWidth={2.3} />
-                </span>
-                {label}
-              </Link>
-            );
-          })}
+        <nav className="app-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-4">
+          {groupedNavItems.map((group) => (
+            <div key={group.label}>
+              <p className="mb-2 px-3 text-[11px] font-black uppercase tracking-wide text-slate-400">
+                {group.label}
+              </p>
+              <div className="space-y-1.5">
+                {group.items.map(({ href, label, icon: Icon }) => {
+                  const active = isActive(pathname, href);
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold ${
+                        active
+                          ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/15"
+                          : "text-slate-600 hover:bg-white hover:text-slate-950"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                          active ? "bg-white/15" : "bg-emerald-50 text-emerald-800"
+                        }`}
+                      >
+                        <Icon size={17} strokeWidth={2.3} />
+                      </span>
+                      <span className="truncate">{label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
-        <div className="absolute bottom-5 left-5 right-5 rounded-lg border border-emerald-100 bg-emerald-50 p-4">
-          <p className="text-sm font-semibold text-emerald-950">Culto de domingo</p>
-          <p className="mt-1 text-xs text-emerald-800">17 pessoas da celula confirmadas</p>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-emerald-100">
-            <div className="h-full w-[74%] rounded-full bg-emerald-600" />
+        <div className="shrink-0 p-4 pt-2">
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white/75 p-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-slate-950">{currentUser.name}</p>
+              <p className="text-xs font-semibold text-emerald-700">{isDemoMode ? "Modo demo" : "Acesso real"}</p>
+            </div>
+            {isDemoMode ? (
+              <Link href="/login" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-900 text-white">
+                <LogIn size={17} />
+              </Link>
+            ) : (
+              <button onClick={signOut} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-white">
+                <LogOut size={17} />
+              </button>
+            )}
           </div>
-          <p className="mt-3 text-[11px] font-bold uppercase text-emerald-700">Savio Cipriano</p>
         </div>
       </aside>
 
-      <main className="mx-auto min-h-screen w-full max-w-7xl px-4 pb-28 pt-3 lg:pl-80 lg:pr-6 lg:pt-4">
+      <main className="min-h-screen w-full px-4 pb-28 pt-3 lg:ml-72 lg:w-[calc(100%-18rem)] lg:px-8 lg:pb-10 lg:pt-4 xl:px-10">
         <header className="sticky top-3 z-30 mb-4 lg:hidden">
           <div className="relative overflow-hidden rounded-[24px] border border-white/70 bg-slate-950/90 p-3 text-white shadow-2xl shadow-slate-900/15 backdrop-blur-2xl">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,#34d39955_0,transparent_38%),linear-gradient(135deg,#02061700,#064e3b55)]" />
@@ -187,7 +234,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {[
                   { href: "/meu-discipulado", label: "Meu discipulado", icon: UserRound },
                   { href: "/instalar", label: "Instalar app", icon: Smartphone },
-                  { href: "/acesso", label: "Meu acesso", icon: ShieldCheck },
+                  { href: "/gestao", label: "Meu acesso", icon: ShieldCheck },
                 ].filter((item) => canAccessRoute(currentUser, item.href)).map(({ href, label, icon: Icon }) => (
                   <Link
                     key={href}
@@ -252,7 +299,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Link>
               <Link
                 href="/acesso"
-                className={`h-11 w-11 items-center justify-center rounded-lg bg-slate-950 text-white shadow-sm ${canAccessRoute(currentUser, "/acesso") ? "flex" : "hidden"}`}
+                className="hidden h-11 w-11 items-center justify-center rounded-lg bg-slate-950 text-white shadow-sm"
                 aria-label="Trocar acesso"
               >
                 <ShieldCheck size={19} />
@@ -276,7 +323,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
               <Link
                 href="/meu-discipulado"
-                className={`h-11 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white ${canAccessRoute(currentUser, "/meu-discipulado") ? "hidden md:flex" : "hidden"}`}
+                className={`h-11 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white ${currentUser.role === "member" && canAccessRoute(currentUser, "/meu-discipulado") ? "hidden md:flex" : "hidden"}`}
               >
                 <UserRound size={17} />
                 Membro

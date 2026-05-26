@@ -8,7 +8,7 @@ import { Copy, Link2, MessageCircle, QrCode, Send, Share2, UserPlus } from "luci
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
-import { getVisibleCells } from "@/lib/access-control";
+import { getInviteableRoles, getVisibleCells } from "@/lib/access-control";
 import { roleLabels, type UserRole } from "@/lib/data";
 import { useCells, useInvites } from "@/lib/local-store";
 import { whatsappLink } from "@/lib/whatsapp";
@@ -36,23 +36,17 @@ function statusTone(status: string) {
 export default function InvitesPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { cells } = useCells();
-  const { invites, createInvite } = useInvites();
+  const { invites, createInvite, refreshInvites } = useInvites();
   const visibleCells = getVisibleCells(currentUser, cells);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<UserRole>(currentUser.role === "leader" ? "member" : "leader");
+  const inviteableRoles = useMemo(() => getInviteableRoles(currentUser), [currentUser]);
+  const [role, setRole] = useState<UserRole>(inviteableRoles[0] ?? "member");
   const [cellId, setCellId] = useState(visibleCells[0]?.id ?? "");
   const [feedback, setFeedback] = useState("");
   const [lastLink, setLastLink] = useState("");
-  const canInviteLeadership = currentUser.role === "admin";
-  const canInviteMember = currentUser.role === "admin" || currentUser.role === "leader";
-  const allowedRoles = useMemo<UserRole[]>(() => {
-    if (canInviteLeadership) {
-      return ["pastor", "supervisor", "leader", "member"];
-    }
-
-    return ["member"];
-  }, [canInviteLeadership]);
+  const canInvite = inviteableRoles.length > 0;
+  const allowedRoles = inviteableRoles;
   const visibleInvites = invites.filter((invite) => invite.churchId === currentUser.churchId || isDemoMode);
   const selectedCell = visibleCells.find((cell) => cell.id === cellId) ?? visibleCells[0];
 
@@ -80,13 +74,18 @@ export default function InvitesPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!canInviteMember) {
+    if (!canInvite) {
       setFeedback("Seu acesso nao permite criar convites.");
       return;
     }
 
     if (!allowedRoles.includes(role)) {
       setFeedback("Esse tipo de acesso nao pode ser convidado pelo seu perfil.");
+      return;
+    }
+
+    if ((role === "member" || role === "leader") && !selectedCell?.id) {
+      setFeedback("Escolha uma celula antes de gerar convite para lider ou membro.");
       return;
     }
 
@@ -118,7 +117,14 @@ export default function InvitesPage() {
         <SectionHeader
           eyebrow={roleLabels[currentUser.role]}
           title="Convites"
-          action={<span className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">{visibleInvites.length} links</span>}
+          action={
+            <button
+              onClick={refreshInvites}
+              className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800"
+            >
+              Atualizar - {visibleInvites.length} links
+            </button>
+          }
         />
 
         <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
@@ -128,7 +134,7 @@ export default function InvitesPage() {
           </p>
         </div>
 
-        {canInviteMember && (
+        {canInvite && (
           <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
             <form onSubmit={handleSubmit} className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
               <SectionHeader eyebrow="Novo acesso" title="Criar convite" />
@@ -189,7 +195,7 @@ export default function InvitesPage() {
                     />
                   </div>
                   <div className="break-all rounded-lg bg-slate-50 p-4 text-sm font-semibold text-slate-700">{lastLink}</div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid gap-2 sm:grid-cols-3">
                     <button onClick={() => copyLink(lastLink)} className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white">
                       <Copy size={17} />
                       Copiar
@@ -239,7 +245,7 @@ export default function InvitesPage() {
                       {invite.status === "pending" ? "Pendente" : invite.status === "accepted" ? "Aceito" : "Expirado"}
                     </span>
                   </div>
-                  <div className="mt-3 flex gap-2">
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
                     <button onClick={() => copyLink(link)} className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-white px-3 text-xs font-bold text-slate-700">
                       <Link2 size={15} />
                       Copiar link

@@ -5,6 +5,23 @@ import { Capacitor } from "@capacitor/core";
 
 export function PwaRegister() {
   useEffect(() => {
+    const isLocalhost =
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1" ||
+      window.location.hostname === "0.0.0.0";
+
+    if (isLocalhost) {
+      navigator.serviceWorker?.getRegistrations?.().then((registrations) => {
+        registrations.forEach((registration) => registration.unregister());
+      });
+
+      caches?.keys?.().then((keys) => {
+        keys.forEach((key) => caches.delete(key));
+      });
+
+      return;
+    }
+
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => undefined);
     }

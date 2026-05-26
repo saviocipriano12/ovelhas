@@ -7,7 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { MetricCard } from "@/components/metric-card";
 import { SectionHeader } from "@/components/section-header";
-import { getVisibleCells, getVisiblePeople, getVisibleSupervisorVisits } from "@/lib/access-control";
+import { canAssignCellResponsibility, getVisibleCells, getVisiblePeople, getVisibleSupervisorVisits } from "@/lib/access-control";
 import { roleLabels, type UserRole } from "@/lib/data";
 import { useActivityEvents, useCells, useLocalPeople, useProfiles, useSupervisorVisits } from "@/lib/local-store";
 import { getCellStats } from "@/lib/reports";
@@ -61,7 +61,8 @@ export default function ManagementPage() {
   const cellsWithoutLeader = visibleCells.filter((cell) => !cell.leaderUserId).length;
   const peopleWithoutLeader = visiblePeople.filter((person) => !person.leaderUserId).length;
   const leadershipUsers = visibleProfiles.filter((user) => user.role !== "member").length;
-  const canManageStructure = currentUser.role === "admin" || currentUser.role === "pastor";
+  const canAssignCells = canAssignCellResponsibility(currentUser);
+  const canManageRoles = currentUser.role === "admin";
   const selectedAssignmentCell = visibleCells.find((cell) => cell.id === (assignmentCellId || visibleCells[0]?.id));
 
   async function handleAssignmentSubmit(event: FormEvent<HTMLFormElement>) {
@@ -74,12 +75,14 @@ export default function ManagementPage() {
     }
 
     const leader = leaders.find((item) => item.id === assignmentLeaderId);
-    const supervisor = supervisors.find((item) => item.id === assignmentSupervisorId);
+    const nextSupervisorId =
+      currentUser.role === "supervisor" ? currentUser.id : assignmentSupervisorId || cell.supervisorUserId;
+    const supervisor = supervisors.find((item) => item.id === nextSupervisorId);
     const result = await updateCellAssignment({
       cellId: cell.id,
       leaderUserId: assignmentLeaderId || cell.leaderUserId,
       leaderName: leader?.name ?? cell.leaderName,
-      supervisorUserId: assignmentSupervisorId || cell.supervisorUserId,
+      supervisorUserId: nextSupervisorId,
       persistToSupabase: !isDemoMode,
     });
 
@@ -150,10 +153,10 @@ export default function ManagementPage() {
           <MetricCard icon={AlertTriangle} label="Lacunas" value={String(cellsWithoutSupervisor + cellsWithoutLeader + peopleWithoutLeader)} accent="bg-amber-500" />
         </div>
 
-        {canManageStructure && (
+        {canAssignCells && (
           <section className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
             <form onSubmit={handleAssignmentSubmit} className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
-              <SectionHeader eyebrow="Administrador e pastor" title="Atribuir celulas" />
+              <SectionHeader eyebrow={currentUser.role === "supervisor" ? "Supervisor" : "Lideranca"} title="Atribuir celulas" />
               <div className="grid gap-3 md:grid-cols-3">
                 <label className="space-y-2 text-sm font-semibold text-slate-700">
                   Celula
@@ -170,21 +173,30 @@ export default function ManagementPage() {
                   </select>
                 </label>
 
-                <label className="space-y-2 text-sm font-semibold text-slate-700">
-                  Supervisor
-                  <select
-                    value={assignmentSupervisorId}
-                    onChange={(event) => setAssignmentSupervisorId(event.target.value)}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
-                  >
-                    <option value="">Manter atual</option>
-                    {supervisors.map((supervisor) => (
-                      <option key={supervisor.id} value={supervisor.id}>
-                        {supervisor.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                {currentUser.role === "supervisor" ? (
+                  <div className="space-y-2 text-sm font-semibold text-slate-700">
+                    Supervisor
+                    <div className="flex min-h-12 items-center rounded-lg border border-emerald-100 bg-emerald-50 px-3 text-sm font-bold text-emerald-900">
+                      {currentUser.name}
+                    </div>
+                  </div>
+                ) : (
+                  <label className="space-y-2 text-sm font-semibold text-slate-700">
+                    Supervisor
+                    <select
+                      value={assignmentSupervisorId}
+                      onChange={(event) => setAssignmentSupervisorId(event.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                    >
+                      <option value="">Manter atual</option>
+                      {supervisors.map((supervisor) => (
+                        <option key={supervisor.id} value={supervisor.id}>
+                          {supervisor.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
 
                 <label className="space-y-2 text-sm font-semibold text-slate-700">
                   Lider
@@ -208,44 +220,46 @@ export default function ManagementPage() {
               </button>
             </form>
 
-            <form onSubmit={handleRoleSubmit} className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
-              <SectionHeader eyebrow="Acesso" title="Promover usuario" />
-              <div className="space-y-3">
-                <label className="space-y-2 text-sm font-semibold text-slate-700">
-                  Usuario
-                  <select
-                    value={roleUserId}
-                    onChange={(event) => setRoleUserId(event.target.value)}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
-                  >
-                    <option value="">Escolher usuario</option>
-                    {visibleProfiles.map((profile) => (
-                      <option key={profile.id} value={profile.id}>
-                        {profile.name} - {roleLabels[profile.role]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="space-y-2 text-sm font-semibold text-slate-700">
-                  Novo tipo
-                  <select
-                    value={roleValue}
-                    onChange={(event) => setRoleValue(event.target.value as UserRole)}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
-                  >
-                    <option value="member">Membro</option>
-                    <option value="leader">Lider</option>
-                    <option value="supervisor">Supervisor</option>
-                    <option value="pastor">Pastor</option>
-                    <option value="admin">Administrador</option>
-                  </select>
-                </label>
-              </div>
-              <button className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800">
-                <UserCog size={18} />
-                Alterar acesso
-              </button>
-            </form>
+            {canManageRoles && (
+              <form onSubmit={handleRoleSubmit} className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+                <SectionHeader eyebrow="Acesso" title="Promover usuario" />
+                <div className="space-y-3">
+                  <label className="space-y-2 text-sm font-semibold text-slate-700">
+                    Usuario
+                    <select
+                      value={roleUserId}
+                      onChange={(event) => setRoleUserId(event.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                    >
+                      <option value="">Escolher usuario</option>
+                      {visibleProfiles.map((profile) => (
+                        <option key={profile.id} value={profile.id}>
+                          {profile.name} - {roleLabels[profile.role]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-2 text-sm font-semibold text-slate-700">
+                    Novo tipo
+                    <select
+                      value={roleValue}
+                      onChange={(event) => setRoleValue(event.target.value as UserRole)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                    >
+                      <option value="member">Membro</option>
+                      <option value="leader">Lider</option>
+                      <option value="supervisor">Supervisor</option>
+                      <option value="pastor">Pastor</option>
+                      <option value="admin">Administrador</option>
+                    </select>
+                  </label>
+                </div>
+                <button className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800">
+                  <UserCog size={18} />
+                  Alterar acesso
+                </button>
+              </form>
+            )}
           </section>
         )}
 
@@ -265,8 +279,8 @@ export default function ManagementPage() {
                 <article key={role} className="rounded-lg bg-slate-50 p-4">
                   <p className="font-bold text-slate-950">{roleLabels[role]}</p>
                   <p className="mt-1 text-sm text-slate-500">
-                    {role === "pastor" && "Ve tudo que acontece nas celulas da igreja."}
-                    {role === "supervisor" && "Monitora varias celulas e presta relatorio ao pastor."}
+                    {role === "pastor" && "Administra a igreja no dia a dia: celulas, supervisores, lideres e membros."}
+                    {role === "supervisor" && "Cria e monitora celulas, chama lideres e membros, e presta relatorio ao pastor."}
                     {role === "leader" && "Cuida da propria celula, membros, presencas e discipulado."}
                     {role === "member" && "Acessa apenas o proprio discipulado e informacoes pessoais."}
                   </p>

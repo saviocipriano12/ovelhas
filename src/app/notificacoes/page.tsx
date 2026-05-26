@@ -99,7 +99,7 @@ export default function NotificationsPage() {
           eyebrow="Central inteligente"
           title="Notificacoes"
           action={
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={enableDeviceNotifications}
                 className={`flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-bold ${
@@ -122,7 +122,7 @@ export default function NotificationsPage() {
 
         {feedback && <p className="rounded-lg bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{feedback}</p>}
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-lg bg-slate-950 p-4 text-white">
             <Bell size={20} className="text-emerald-200" />
             <p className="mt-3 text-2xl font-semibold">{notifications.length}</p>

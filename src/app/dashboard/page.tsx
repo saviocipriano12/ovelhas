@@ -9,16 +9,16 @@ import { MetricCard } from "@/components/metric-card";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
 import { getVisibleCareTasks, getVisibleCells, getVisiblePeople } from "@/lib/access-control";
-import { careTasks } from "@/lib/data";
-import { useCells, useLocalPeople } from "@/lib/local-store";
+import { useCareTasks, useCells, useLocalPeople } from "@/lib/local-store";
 
 export default function DashboardPage() {
   const { currentUser } = useAuth();
   const { people } = useLocalPeople();
   const { cells } = useCells();
+  const { tasks } = useCareTasks();
   const visiblePeople = getVisiblePeople(currentUser, people);
   const visibleCells = getVisibleCells(currentUser, cells);
-  const visibleCareTasks = getVisibleCareTasks(currentUser, careTasks, people);
+  const visibleCareTasks = getVisibleCareTasks(currentUser, tasks, people);
   const present = visiblePeople.filter((person) => person.cellAbsences === 0).length;
   const servicePresent = visiblePeople.filter((person) => person.servicePresent).length;
   const averageProgress = visiblePeople.length

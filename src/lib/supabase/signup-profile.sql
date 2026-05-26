@@ -19,6 +19,10 @@ begin
   )
   on conflict (id) do nothing;
 
+  if new.raw_user_meta_data ? 'invite_token' then
+    perform public.accept_invite_for_user(new.id, new.email, new.raw_user_meta_data->>'invite_token');
+  end if;
+
   return new;
 end;
 $$;

@@ -49,7 +49,7 @@ export default function PeoplePage() {
       return;
     }
 
-    const person = await addPerson({
+    const result = await addPerson({
       name,
       phone,
       stage,
@@ -62,7 +62,13 @@ export default function PeoplePage() {
       cellName: selectedCell?.name,
       persistToSupabase: !isDemoMode,
     });
-    setCreated(`${person.name} foi adicionado ao cuidado da celula.`);
+
+    if (!result.ok || !result.person) {
+      setCreated(`Nao consegui cadastrar: ${result.error}`);
+      return;
+    }
+
+    setCreated(`${result.person.name} foi adicionado ao cuidado da celula.`);
     setOpen(false);
     event.currentTarget.reset();
   }
@@ -131,7 +137,7 @@ export default function PeoplePage() {
           <div className="fixed inset-0 z-50 flex items-end bg-slate-950/35 p-3 backdrop-blur-sm sm:items-center sm:justify-center">
             <form
               onSubmit={handleSubmit}
-              className="animate-enter w-full rounded-[22px] bg-white p-5 shadow-2xl shadow-slate-900/20 sm:max-w-md"
+              className="app-scrollbar animate-enter max-h-[92vh] w-full overflow-y-auto rounded-[22px] bg-white p-5 shadow-2xl shadow-slate-900/20 sm:max-w-md"
             >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>

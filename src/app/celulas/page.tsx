@@ -1,29 +1,90 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, MapPin, Users } from "lucide-react";
+import { FormEvent, useState } from "react";
+import { CalendarClock, MapPin, Plus, Save, Users, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { MetricCard } from "@/components/metric-card";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
-import { getVisibleCells } from "@/lib/access-control";
-import { useCells, useLocalPeople } from "@/lib/local-store";
+import { canCreateCell, getVisibleCells } from "@/lib/access-control";
+import { roleLabels } from "@/lib/data";
+import { useCells, useLocalPeople, useProfiles } from "@/lib/local-store";
 import { getCellStats } from "@/lib/reports";
 
 export default function CellsPage() {
-  const { currentUser } = useAuth();
+  const { currentUser, isDemoMode } = useAuth();
   const { people } = useLocalPeople();
-  const { cells } = useCells();
+  const { cells, addCell } = useCells();
+  const { profiles } = useProfiles();
+  const [open, setOpen] = useState(false);
+  const [feedback, setFeedback] = useState("");
   const visibleCells = getVisibleCells(currentUser, cells);
   const visibleCellIds = new Set(visibleCells.map((cell) => cell.id));
   const visiblePeople = people.filter((person) => visibleCellIds.has(person.cellId));
   const attention = visiblePeople.filter((person) => person.cellAbsences >= 2 || person.progress < 20).length;
+  const visibleProfiles = profiles.filter((profile) => profile.churchId === currentUser.churchId || isDemoMode);
+  const supervisors = visibleProfiles.filter((profile) => profile.role === "supervisor");
+  const leaders = visibleProfiles.filter((profile) => profile.role === "leader");
+  const canCreateNewCell = canCreateCell(currentUser);
+
+  async function handleCreateCell(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+    const name = String(formData.get("name") || "").trim();
+    const supervisorId =
+      currentUser.role === "supervisor" ? currentUser.id : String(formData.get("supervisorId") || "");
+    const leaderId = String(formData.get("leaderId") || "");
+    const leader = leaders.find((profile) => profile.id === leaderId);
+
+    if (!name) {
+      setFeedback("Informe o nome da celula.");
+      return;
+    }
+
+    const result = await addCell({
+      churchId: currentUser.churchId,
+      name,
+      supervisorUserId: supervisorId,
+      leaderUserId: leaderId,
+      leaderName: leader?.name,
+      meetingDay: String(formData.get("meetingDay") || "").trim(),
+      meetingTime: String(formData.get("meetingTime") || "").trim(),
+      address: String(formData.get("address") || "").trim(),
+      neighborhood: String(formData.get("neighborhood") || "").trim(),
+      persistToSupabase: !isDemoMode,
+    });
+
+    if (!result.ok) {
+      setFeedback(`Nao consegui criar a celula: ${result.error}`);
+      return;
+    }
+
+    setFeedback(`${result.cell?.name ?? "Celula"} criada e pronta para receber pessoas.`);
+    setOpen(false);
+    event.currentTarget.reset();
+  }
 
   return (
     <AppShell>
       <section className="animate-enter space-y-5">
-        <SectionHeader eyebrow="Celulas" title="Acompanhamento por celula" />
+        <SectionHeader
+          eyebrow="Celulas"
+          title="Acompanhamento por celula"
+          action={
+            canCreateNewCell ? (
+              <button
+                onClick={() => setOpen(true)}
+                className="flex h-11 items-center gap-2 rounded-2xl bg-emerald-900 px-4 text-sm font-bold text-white shadow-sm"
+              >
+                <Plus size={18} />
+                Nova
+              </button>
+            ) : null
+          }
+        />
 
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <MetricCard icon={Users} label="Celulas" value={String(visibleCells.length)} accent="bg-emerald-500" />
@@ -31,6 +92,12 @@ export default function CellsPage() {
           <MetricCard icon={CalendarClock} label="Atencao" value={String(attention)} accent="bg-amber-500" />
           <MetricCard icon={MapPin} label="Bairros" value={String(new Set(visibleCells.map((cell) => cell.neighborhood)).size)} accent="bg-violet-500" />
         </div>
+
+        {feedback && (
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">
+            {feedback}
+          </div>
+        )}
 
         <div className="grid gap-3 lg:grid-cols-2">
           {visibleCells.map((cell) => {
@@ -88,6 +155,92 @@ export default function CellsPage() {
         {visibleCells.length === 0 && (
           <div className="rounded-lg border border-white/80 bg-white/90 p-5 text-center text-sm font-medium text-slate-500">
             Nenhuma celula visivel para este perfil.
+          </div>
+        )}
+
+        {open && (
+          <div className="fixed inset-0 z-50 flex items-end bg-slate-950/35 p-3 backdrop-blur-sm sm:items-center sm:justify-center">
+            <form
+              onSubmit={handleCreateCell}
+              className="app-scrollbar animate-enter max-h-[92vh] w-full overflow-y-auto rounded-[24px] bg-white p-5 shadow-2xl shadow-slate-900/20 sm:max-w-xl"
+            >
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase text-emerald-700">{roleLabels[currentUser.role]}</p>
+                  <h2 className="text-xl font-semibold text-slate-950">Nova celula</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600"
+                  aria-label="Fechar"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input
+                  name="name"
+                  required
+                  className="min-h-12 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500 sm:col-span-2"
+                  placeholder="Nome da celula"
+                />
+                <input
+                  name="neighborhood"
+                  className="min-h-12 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                  placeholder="Bairro"
+                />
+                <input
+                  name="address"
+                  className="min-h-12 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                  placeholder="Endereco"
+                />
+                <input
+                  name="meetingDay"
+                  className="min-h-12 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                  placeholder="Dia da semana"
+                />
+                <input
+                  name="meetingTime"
+                  className="min-h-12 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                  placeholder="Horario"
+                />
+                {currentUser.role === "supervisor" ? (
+                  <div className="flex min-h-12 items-center rounded-xl border border-emerald-100 bg-emerald-50 px-3 text-sm font-bold text-emerald-900">
+                    Supervisor: {currentUser.name}
+                  </div>
+                ) : (
+                  <select
+                    name="supervisorId"
+                    className="min-h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-emerald-500"
+                  >
+                    <option value="">Sem supervisor por enquanto</option>
+                    {supervisors.map((supervisor) => (
+                      <option key={supervisor.id} value={supervisor.id}>
+                        {supervisor.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <select
+                  name="leaderId"
+                  className="min-h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-emerald-500"
+                >
+                  <option value="">Sem lider por enquanto</option>
+                  {leaders.map((leader) => (
+                    <option key={leader.id} value={leader.id}>
+                      {leader.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-900 px-4 text-sm font-bold text-white">
+                <Save size={18} />
+                Criar celula
+              </button>
+            </form>
           </div>
         )}
       </section>

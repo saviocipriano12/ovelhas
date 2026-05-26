@@ -275,9 +275,9 @@ export default function VideosPage() {
                 <form onSubmit={handleCreateVideo} className="space-y-3">
                   <input value={videoTitle} onChange={(event) => setVideoTitle(event.target.value)} placeholder="Titulo do video" className="min-h-12 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
                   <input value={videoUrl} onChange={(event) => setVideoUrl(event.target.value)} placeholder="URL do video" className="min-h-12 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
-                  <div className="grid grid-cols-[1fr_120px] gap-3">
-                    <input value={videoDescription} onChange={(event) => setVideoDescription(event.target.value)} placeholder="Descricao" className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
-                    <input type="number" min="1" value={videoMinutes} onChange={(event) => setVideoMinutes(Number(event.target.value))} className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                  <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
+                    <input value={videoDescription} onChange={(event) => setVideoDescription(event.target.value)} placeholder="Descricao" className="min-h-12 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                    <input type="number" min="1" value={videoMinutes} onChange={(event) => setVideoMinutes(Number(event.target.value))} className="min-h-12 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
                   </div>
                   <button className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-900 px-4 text-sm font-bold text-white">
                     <Video size={18} />

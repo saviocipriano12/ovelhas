@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Clock3, LogOut, MailCheck, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 
@@ -48,13 +47,10 @@ export default function WaitingAccessPage() {
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-2">
-            <Link href="/login" className="flex min-h-12 items-center justify-center rounded-2xl bg-emerald-900 px-4 text-sm font-bold text-white">
-              Entrar novamente
-            </Link>
+          <div className="mt-5">
             <button
               onClick={signOut}
-              className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700"
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700"
             >
               <LogOut size={17} />
               Sair

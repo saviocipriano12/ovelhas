@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Building2, Loader2 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { supabase } from "@/lib/supabase/client";
 
 export default function SetupPage() {
   const { currentUser } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -23,60 +25,25 @@ export default function SetupPage() {
     const city = String(formData.get("city") || "").trim();
     const state = String(formData.get("state") || "").trim();
 
-    const { data: church, error: churchError } = await supabase
-      .from("churches")
-      .insert({ name: churchName, city, state })
-      .select("id")
-      .single();
+    const { error: bootstrapError } = await supabase.rpc("bootstrap_first_admin", {
+      church_name: churchName,
+      church_city: city,
+      church_state: state,
+      admin_name: currentUser.name,
+    });
 
-    if (churchError || !church) {
-      setError(churchError?.message ?? "Nao foi possivel criar a igreja.");
+    if (bootstrapError) {
+      setError(bootstrapError.message);
       setLoading(false);
       return;
     }
 
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({
-        church_id: church.id,
-        role: "admin",
-        name: currentUser.name,
-      })
-      .eq("id", currentUser.id);
-
-    if (profileError) {
-      setError(profileError.message);
-      setLoading(false);
-      return;
-    }
-
-    const { error: cellsError } = await supabase.from("cells").insert([
-      {
-        church_id: church.id,
-        name: "Casa da Paz",
-        meeting_day: "Terca",
-        meeting_time: "20h",
-        neighborhood: "Centro",
-        active: true,
-      },
-      {
-        church_id: church.id,
-        name: "Renovo",
-        meeting_day: "Quinta",
-        meeting_time: "19h30",
-        neighborhood: "Vila Esperanca",
-        active: true,
-      },
-    ]);
-
-    if (cellsError) {
-      setError(cellsError.message);
-      setLoading(false);
-      return;
-    }
-
-    setMessage("Igreja criada, seu perfil virou administrador e celulas iniciais foram adicionadas. Recarregue o app para atualizar a sessao.");
+    setMessage("Primeiro administrador criado. Reabrindo o painel com seu acesso atualizado...");
     setLoading(false);
+    window.setTimeout(() => {
+      router.refresh();
+      window.location.href = "/dashboard";
+    }, 900);
   }
 
   return (
@@ -93,7 +60,7 @@ export default function SetupPage() {
           <Building2 size={34} className="text-emerald-200" />
           <h1 className="mt-5 text-3xl font-semibold leading-tight">Configurar primeira igreja</h1>
           <p className="mt-3 text-sm leading-6 text-slate-300">
-            Esta etapa vincula sua conta real a uma igreja e prepara o ambiente inicial.
+            Esta etapa so funciona enquanto ainda nao existe nenhum administrador no banco.
           </p>
         </section>
 

@@ -9,6 +9,7 @@ import { users, type UserRole } from "@/lib/data";
 import { supabase } from "@/lib/supabase/client";
 
 const AUTH_KEY = "ovelhas:current-user";
+const PENDING_INVITE_KEY = "ovelhas:pending-invite-token";
 
 type AuthContextValue = {
   currentUser: AppUser;
@@ -22,6 +23,15 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const publicRoutes = ["/login", "/convite", "/offline"];
+
+type CurrentAppUserProfile = {
+  id?: string;
+  church_id?: string | null;
+  name?: string | null;
+  role?: UserRole | null;
+  person_id?: string | null;
+  cell_ids?: string[] | null;
+};
 
 function isPublicRoute(pathname: string) {
   return publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
@@ -47,6 +57,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true;
 
     async function loadProfile(user: { id: string; email?: string | null; user_metadata?: { name?: string } }) {
+      const pendingInviteToken =
+        typeof window !== "undefined" ? window.localStorage.getItem(PENDING_INVITE_KEY) : null;
+
+      if (pendingInviteToken) {
+        const { error } = await supabase.rpc("accept_invite", { invite_token: pendingInviteToken });
+
+        if (!error && typeof window !== "undefined") {
+          window.localStorage.removeItem(PENDING_INVITE_KEY);
+        }
+      }
+
+      const { data: rpcData } = await supabase.rpc("current_app_user");
+      const rpcProfile = rpcData as CurrentAppUserProfile | null;
+
+      if (!active) {
+        return;
+      }
+
+      if (rpcProfile?.id) {
+        setSupabaseUser({
+          id: rpcProfile.id,
+          name: rpcProfile.name ?? user.user_metadata?.name ?? user.email?.split("@")[0] ?? "Usuario",
+          role: (rpcProfile.role ?? "member") as UserRole,
+          churchId: rpcProfile.church_id ?? "sem-igreja",
+          cellIds: rpcProfile.cell_ids ?? [],
+          personId: rpcProfile.person_id ?? undefined,
+        });
+        return;
+      }
+
       const { data } = await supabase
         .from("profiles")
         .select("id, church_id, name, role")

@@ -231,19 +231,15 @@ as $$
   )
 $$;
 
-create policy "profiles_select_own_or_church_leadership"
+drop policy if exists "profiles_select_own_or_church_leadership" on public.profiles;
+drop policy if exists "profiles_select_authenticated" on public.profiles;
+create policy "profiles_select_authenticated"
 on public.profiles
 for select
-using (
-  id = auth.uid()
-  or exists (
-    select 1 from public.profiles p
-    where p.id = auth.uid()
-    and p.role in ('admin', 'pastor')
-    and p.church_id = profiles.church_id
-  )
-);
+to authenticated
+using (true);
 
+drop policy if exists "cells_select_by_role" on public.cells;
 create policy "cells_select_by_role"
 on public.cells
 for select
@@ -259,11 +255,13 @@ using (
   )
 );
 
+drop policy if exists "people_select_by_responsibility" on public.people;
 create policy "people_select_by_responsibility"
 on public.people
 for select
 using (public.can_view_person(people));
 
+drop policy if exists "people_insert_by_leadership" on public.people;
 create policy "people_insert_by_leadership"
 on public.people
 for insert
@@ -276,12 +274,14 @@ with check (
   )
 );
 
+drop policy if exists "people_update_by_responsibility" on public.people;
 create policy "people_update_by_responsibility"
 on public.people
 for update
 using (public.can_view_person(people))
 with check (public.can_view_person(people));
 
+drop policy if exists "cell_reports_select_by_cell_access" on public.cell_reports;
 create policy "cell_reports_select_by_cell_access"
 on public.cell_reports
 for select
@@ -301,6 +301,7 @@ using (
   )
 );
 
+drop policy if exists "cell_reports_insert_by_leader_or_admin" on public.cell_reports;
 create policy "cell_reports_insert_by_leader_or_admin"
 on public.cell_reports
 for insert

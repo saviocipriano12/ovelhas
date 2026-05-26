@@ -13,7 +13,6 @@ import {
   Heart,
   LayoutGrid,
   PlayCircle,
-  ShieldCheck,
   Settings,
   LogIn,
   UserRound,
@@ -53,7 +52,6 @@ const menuItems: { href: string; title: string; description: string; icon: Lucid
   { href: "/login", title: "Login", description: "Entrar ou criar conta real pelo Supabase.", icon: LogIn },
   { href: "/configuracao", title: "Configuracao inicial", description: "Criar igreja e preparar o primeiro administrador.", icon: Building2 },
   { href: "/configuracoes", title: "Configuracoes", description: "Marca, mensagens, LGPD, auditoria e backup.", icon: Settings },
-  { href: "/acesso", title: "Acesso", description: "Testar administrador, pastor, supervisor, lider e membro.", icon: ShieldCheck },
 ];
 
 export default function MorePage() {

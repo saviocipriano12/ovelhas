@@ -29,6 +29,7 @@ using (
 );
 
 drop policy if exists "church_settings_upsert_by_admin_or_pastor" on public.church_settings;
+drop policy if exists "church_settings_upsert_by_admin" on public.church_settings;
 create policy "church_settings_upsert_by_admin_or_pastor"
 on public.church_settings
 for insert
@@ -43,6 +44,7 @@ with check (
 );
 
 drop policy if exists "church_settings_update_by_admin_or_pastor" on public.church_settings;
+drop policy if exists "church_settings_update_by_admin" on public.church_settings;
 create policy "church_settings_update_by_admin_or_pastor"
 on public.church_settings
 for update
@@ -66,6 +68,7 @@ with check (
 );
 
 drop policy if exists "churches_update_admin_or_pastor" on public.churches;
+drop policy if exists "churches_update_admin" on public.churches;
 create policy "churches_update_admin_or_pastor"
 on public.churches
 for update

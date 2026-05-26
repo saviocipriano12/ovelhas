@@ -25,26 +25,7 @@ import type {
   VideoProgressRecord,
 } from "@/lib/data";
 import {
-  cells as seedCells,
-  careTasks as seedCareTasks,
-  discipleshipTracks as seedDiscipleshipTracks,
-  discipleshipVideos as seedDiscipleshipVideos,
-  people as seedPeople,
-  personTrackAccesses as seedPersonTrackAccesses,
-  seedActivityEvents,
-  seedCertificateRecords,
-  seedCheckIns,
-  seedCellRsvps,
-  seedCellReports,
   seedChurchSettings,
-  seedInvites,
-  seedLibraryMaterials,
-  seedPastoralNotes,
-  seedPastoralReminders,
-  seedPrayerRequests,
-  seedSupervisorVisits,
-  users as seedUsers,
-  videoProgressRecords as seedVideoProgressRecords,
 } from "@/lib/data";
 import { supabase } from "@/lib/supabase/client";
 import { mapSupabaseCell, mapSupabasePerson } from "@/lib/supabase/mappers";
@@ -114,17 +95,6 @@ function initialsFromName(name: string) {
     .toUpperCase();
 }
 
-function normalizePeople(items: Person[]) {
-  return items.map((person) => ({
-    ...person,
-    discipleshipLeader: person.discipleshipLeader || (person as Person & { discipler?: string }).discipler || person.leader,
-    churchId: person.churchId || "igreja-central",
-    cellId: person.cellId || "cell-casa-da-paz",
-    createdByUserId: person.createdByUserId || "leader-rafael",
-    leaderUserId: person.leaderUserId || "leader-rafael",
-  }));
-}
-
 function toIsoDate(value: string) {
   if (!value.includes("/")) {
     return value;
@@ -134,25 +104,116 @@ function toIsoDate(value: string) {
   return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 }
 
+function formatDate(value?: string | null) {
+  if (!value) {
+    return "Hoje";
+  }
+
+  return new Intl.DateTimeFormat("pt-BR").format(new Date(`${value.slice(0, 10)}T00:00:00`));
+}
+
+function mapInviteRow(invite: {
+  id: string;
+  church_id: string;
+  token: string;
+  email: string | null;
+  name: string | null;
+  role: UserRole;
+  cell_id: string | null;
+  created_by: string | null;
+  status: Invite["status"];
+  expires_at: string;
+  accepted_by: string | null;
+  accepted_at: string | null;
+  created_at: string;
+}): Invite {
+  return {
+    id: invite.id,
+    churchId: invite.church_id,
+    token: invite.token,
+    email: invite.email ?? "",
+    name: invite.name ?? "",
+    role: invite.role,
+    cellId: invite.cell_id ?? "",
+    createdBy: invite.created_by ?? "",
+    status: invite.status,
+    expiresAt: invite.expires_at,
+    acceptedBy: invite.accepted_by ?? undefined,
+    acceptedAt: invite.accepted_at ?? undefined,
+    createdAt: invite.created_at,
+  };
+}
+
 export function useLocalPeople() {
-  const [items, setItems] = useState<Person[]>(seedPeople);
+  const [items, setItems] = useState<Person[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setItems(normalizePeople(readJson<Person[]>(PEOPLE_KEY, seedPeople)));
       setHydrated(true);
     });
   }, []);
 
   useEffect(() => {
     async function loadSupabasePeople() {
-      const { data, error } = await supabase
-        .from("people")
-        .select("id, church_id, cell_id, person_user_id, created_by_user_id, leader_user_id, name, phone, email, birth_date, address, neighborhood, status, journey_stage, first_visit_date, notes");
+      const [peopleResult, cellsResult, profilesResult, progressResult, meetingsResult, serviceResult] = await Promise.all([
+        supabase
+          .from("people")
+          .select("id, church_id, cell_id, person_user_id, created_by_user_id, leader_user_id, name, phone, email, birth_date, address, neighborhood, status, journey_stage, first_visit_date, notes"),
+        supabase.from("cells").select("id, name, leader_id"),
+        supabase.from("profiles").select("id, name"),
+        supabase.from("video_progress").select("person_id, progress_percent"),
+        supabase.from("cell_meetings").select("id, meeting_date, cell_attendance(person_id, present)").order("meeting_date", { ascending: false }).limit(8),
+        supabase.from("service_attendance").select("person_id, present, church_services(service_date)").order("created_at", { ascending: false }).limit(200),
+      ]);
 
-      if (!error && data && data.length > 0) {
-        setItems(data.map((person) => mapSupabasePerson(person)));
+      if (!peopleResult.error && peopleResult.data) {
+        const cellNames = new Map((cellsResult.data ?? []).map((cell) => [cell.id, cell.name]));
+        const cellLeaders = new Map((cellsResult.data ?? []).map((cell) => [cell.id, cell.leader_id ?? ""]));
+        const profileNames = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile.name]));
+        const progressByPerson = new Map<string, number[]>();
+
+        (progressResult.data ?? []).forEach((item) => {
+          const values = progressByPerson.get(item.person_id) ?? [];
+          values.push(item.progress_percent ?? 0);
+          progressByPerson.set(item.person_id, values);
+        });
+
+        const absenceStreaks = new Map<string, number>();
+        ((meetingsResult.data ?? []) as { cell_attendance?: { person_id: string; present: boolean }[] }[]).forEach((meeting) => {
+          (meeting.cell_attendance ?? []).forEach((attendance) => {
+            if (absenceStreaks.has(attendance.person_id)) {
+              return;
+            }
+
+            absenceStreaks.set(attendance.person_id, attendance.present ? 0 : 1);
+          });
+        });
+
+        const servicePresence = new Map<string, boolean>();
+        ((serviceResult.data ?? []) as { person_id: string; present: boolean }[]).forEach((attendance) => {
+          if (!servicePresence.has(attendance.person_id)) {
+            servicePresence.set(attendance.person_id, attendance.present);
+          }
+        });
+
+        setItems(
+          peopleResult.data.map((person) => {
+            const leaderId = person.leader_user_id ?? cellLeaders.get(person.cell_id ?? "") ?? "";
+            const progressValues = progressByPerson.get(person.id) ?? [];
+            const progress = progressValues.length
+              ? Math.round(progressValues.reduce((sum, value) => sum + value, 0) / progressValues.length)
+              : 0;
+
+            return mapSupabasePerson(person, {
+              cellName: cellNames.get(person.cell_id ?? "") ?? "Sem celula",
+              leaderName: profileNames.get(leaderId) ?? "Sem lider",
+              progress,
+              cellAbsences: absenceStreaks.get(person.id) ?? 0,
+              servicePresent: servicePresence.get(person.id) ?? false,
+            });
+          }),
+        );
       }
     }
 
@@ -177,7 +238,7 @@ export function useLocalPeople() {
     cellId?: string;
     cellName?: string;
     persistToSupabase?: boolean;
-  }): Promise<Person> {
+  }): Promise<{ ok: boolean; person?: Person; error?: string }> {
     const idBase = slugify(input.name) || "pessoa";
     const localPerson: Person = {
       id: `${idBase}-${Date.now().toString().slice(-5)}`,
@@ -205,7 +266,7 @@ export function useLocalPeople() {
 
     if (!input.persistToSupabase) {
       setItems((current) => [localPerson, ...current]);
-      return localPerson;
+      return { ok: true, person: localPerson };
     }
 
     const { data, error } = await supabase
@@ -226,9 +287,13 @@ export function useLocalPeople() {
       .select("id, church_id, cell_id, person_user_id, created_by_user_id, leader_user_id, name, phone, email, neighborhood, status, journey_stage, first_visit_date")
       .single();
 
-    const newPerson = !error && data ? mapSupabasePerson(data, input.cellName) : localPerson;
+    if (error || !data) {
+      return { ok: false, error: error?.message ?? "Nao foi possivel cadastrar a pessoa." };
+    }
+
+    const newPerson = mapSupabasePerson(data, { cellName: input.cellName });
     setItems((current) => [newPerson, ...current]);
-    return newPerson;
+    return { ok: true, person: newPerson };
   }
 
   function updatePeople(updater: (current: Person[]) => Person[]) {
@@ -291,24 +356,27 @@ export function useLocalPeople() {
 }
 
 export function useCells() {
-  const [items, setItems] = useState<Cell[]>(seedCells);
+  const [items, setItems] = useState<Cell[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setItems(readJson<Cell[]>(CELLS_KEY, seedCells));
       setHydrated(true);
     });
   }, []);
 
   useEffect(() => {
     async function loadSupabaseCells() {
-      const { data, error } = await supabase
-        .from("cells")
-        .select("id, church_id, name, leader_id, supervisor_id, meeting_day, meeting_time, address, neighborhood, active");
+      const [{ data, error }, profilesResult] = await Promise.all([
+        supabase
+          .from("cells")
+          .select("id, church_id, name, leader_id, supervisor_id, meeting_day, meeting_time, address, neighborhood, active"),
+        supabase.from("profiles").select("id, name"),
+      ]);
 
-      if (!error && data && data.length > 0) {
-        setItems(data.map((cell) => mapSupabaseCell(cell)));
+      if (!error && data) {
+        const profileNames = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile.name]));
+        setItems(data.map((cell) => mapSupabaseCell(cell, profileNames.get(cell.leader_id ?? "") ?? "Sem lider")));
       }
     }
 
@@ -320,6 +388,62 @@ export function useCells() {
       writeJson(CELLS_KEY, items);
     }
   }, [hydrated, items]);
+
+  async function addCell(input: {
+    churchId: string;
+    name: string;
+    leaderUserId?: string;
+    leaderName?: string;
+    supervisorUserId?: string;
+    meetingDay?: string;
+    meetingTime?: string;
+    address?: string;
+    neighborhood?: string;
+    persistToSupabase?: boolean;
+  }) {
+    const localCell: Cell = {
+      id: `cell-${Date.now()}`,
+      churchId: input.churchId,
+      name: input.name,
+      leaderUserId: input.leaderUserId ?? "",
+      leaderName: input.leaderName ?? "Sem lider",
+      supervisorUserId: input.supervisorUserId ?? "",
+      meetingDay: input.meetingDay ?? "",
+      meetingTime: input.meetingTime ?? "",
+      address: input.address ?? "",
+      neighborhood: input.neighborhood ?? "",
+      active: true,
+    };
+
+    if (input.persistToSupabase) {
+      const { data, error } = await supabase
+        .from("cells")
+        .insert({
+          church_id: input.churchId,
+          name: input.name,
+          leader_id: input.leaderUserId || null,
+          supervisor_id: input.supervisorUserId || null,
+          meeting_day: input.meetingDay || null,
+          meeting_time: input.meetingTime || null,
+          address: input.address || null,
+          neighborhood: input.neighborhood || null,
+          active: true,
+        })
+        .select("id, church_id, name, leader_id, supervisor_id, meeting_day, meeting_time, address, neighborhood, active")
+        .single();
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+
+      if (data) {
+        localCell.id = data.id;
+      }
+    }
+
+    setItems((current) => [localCell, ...current]);
+    return { ok: true, cell: localCell };
+  }
 
   async function updateCellAssignment(input: {
     cellId: string;
@@ -358,16 +482,15 @@ export function useCells() {
     return { ok: true };
   }
 
-  return { cells: items, updateCellAssignment };
+  return { cells: items, addCell, updateCellAssignment };
 }
 
 export function useProfiles() {
-  const [profiles, setProfiles] = useState<AppUser[]>(seedUsers);
+  const [profiles, setProfiles] = useState<AppUser[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setProfiles(readJson<AppUser[]>(PROFILES_KEY, seedUsers));
       setHydrated(true);
     });
   }, []);
@@ -385,7 +508,7 @@ export function useProfiles() {
         .select("id, church_id, name, role")
         .order("name", { ascending: true });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setProfiles(
           data.map((profile) => ({
             id: profile.id,
@@ -452,12 +575,11 @@ export function useCompletedCare() {
 }
 
 export function useCareTasks() {
-  const [tasks, setTasks] = useState<CareTask[]>(seedCareTasks);
+  const [tasks, setTasks] = useState<CareTask[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setTasks(readJson<CareTask[]>(CARE_TASKS_KEY, seedCareTasks));
       setHydrated(true);
     });
   }, []);
@@ -476,23 +598,18 @@ export function useCareTasks() {
         .neq("status", "completed")
         .order("created_at", { ascending: false });
 
-      if (!error && data && data.length > 0) {
-        setTasks((current) => {
-          const currentIds = new Set(current.map((task) => task.id));
-          const remoteTasks = data
-            .filter((task) => !currentIds.has(task.id))
-            .map((task) => ({
+      if (!error && data) {
+        setTasks(
+          data.map((task) => ({
               id: task.id,
               personId: task.person_id,
               title: task.title,
               description: task.description ?? "Acompanhamento pastoral pendente.",
               priority: (task.priority ?? "Media") as CareTask["priority"],
-              due: task.due_date ? new Intl.DateTimeFormat("pt-BR").format(new Date(`${task.due_date}T00:00:00`)) : "Hoje",
+              due: formatDate(task.due_date),
               message: "Ola! Passando para saber como voce esta. Estamos aqui para caminhar com voce.",
-            }));
-
-          return [...remoteTasks, ...current];
-        });
+            })),
+        );
       }
     }
 
@@ -533,16 +650,33 @@ export function useCareTasks() {
     return { ok: true };
   }
 
-  return { tasks, addCareTask };
+  async function completeCareTask(taskId: string, persistToSupabase?: boolean) {
+    const now = new Date().toISOString();
+
+    if (persistToSupabase) {
+      const { error } = await supabase
+        .from("follow_ups")
+        .update({ status: "completed", completed_at: now })
+        .eq("id", taskId);
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setTasks((current) => current.filter((task) => task.id !== taskId));
+    return { ok: true };
+  }
+
+  return { tasks, addCareTask, completeCareTask };
 }
 
 export function useCellReports() {
-  const [reports, setReports] = useState<CellReport[]>(seedCellReports);
+  const [reports, setReports] = useState<CellReport[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setReports(readJson<CellReport[]>(CELL_REPORTS_KEY, seedCellReports));
       setHydrated(true);
     });
   }, []);
@@ -555,18 +689,24 @@ export function useCellReports() {
 
   useEffect(() => {
     async function loadSupabaseReports() {
-      const { data, error } = await supabase
-        .from("cell_reports")
-        .select("id, cell_id, leader_id, supervisor_id, meeting_date, present_count, visitors_count, service_count, decisions_count, highlights, needs, prayer_requests, created_at");
+      const [reportsResult, cellsResult, profilesResult] = await Promise.all([
+        supabase
+          .from("cell_reports")
+          .select("id, cell_id, leader_id, supervisor_id, meeting_date, present_count, visitors_count, service_count, decisions_count, highlights, needs, prayer_requests, created_at"),
+        supabase.from("cells").select("id, name"),
+        supabase.from("profiles").select("id, name"),
+      ]);
 
-      if (!error && data && data.length > 0) {
+      if (!reportsResult.error && reportsResult.data) {
+        const cellNames = new Map((cellsResult.data ?? []).map((cell) => [cell.id, cell.name]));
+        const profileNames = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile.name]));
         setReports(
-          data.map((report) => ({
+          reportsResult.data.map((report) => ({
             id: report.id,
             cellId: report.cell_id,
-            cellName: "Celula",
+            cellName: cellNames.get(report.cell_id) ?? "Celula",
             leaderUserId: report.leader_id ?? "",
-            leaderName: "Lider",
+            leaderName: profileNames.get(report.leader_id ?? "") ?? "Lider",
             supervisorUserId: report.supervisor_id ?? "",
             meetingDate: report.meeting_date,
             presentCount: report.present_count,
@@ -625,12 +765,11 @@ export function useCellReports() {
 }
 
 export function useSupervisorVisits() {
-  const [visits, setVisits] = useState<SupervisorVisit[]>(seedSupervisorVisits);
+  const [visits, setVisits] = useState<SupervisorVisit[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setVisits(readJson<SupervisorVisit[]>(SUPERVISOR_VISITS_KEY, seedSupervisorVisits));
       setHydrated(true);
     });
   }, []);
@@ -643,21 +782,27 @@ export function useSupervisorVisits() {
 
   useEffect(() => {
     async function loadSupabaseVisits() {
-      const { data, error } = await supabase
-        .from("supervisor_visits")
-        .select("id, church_id, cell_id, supervisor_id, leader_id, visit_date, visit_type, leader_present, health_score, notes, next_steps, created_at");
+      const [visitsResult, cellsResult, profilesResult] = await Promise.all([
+        supabase
+          .from("supervisor_visits")
+          .select("id, church_id, cell_id, supervisor_id, leader_id, visit_date, visit_type, leader_present, health_score, notes, next_steps, created_at"),
+        supabase.from("cells").select("id, name"),
+        supabase.from("profiles").select("id, name"),
+      ]);
 
-      if (!error && data && data.length > 0) {
+      if (!visitsResult.error && visitsResult.data) {
+        const cellNames = new Map((cellsResult.data ?? []).map((cell) => [cell.id, cell.name]));
+        const profileNames = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile.name]));
         setVisits(
-          data.map((visit) => ({
+          visitsResult.data.map((visit) => ({
             id: visit.id,
             churchId: visit.church_id,
             cellId: visit.cell_id,
-            cellName: "Celula",
+            cellName: cellNames.get(visit.cell_id) ?? "Celula",
             supervisorUserId: visit.supervisor_id ?? "",
-            supervisorName: "Supervisor",
+            supervisorName: profileNames.get(visit.supervisor_id ?? "") ?? "Supervisor",
             leaderUserId: visit.leader_id ?? "",
-            leaderName: "Lider",
+            leaderName: profileNames.get(visit.leader_id ?? "") ?? "Lider",
             visitDate: visit.visit_date,
             visitType: visit.visit_type as "Presencial" | "Online" | "Ligacao",
             leaderPresent: visit.leader_present,
@@ -711,12 +856,11 @@ export function useSupervisorVisits() {
 }
 
 export function useActivityEvents() {
-  const [events, setEvents] = useState<ActivityEvent[]>(seedActivityEvents);
+  const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setEvents(readJson<ActivityEvent[]>(ACTIVITY_EVENTS_KEY, seedActivityEvents));
       setHydrated(true);
     });
   }, []);
@@ -733,7 +877,7 @@ export function useActivityEvents() {
         .from("activity_events")
         .select("id, church_id, actor_user_id, actor_name, actor_role, action, description, target_type, target_id, target_name, cell_id, person_id, visibility, created_at");
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setEvents(
           data.map((event) => ({
             id: event.id,
@@ -798,18 +942,14 @@ export function useActivityEvents() {
 }
 
 export function useDiscipleship() {
-  const [tracks, setTracks] = useState<DiscipleshipTrack[]>(seedDiscipleshipTracks);
-  const [videos, setVideos] = useState<DiscipleshipVideo[]>(seedDiscipleshipVideos);
-  const [accesses, setAccesses] = useState<PersonTrackAccess[]>(seedPersonTrackAccesses);
-  const [progress, setProgress] = useState<VideoProgressRecord[]>(seedVideoProgressRecords);
+  const [tracks, setTracks] = useState<DiscipleshipTrack[]>([]);
+  const [videos, setVideos] = useState<DiscipleshipVideo[]>([]);
+  const [accesses, setAccesses] = useState<PersonTrackAccess[]>([]);
+  const [progress, setProgress] = useState<VideoProgressRecord[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setTracks(readJson<DiscipleshipTrack[]>(DISCIPLESHIP_TRACKS_KEY, seedDiscipleshipTracks));
-      setVideos(readJson<DiscipleshipVideo[]>(DISCIPLESHIP_VIDEOS_KEY, seedDiscipleshipVideos));
-      setAccesses(readJson<PersonTrackAccess[]>(PERSON_TRACK_ACCESS_KEY, seedPersonTrackAccesses));
-      setProgress(readJson<VideoProgressRecord[]>(VIDEO_PROGRESS_KEY, seedVideoProgressRecords));
       setHydrated(true);
     });
   }, []);
@@ -843,7 +983,7 @@ export function useDiscipleship() {
           .select("id, person_id, video_id, status, progress_percent, started_at, completed_at, last_watched_at"),
       ]);
 
-      if (!tracksResult.error && tracksResult.data && tracksResult.data.length > 0) {
+      if (!tracksResult.error && tracksResult.data) {
         setTracks(
           tracksResult.data.map((track) => ({
             id: track.id,
@@ -857,7 +997,7 @@ export function useDiscipleship() {
         );
       }
 
-      if (!videosResult.error && videosResult.data && videosResult.data.length > 0) {
+      if (!videosResult.error && videosResult.data) {
         setVideos(
           videosResult.data.map((video) => ({
             id: video.id,
@@ -874,7 +1014,7 @@ export function useDiscipleship() {
         );
       }
 
-      if (!accessesResult.error && accessesResult.data && accessesResult.data.length > 0) {
+      if (!accessesResult.error && accessesResult.data) {
         setAccesses(
           accessesResult.data.map((access) => ({
             id: access.id,
@@ -889,7 +1029,7 @@ export function useDiscipleship() {
         );
       }
 
-      if (!progressResult.error && progressResult.data && progressResult.data.length > 0) {
+      if (!progressResult.error && progressResult.data) {
         setProgress(
           progressResult.data.map((item) => ({
             id: item.id,
@@ -1116,12 +1256,11 @@ function createInviteToken() {
 }
 
 export function useInvites() {
-  const [invites, setInvites] = useState<Invite[]>(seedInvites);
+  const [invites, setInvites] = useState<Invite[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setInvites(readJson<Invite[]>(INVITES_KEY, seedInvites));
       setHydrated(true);
     });
   }, []);
@@ -1132,35 +1271,21 @@ export function useInvites() {
     }
   }, [hydrated, invites]);
 
-  useEffect(() => {
-    async function loadSupabaseInvites() {
-      const { data, error } = await supabase
-        .from("invites")
-        .select("id, church_id, token, email, name, role, cell_id, created_by, status, expires_at, accepted_by, accepted_at, created_at")
-        .order("created_at", { ascending: false });
+  async function refreshInvites() {
+    const { data, error } = await supabase
+      .from("invites")
+      .select("id, church_id, token, email, name, role, cell_id, created_by, status, expires_at, accepted_by, accepted_at, created_at")
+      .order("created_at", { ascending: false });
 
-      if (!error && data && data.length > 0) {
-        setInvites(
-          data.map((invite) => ({
-            id: invite.id,
-            churchId: invite.church_id,
-            token: invite.token,
-            email: invite.email ?? "",
-            name: invite.name ?? "",
-            role: invite.role as UserRole,
-            cellId: invite.cell_id ?? "",
-            createdBy: invite.created_by ?? "",
-            status: invite.status as Invite["status"],
-            expiresAt: invite.expires_at,
-            acceptedBy: invite.accepted_by ?? undefined,
-            acceptedAt: invite.accepted_at ?? undefined,
-            createdAt: invite.created_at,
-          })),
-        );
-      }
+    if (!error && data) {
+      setInvites(data.map((invite) => mapInviteRow(invite)));
     }
+  }
 
-    loadSupabaseInvites();
+  useEffect(() => {
+    queueMicrotask(() => {
+      refreshInvites();
+    });
   }, []);
 
   async function createInvite(input: {
@@ -1217,16 +1342,15 @@ export function useInvites() {
     return { ok: true, invite: localInvite };
   }
 
-  return { invites, createInvite };
+  return { invites, createInvite, refreshInvites };
 }
 
 export function usePastoralNotes() {
-  const [notes, setNotes] = useState<PastoralNote[]>(seedPastoralNotes);
+  const [notes, setNotes] = useState<PastoralNote[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setNotes(readJson<PastoralNote[]>(PASTORAL_NOTES_KEY, seedPastoralNotes));
       setHydrated(true);
     });
   }, []);
@@ -1244,7 +1368,7 @@ export function usePastoralNotes() {
         .select("id, person_id, created_by, note, visibility, created_at")
         .order("created_at", { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setNotes(
           data.map((note) => ({
             id: note.id,
@@ -1310,12 +1434,11 @@ export function usePastoralNotes() {
 }
 
 export function usePastoralReminders() {
-  const [reminders, setReminders] = useState<PastoralReminder[]>(seedPastoralReminders);
+  const [reminders, setReminders] = useState<PastoralReminder[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setReminders(readJson<PastoralReminder[]>(PASTORAL_REMINDERS_KEY, seedPastoralReminders));
       setHydrated(true);
     });
   }, []);
@@ -1333,7 +1456,7 @@ export function usePastoralReminders() {
         .select("id, church_id, assigned_to, title, description, reminder_type, due_at, status, person_id, cell_id, created_by, created_at, completed_at")
         .order("due_at", { ascending: true });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setReminders(
           data.map((reminder) => ({
             id: reminder.id,
@@ -1443,12 +1566,11 @@ export function usePastoralReminders() {
 }
 
 export function usePrayerRequests() {
-  const [requests, setRequests] = useState<PrayerRequest[]>(seedPrayerRequests);
+  const [requests, setRequests] = useState<PrayerRequest[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setRequests(readJson<PrayerRequest[]>(PRAYER_REQUESTS_KEY, seedPrayerRequests));
       setHydrated(true);
     });
   }, []);
@@ -1466,7 +1588,7 @@ export function usePrayerRequests() {
         .select("id, church_id, person_id, cell_id, title, request, visibility, status, created_by, created_by_name, answered_note, created_at, updated_at")
         .order("created_at", { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setRequests(
           data.map((request) => ({
             id: request.id,
@@ -1694,12 +1816,11 @@ export function useChurchSettings(churchId: string) {
 
 export function useLibraryMaterials(churchId: string) {
   const storageKey = `${LIBRARY_MATERIALS_KEY}:${churchId || "demo"}`;
-  const [materials, setMaterials] = useState<LibraryMaterial[]>(seedLibraryMaterials);
+  const [materials, setMaterials] = useState<LibraryMaterial[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setMaterials(readJson<LibraryMaterial[]>(storageKey, seedLibraryMaterials));
       setHydrated(true);
     });
   }, [storageKey]);
@@ -1717,7 +1838,7 @@ export function useLibraryMaterials(churchId: string) {
         .select("id, church_id, track_id, title, description, material_type, url, audience, active, created_by, created_at")
         .order("created_at", { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setMaterials(
           data.map((material) => ({
             id: material.id,
@@ -1783,12 +1904,11 @@ export function useLibraryMaterials(churchId: string) {
 
 export function useCertificates(churchId: string) {
   const storageKey = `${CERTIFICATES_KEY}:${churchId || "demo"}`;
-  const [certificates, setCertificates] = useState<CertificateRecord[]>(seedCertificateRecords);
+  const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setCertificates(readJson<CertificateRecord[]>(storageKey, seedCertificateRecords));
       setHydrated(true);
     });
   }, [storageKey]);
@@ -1806,7 +1926,7 @@ export function useCertificates(churchId: string) {
         .select("id, church_id, person_id, track_id, title, issued_by, issued_by_name, issued_at")
         .order("issued_at", { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setCertificates(
           data.map((certificate) => ({
             id: certificate.id,
@@ -1874,12 +1994,11 @@ export function useCertificates(churchId: string) {
 
 export function useCheckIns(churchId: string) {
   const storageKey = `${CHECKINS_KEY}:${churchId || "demo"}`;
-  const [checkIns, setCheckIns] = useState<CheckInEvent[]>(seedCheckIns);
+  const [checkIns, setCheckIns] = useState<CheckInEvent[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setCheckIns(readJson<CheckInEvent[]>(storageKey, seedCheckIns));
       setHydrated(true);
     });
   }, [storageKey]);
@@ -1897,7 +2016,7 @@ export function useCheckIns(churchId: string) {
         .select("id, church_id, cell_id, person_id, person_name, checkin_type, checkin_date, created_at")
         .order("created_at", { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setCheckIns(
           data.map((checkin) => ({
             id: checkin.id,
@@ -1968,12 +2087,11 @@ export function useCheckIns(churchId: string) {
 
 export function useCellRsvps(churchId: string) {
   const storageKey = `${CELL_RSVPS_KEY}:${churchId || "demo"}`;
-  const [rsvps, setRsvps] = useState<CellRsvp[]>(seedCellRsvps);
+  const [rsvps, setRsvps] = useState<CellRsvp[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setRsvps(readJson<CellRsvp[]>(storageKey, seedCellRsvps));
       setHydrated(true);
     });
   }, [storageKey]);
@@ -2104,35 +2222,42 @@ export function useNotificationReads(userId: string) {
 }
 
 export async function getInviteByToken(token: string): Promise<Invite | null> {
-  const { data, error } = await supabase
-    .from("invites")
-    .select("id, church_id, token, email, name, role, cell_id, created_by, status, expires_at, accepted_by, accepted_at, created_at")
-    .eq("token", token)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("get_invite_by_token", { invite_token: token }).maybeSingle();
 
   if (error || !data) {
-    return readJson<Invite[]>(INVITES_KEY, seedInvites).find((invite) => invite.token === token) ?? null;
+    return null;
   }
 
-  return {
-    id: data.id,
-    churchId: data.church_id,
-    token: data.token,
-    email: data.email ?? "",
-    name: data.name ?? "",
-    role: data.role as UserRole,
-    cellId: data.cell_id ?? "",
-    createdBy: data.created_by ?? "",
-    status: data.status as Invite["status"],
-    expiresAt: data.expires_at,
-    acceptedBy: data.accepted_by ?? undefined,
-    acceptedAt: data.accepted_at ?? undefined,
-    createdAt: data.created_at,
-  };
+  return mapInviteRow(data as Parameters<typeof mapInviteRow>[0]);
 }
 
 export async function acceptInvite(token: string) {
   const { error } = await supabase.rpc("accept_invite", { invite_token: token });
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  return { ok: true };
+}
+
+export async function saveVideoReflection(input: {
+  personId: string;
+  videoId: string;
+  answer: string;
+  question?: string;
+}) {
+  const now = new Date().toISOString();
+  const { error } = await supabase.from("video_reflections").upsert(
+    {
+      person_id: input.personId,
+      video_id: input.videoId,
+      question: input.question || "Reflexao",
+      answer: input.answer,
+      updated_at: now,
+    },
+    { onConflict: "person_id,video_id,question" },
+  );
 
   if (error) {
     return { ok: false, error: error.message };

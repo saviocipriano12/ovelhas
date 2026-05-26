@@ -137,7 +137,7 @@ export default function LibraryPage() {
       <section className="animate-enter space-y-5">
         <SectionHeader eyebrow={roleLabels[currentUser.role]} title="Biblioteca e certificados" />
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-lg bg-slate-950 p-4 text-white">
             <BookOpen size={20} className="text-emerald-200" />
             <p className="mt-3 text-2xl font-semibold">{visibleMaterials.length}</p>

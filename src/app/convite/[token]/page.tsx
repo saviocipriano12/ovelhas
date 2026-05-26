@@ -9,6 +9,8 @@ import { roleLabels } from "@/lib/data";
 import { acceptInvite, getInviteByToken } from "@/lib/local-store";
 import { supabase } from "@/lib/supabase/client";
 
+const PENDING_INVITE_KEY = "ovelhas:pending-invite-token";
+
 export default function InviteAcceptPage() {
   const router = useRouter();
   const params = useParams<{ token: string }>();
@@ -35,6 +37,10 @@ export default function InviteAcceptPage() {
   }, [token]);
 
   async function applyInvite() {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(PENDING_INVITE_KEY, token);
+    }
+
     const result = await acceptInvite(token);
 
     if (!result.ok) {
@@ -43,6 +49,9 @@ export default function InviteAcceptPage() {
     }
 
     setMessage("Convite aceito. Preparando seu acesso...");
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(PENDING_INVITE_KEY);
+    }
     router.push("/dashboard");
     router.refresh();
     return true;
@@ -62,6 +71,25 @@ export default function InviteAcceptPage() {
     const { data: sessionData } = await supabase.auth.getSession();
 
     if (sessionData.session) {
+      const sessionEmail = sessionData.session.user.email?.toLowerCase();
+      const inviteEmail = invite?.email?.toLowerCase();
+
+      if (inviteEmail && sessionEmail && sessionEmail !== inviteEmail) {
+        await supabase.auth.signOut();
+      } else {
+        await applyInvite();
+        setLoading(false);
+        return;
+      }
+    }
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(PENDING_INVITE_KEY, token);
+    }
+
+    const { data: freshSession } = await supabase.auth.getSession();
+
+    if (freshSession.session) {
       await applyInvite();
       setLoading(false);
       return;
@@ -85,7 +113,7 @@ export default function InviteAcceptPage() {
     }
 
     if (!data.session) {
-      setMessage("Conta criada. Confirme seu email e depois abra este convite novamente para ativar o acesso.");
+      setMessage("Conta criada e convite preparado. Confirme seu email e depois entre no Ovelhas com esta conta.");
       setLoading(false);
       return;
     }

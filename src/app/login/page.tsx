@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Eye, EyeOff, Loader2, LogIn, MailCheck, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 
-type Mode = "signin" | "signup" | "reset";
+type Mode = "signin" | "reset";
 
 function friendlyAuthError(message: string) {
   const lower = message.toLowerCase();
@@ -45,7 +45,6 @@ export default function LoginPage() {
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") || "").trim();
     const password = String(formData.get("password") || "");
-    const name = String(formData.get("name") || "").trim();
 
     if (mode === "reset") {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
@@ -77,30 +76,6 @@ export default function LoginPage() {
       return;
     }
 
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name,
-        },
-      },
-    });
-
-    if (signUpError) {
-      setError(friendlyAuthError(signUpError.message));
-      setLoading(false);
-      return;
-    }
-
-    if (data.session) {
-      setMessage("Conta criada. Agora use um convite da igreja ou aguarde sua lideranca liberar o acesso.");
-      router.push("/aguardando");
-      router.refresh();
-    } else {
-      setMessage("Conta criada. Verifique seu email e depois use o convite da sua igreja para liberar o acesso.");
-    }
-
     setLoading(false);
   }
 
@@ -128,7 +103,7 @@ export default function LoginPage() {
             <ShieldCheck size={25} />
           </div>
           <h1 className="mt-5 text-3xl font-semibold leading-tight">
-            {mode === "signin" ? "Entrar no Ovelhas" : mode === "signup" ? "Criar acesso" : "Recuperar senha"}
+            {mode === "signin" ? "Entrar no Ovelhas" : "Recuperar senha"}
           </h1>
           <p className="mt-3 text-sm leading-6 text-slate-300">
             Os dados da igreja ficam protegidos por login, perfil e permissoes de pastor, supervisor, lider e membro.
@@ -143,20 +118,13 @@ export default function LoginPage() {
         </section>
 
         <form onSubmit={handleSubmit} className="mt-5 rounded-[22px] border border-white/80 bg-white/90 p-5 shadow-sm">
-          <div className="mb-4 grid grid-cols-3 gap-2 rounded-lg bg-slate-100 p-1">
+          <div className="mb-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
             <button
               type="button"
               onClick={() => setMode("signin")}
               className={`min-h-10 rounded-lg text-sm font-bold ${mode === "signin" ? "bg-white text-emerald-900 shadow-sm" : "text-slate-500"}`}
             >
               Entrar
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("signup")}
-              className={`min-h-10 rounded-lg text-sm font-bold ${mode === "signup" ? "bg-white text-emerald-900 shadow-sm" : "text-slate-500"}`}
-            >
-              Cadastrar
             </button>
             <button
               type="button"
@@ -168,14 +136,6 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-3">
-            {mode === "signup" && (
-              <input
-                name="name"
-                required
-                className="min-h-12 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
-                placeholder="Nome completo"
-              />
-            )}
             <input
               name="email"
               type="email"
@@ -208,7 +168,7 @@ export default function LoginPage() {
             className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-900 px-4 text-sm font-bold text-white disabled:opacity-70"
           >
             {loading ? <Loader2 className="animate-spin" size={18} /> : mode === "reset" ? <MailCheck size={18} /> : <LogIn size={18} />}
-            {mode === "signin" ? "Entrar" : mode === "signup" ? "Criar conta" : "Enviar recuperacao"}
+            {mode === "signin" ? "Entrar" : "Enviar recuperacao"}
           </button>
         </form>
 

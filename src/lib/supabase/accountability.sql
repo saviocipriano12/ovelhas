@@ -36,6 +36,7 @@ create table if not exists public.activity_events (
 alter table public.supervisor_visits enable row level security;
 alter table public.activity_events enable row level security;
 
+drop policy if exists "supervisor_visits_select_by_role" on public.supervisor_visits;
 create policy "supervisor_visits_select_by_role"
 on public.supervisor_visits
 for select
@@ -53,6 +54,7 @@ using (
   )
 );
 
+drop policy if exists "supervisor_visits_insert_by_supervisor_or_admin" on public.supervisor_visits;
 create policy "supervisor_visits_insert_by_supervisor_or_admin"
 on public.supervisor_visits
 for insert
@@ -69,6 +71,7 @@ with check (
   )
 );
 
+drop policy if exists "activity_events_select_by_role" on public.activity_events;
 create policy "activity_events_select_by_role"
 on public.activity_events
 for select
@@ -80,7 +83,7 @@ using (
     left join public.people pe on pe.id = activity_events.person_id
     where p.id = auth.uid()
     and (
-      (p.role in ('admin', 'pastor') and p.church_id = activity_events.church_id and activity_events.visibility = 'leadership')
+      (p.role in ('admin', 'pastor') and p.church_id = activity_events.church_id and activity_events.visibility <> 'member')
       or (p.role = 'supervisor' and (p.id = c.supervisor_id or p.id = activity_events.actor_user_id))
       or (p.role = 'leader' and (p.id = c.leader_id or p.id = pe.leader_user_id or p.id = activity_events.actor_user_id))
       or (p.role = 'member' and activity_events.visibility = 'member' and p.id = activity_events.actor_user_id)
@@ -88,6 +91,7 @@ using (
   )
 );
 
+drop policy if exists "activity_events_insert_authenticated" on public.activity_events;
 create policy "activity_events_insert_authenticated"
 on public.activity_events
 for insert
