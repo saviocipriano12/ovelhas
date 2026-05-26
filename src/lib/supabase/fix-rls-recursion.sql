@@ -310,4 +310,256 @@ grant execute on function public.current_app_user() to authenticated;
 grant execute on function public.can_create_invite(uuid, app_role, uuid) to authenticated;
 grant execute on function public.can_view_invite(uuid, uuid, uuid) to anon, authenticated;
 
+-- 6) RPCs centrais para o app. Elas evitam que mobile/desktop dependam de
+-- policies complexas em leituras basicas de celulas, pessoas e perfis.
+create or replace function public.get_my_profiles()
+returns table (
+  id uuid,
+  church_id uuid,
+  name text,
+  role app_role
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  viewer public.profiles%rowtype;
+begin
+  select *
+  into viewer
+  from public.profiles
+  where profiles.id = auth.uid()
+  limit 1;
+
+  if viewer.id is null then
+    return;
+  end if;
+
+  if viewer.role = 'member' then
+    return query
+    select p.id, p.church_id, p.name, p.role
+    from public.profiles p
+    where p.id = viewer.id;
+    return;
+  end if;
+
+  return query
+  select p.id, p.church_id, p.name, p.role
+  from public.profiles p
+  where p.church_id = viewer.church_id
+  order by p.name;
+end;
+$$;
+
+create or replace function public.get_my_cells()
+returns table (
+  id uuid,
+  church_id uuid,
+  name text,
+  leader_id uuid,
+  supervisor_id uuid,
+  meeting_day text,
+  meeting_time text,
+  address text,
+  neighborhood text,
+  active boolean
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  viewer public.profiles%rowtype;
+begin
+  select *
+  into viewer
+  from public.profiles
+  where profiles.id = auth.uid()
+  limit 1;
+
+  if viewer.id is null or viewer.church_id is null then
+    return;
+  end if;
+
+  return query
+  select c.id, c.church_id, c.name, c.leader_id, c.supervisor_id, c.meeting_day, c.meeting_time, c.address, c.neighborhood, c.active
+  from public.cells c
+  where c.church_id = viewer.church_id
+    and (
+      viewer.role in ('admin', 'pastor')
+      or (viewer.role = 'supervisor' and c.supervisor_id = viewer.id)
+      or (viewer.role = 'leader' and c.leader_id = viewer.id)
+      or (
+        viewer.role = 'member'
+        and exists (
+          select 1
+          from public.people pe
+          where pe.person_user_id = viewer.id
+            and pe.cell_id = c.id
+        )
+      )
+    )
+  order by c.created_at desc;
+end;
+$$;
+
+create or replace function public.get_my_people()
+returns table (
+  id uuid,
+  church_id uuid,
+  cell_id uuid,
+  person_user_id uuid,
+  created_by_user_id uuid,
+  leader_user_id uuid,
+  name text,
+  phone text,
+  email text,
+  birth_date date,
+  address text,
+  neighborhood text,
+  status text,
+  journey_stage text,
+  first_visit_date date,
+  notes text
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  viewer public.profiles%rowtype;
+begin
+  select *
+  into viewer
+  from public.profiles
+  where profiles.id = auth.uid()
+  limit 1;
+
+  if viewer.id is null or viewer.church_id is null then
+    return;
+  end if;
+
+  return query
+  select pe.id, pe.church_id, pe.cell_id, pe.person_user_id, pe.created_by_user_id, pe.leader_user_id,
+         pe.name, pe.phone, pe.email, pe.birth_date, pe.address, pe.neighborhood, pe.status,
+         pe.journey_stage, pe.first_visit_date, pe.notes
+  from public.people pe
+  left join public.cells c on c.id = pe.cell_id
+  where pe.church_id = viewer.church_id
+    and (
+      viewer.role in ('admin', 'pastor')
+      or (viewer.role = 'supervisor' and c.supervisor_id = viewer.id)
+      or (
+        viewer.role = 'leader'
+        and (
+          pe.leader_user_id = viewer.id
+          or pe.created_by_user_id = viewer.id
+          or c.leader_id = viewer.id
+        )
+      )
+      or (viewer.role = 'member' and pe.person_user_id = viewer.id)
+    )
+  order by pe.created_at desc;
+end;
+$$;
+
+create or replace function public.create_cell_secure(
+  cell_name text,
+  cell_leader_id uuid default null,
+  cell_supervisor_id uuid default null,
+  cell_meeting_day text default null,
+  cell_meeting_time text default null,
+  cell_address text default null,
+  cell_neighborhood text default null
+)
+returns table (
+  id uuid,
+  church_id uuid,
+  name text,
+  leader_id uuid,
+  supervisor_id uuid,
+  meeting_day text,
+  meeting_time text,
+  address text,
+  neighborhood text,
+  active boolean
+)
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  viewer public.profiles%rowtype;
+  next_supervisor_id uuid;
+  created_cell public.cells%rowtype;
+begin
+  select *
+  into viewer
+  from public.profiles
+  where profiles.id = auth.uid()
+  limit 1;
+
+  if viewer.id is null or viewer.church_id is null then
+    raise exception 'Usuario sem igreja vinculada.';
+  end if;
+
+  if viewer.role not in ('admin', 'pastor', 'supervisor') then
+    raise exception 'Seu acesso nao permite criar celulas.';
+  end if;
+
+  next_supervisor_id := cell_supervisor_id;
+
+  if viewer.role = 'supervisor' then
+    next_supervisor_id := viewer.id;
+  end if;
+
+  if nullif(trim(cell_name), '') is null then
+    raise exception 'Informe o nome da celula.';
+  end if;
+
+  insert into public.cells (
+    church_id,
+    name,
+    leader_id,
+    supervisor_id,
+    meeting_day,
+    meeting_time,
+    address,
+    neighborhood,
+    active
+  )
+  values (
+    viewer.church_id,
+    trim(cell_name),
+    cell_leader_id,
+    next_supervisor_id,
+    nullif(trim(coalesce(cell_meeting_day, '')), ''),
+    nullif(trim(coalesce(cell_meeting_time, '')), ''),
+    nullif(trim(coalesce(cell_address, '')), ''),
+    nullif(trim(coalesce(cell_neighborhood, '')), ''),
+    true
+  )
+  returning *
+  into created_cell;
+
+  return query
+  select created_cell.id, created_cell.church_id, created_cell.name, created_cell.leader_id,
+         created_cell.supervisor_id, created_cell.meeting_day, created_cell.meeting_time,
+         created_cell.address, created_cell.neighborhood, created_cell.active;
+end;
+$$;
+
+grant execute on function public.get_my_profiles() to authenticated;
+grant execute on function public.get_my_cells() to authenticated;
+grant execute on function public.get_my_people() to authenticated;
+grant execute on function public.create_cell_secure(text, uuid, uuid, text, text, text, text) to authenticated;
+
 commit;

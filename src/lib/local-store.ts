@@ -144,8 +144,13 @@ function mapInviteRow(invite: {
   };
 }
 
+function isMissingRpc(message?: string) {
+  const lower = (message ?? "").toLowerCase();
+  return lower.includes("could not find the function") || (lower.includes("function") && lower.includes("does not exist"));
+}
+
 export function useLocalPeople() {
-  const [items, setItems] = useState<Person[]>(() => readJson<Person[]>(PEOPLE_KEY, []));
+  const [items, setItems] = useState<Person[]>([]);
   const [isLoadingPeople, setIsLoadingPeople] = useState(false);
   const [peopleLoadError, setPeopleLoadError] = useState("");
   const [hydrated, setHydrated] = useState(false);
@@ -160,15 +165,29 @@ export function useLocalPeople() {
     setIsLoadingPeople(true);
     setPeopleLoadError("");
 
-    const [peopleResult, cellsResult, profilesResult, progressResult, meetingsResult, serviceResult] = await Promise.all([
-      supabase
-        .from("people")
-        .select("id, church_id, cell_id, person_user_id, created_by_user_id, leader_user_id, name, phone, email, birth_date, address, neighborhood, status, journey_stage, first_visit_date, notes"),
-      supabase.from("cells").select("id, name, leader_id"),
-      supabase.from("profiles").select("id, name"),
+    const peopleRpcResult = await supabase.rpc("get_my_people");
+    const peopleQuery = peopleRpcResult.error && isMissingRpc(peopleRpcResult.error.message)
+      ? supabase
+          .from("people")
+          .select("id, church_id, cell_id, person_user_id, created_by_user_id, leader_user_id, name, phone, email, birth_date, address, neighborhood, status, journey_stage, first_visit_date, notes")
+      : Promise.resolve(peopleRpcResult);
+
+    const [peopleResult, cellsRpcResult, profilesRpcResult, progressResult, meetingsResult, serviceResult] = await Promise.all([
+      peopleQuery,
+      supabase.rpc("get_my_cells"),
+      supabase.rpc("get_my_profiles"),
       supabase.from("video_progress").select("person_id, progress_percent"),
       supabase.from("cell_meetings").select("id, meeting_date, cell_attendance(person_id, present)").order("meeting_date", { ascending: false }).limit(8),
       supabase.from("service_attendance").select("person_id, present, church_services(service_date)").order("created_at", { ascending: false }).limit(200),
+    ]);
+
+    const [cellsResult, profilesResult] = await Promise.all([
+      cellsRpcResult.error && isMissingRpc(cellsRpcResult.error.message)
+        ? supabase.from("cells").select("id, name, leader_id")
+        : Promise.resolve(cellsRpcResult),
+      profilesRpcResult.error && isMissingRpc(profilesRpcResult.error.message)
+        ? supabase.from("profiles").select("id, name")
+        : Promise.resolve(profilesRpcResult),
     ]);
 
     setIsLoadingPeople(false);
@@ -178,9 +197,11 @@ export function useLocalPeople() {
       return { ok: false, error: peopleResult.error.message };
     }
 
-    const cellNames = new Map((cellsResult.data ?? []).map((cell) => [cell.id, cell.name]));
-    const cellLeaders = new Map((cellsResult.data ?? []).map((cell) => [cell.id, cell.leader_id ?? ""]));
-    const profileNames = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile.name]));
+    const cellRows = (cellsResult.data ?? []) as { id: string; name: string; leader_id?: string | null }[];
+    const profileRows = (profilesResult.data ?? []) as { id: string; name: string }[];
+    const cellNames = new Map(cellRows.map((cell) => [cell.id, cell.name]));
+    const cellLeaders = new Map(cellRows.map((cell) => [cell.id, cell.leader_id ?? ""]));
+    const profileNames = new Map(profileRows.map((profile) => [profile.id, profile.name]));
     const progressByPerson = new Map<string, number[]>();
 
     (progressResult.data ?? []).forEach((item) => {
@@ -207,7 +228,7 @@ export function useLocalPeople() {
       }
     });
 
-    const mappedPeople = (peopleResult.data ?? []).map((person) => {
+    const mappedPeople = ((peopleResult.data ?? []) as Parameters<typeof mapSupabasePerson>[0][]).map((person) => {
       const leaderId = person.leader_user_id ?? cellLeaders.get(person.cell_id ?? "") ?? "";
       const progressValues = progressByPerson.get(person.id) ?? [];
       const progress = progressValues.length
@@ -369,7 +390,7 @@ export function useLocalPeople() {
 }
 
 export function useCells() {
-  const [items, setItems] = useState<Cell[]>(() => readJson<Cell[]>(CELLS_KEY, []));
+  const [items, setItems] = useState<Cell[]>([]);
   const [isLoadingCells, setIsLoadingCells] = useState(false);
   const [cellLoadError, setCellLoadError] = useState("");
   const [hydrated, setHydrated] = useState(false);
@@ -384,11 +405,21 @@ export function useCells() {
     setIsLoadingCells(true);
     setCellLoadError("");
 
+    const cellsRpcResult = await supabase.rpc("get_my_cells");
+    const cellsQuery = cellsRpcResult.error && isMissingRpc(cellsRpcResult.error.message)
+      ? supabase
+          .from("cells")
+          .select("id, church_id, name, leader_id, supervisor_id, meeting_day, meeting_time, address, neighborhood, active")
+      : Promise.resolve(cellsRpcResult);
+
+    const profilesRpcResult = await supabase.rpc("get_my_profiles");
+    const profilesQuery = profilesRpcResult.error && isMissingRpc(profilesRpcResult.error.message)
+      ? supabase.from("profiles").select("id, name")
+      : Promise.resolve(profilesRpcResult);
+
     const [{ data, error }, profilesResult] = await Promise.all([
-      supabase
-        .from("cells")
-        .select("id, church_id, name, leader_id, supervisor_id, meeting_day, meeting_time, address, neighborhood, active"),
-      supabase.from("profiles").select("id, name"),
+      cellsQuery,
+      profilesQuery,
     ]);
 
     setIsLoadingCells(false);
@@ -398,9 +429,10 @@ export function useCells() {
       return { ok: false, error: error.message };
     }
 
-    const profileNames = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile.name]));
-    setItems((data ?? []).map((cell) => mapSupabaseCell(cell, profileNames.get(cell.leader_id ?? "") ?? "Sem lider")));
-    return { ok: true, cells: data ?? [] };
+    const profileNames = new Map(((profilesResult.data ?? []) as { id: string; name: string }[]).map((profile) => [profile.id, profile.name]));
+    const cellRows = (data ?? []) as Parameters<typeof mapSupabaseCell>[0][];
+    setItems(cellRows.map((cell) => mapSupabaseCell(cell, profileNames.get(cell.leader_id ?? "") ?? "Sem lider")));
+    return { ok: true, cells: cellRows };
   }
 
   useEffect(() => {
@@ -442,28 +474,43 @@ export function useCells() {
     };
 
     if (input.persistToSupabase) {
-      const { data, error } = await supabase
-        .from("cells")
-        .insert({
-          church_id: input.churchId,
-          name: input.name,
-          leader_id: input.leaderUserId || null,
-          supervisor_id: input.supervisorUserId || null,
-          meeting_day: input.meetingDay || null,
-          meeting_time: input.meetingTime || null,
-          address: input.address || null,
-          neighborhood: input.neighborhood || null,
-          active: true,
+      const rpcResult = await supabase
+        .rpc("create_cell_secure", {
+          cell_name: input.name,
+          cell_leader_id: input.leaderUserId || null,
+          cell_supervisor_id: input.supervisorUserId || null,
+          cell_meeting_day: input.meetingDay || null,
+          cell_meeting_time: input.meetingTime || null,
+          cell_address: input.address || null,
+          cell_neighborhood: input.neighborhood || null,
         })
-        .select("id, church_id, name, leader_id, supervisor_id, meeting_day, meeting_time, address, neighborhood, active")
         .single();
+
+      const { data, error } = rpcResult.error && isMissingRpc(rpcResult.error.message)
+        ? await supabase
+            .from("cells")
+            .insert({
+              church_id: input.churchId,
+              name: input.name,
+              leader_id: input.leaderUserId || null,
+              supervisor_id: input.supervisorUserId || null,
+              meeting_day: input.meetingDay || null,
+              meeting_time: input.meetingTime || null,
+              address: input.address || null,
+              neighborhood: input.neighborhood || null,
+              active: true,
+            })
+            .select("id, church_id, name, leader_id, supervisor_id, meeting_day, meeting_time, address, neighborhood, active")
+            .single()
+        : rpcResult;
 
       if (error) {
         return { ok: false, error: error.message };
       }
 
-      if (data) {
-        localCell.id = data.id;
+      const createdCell = data as { id?: string } | null;
+      if (createdCell?.id) {
+        localCell.id = createdCell.id;
       }
     }
 
@@ -512,7 +559,7 @@ export function useCells() {
 }
 
 export function useProfiles() {
-  const [profiles, setProfiles] = useState<AppUser[]>(() => readJson<AppUser[]>(PROFILES_KEY, []));
+  const [profiles, setProfiles] = useState<AppUser[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -529,14 +576,18 @@ export function useProfiles() {
 
   useEffect(() => {
     async function loadSupabaseProfiles() {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, church_id, name, role")
-        .order("name", { ascending: true });
+      const rpcResult = await supabase.rpc("get_my_profiles");
+      const { data, error } = rpcResult.error && isMissingRpc(rpcResult.error.message)
+        ? await supabase
+            .from("profiles")
+            .select("id, church_id, name, role")
+            .order("name", { ascending: true })
+        : rpcResult;
 
       if (!error && data) {
+        const profileRows = data as { id: string; church_id: string | null; name: string; role: UserRole }[];
         setProfiles(
-          data.map((profile) => ({
+          profileRows.map((profile) => ({
             id: profile.id,
             name: profile.name,
             role: profile.role as UserRole,
@@ -1282,7 +1333,7 @@ function createInviteToken() {
 }
 
 export function useInvites() {
-  const [invites, setInvites] = useState<Invite[]>(() => readJson<Invite[]>(INVITES_KEY, []));
+  const [invites, setInvites] = useState<Invite[]>([]);
   const [isLoadingInvites, setIsLoadingInvites] = useState(false);
   const [inviteLoadError, setInviteLoadError] = useState("");
   const [hydrated, setHydrated] = useState(false);
