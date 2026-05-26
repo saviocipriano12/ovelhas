@@ -16,11 +16,11 @@ import { getCellStats } from "@/lib/reports";
 export default function CellsPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { people } = useLocalPeople();
-  const { cells, addCell } = useCells();
+  const { cells, addCell, refreshCells, isLoadingCells, cellLoadError } = useCells();
   const { profiles } = useProfiles();
   const [open, setOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const visibleCells = getVisibleCells(currentUser, cells);
+  const visibleCells = isDemoMode ? getVisibleCells(currentUser, cells) : cells;
   const visibleCellIds = new Set(visibleCells.map((cell) => cell.id));
   const visiblePeople = people.filter((person) => visibleCellIds.has(person.cellId));
   const attention = visiblePeople.filter((person) => person.cellAbsences >= 2 || person.progress < 20).length;
@@ -63,6 +63,7 @@ export default function CellsPage() {
     }
 
     setFeedback(`${result.cell?.name ?? "Celula"} criada e pronta para receber pessoas.`);
+    await refreshCells();
     setOpen(false);
     event.currentTarget.reset();
   }
@@ -74,15 +75,26 @@ export default function CellsPage() {
           eyebrow="Celulas"
           title="Acompanhamento por celula"
           action={
-            canCreateNewCell ? (
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => setOpen(true)}
-                className="flex h-11 items-center gap-2 rounded-2xl bg-emerald-900 px-4 text-sm font-bold text-white shadow-sm"
+                onClick={async () => {
+                  const result = await refreshCells();
+                  setFeedback(result.ok ? "Celulas atualizadas." : `Nao consegui carregar celulas: ${result.error}`);
+                }}
+                className="flex h-11 items-center rounded-2xl bg-emerald-50 px-3 text-xs font-bold text-emerald-800"
               >
-                <Plus size={18} />
-                Nova
+                {isLoadingCells ? "Carregando..." : "Atualizar"}
               </button>
-            ) : null
+              {canCreateNewCell ? (
+                <button
+                  onClick={() => setOpen(true)}
+                  className="flex h-11 items-center gap-2 rounded-2xl bg-emerald-900 px-4 text-sm font-bold text-white shadow-sm"
+                >
+                  <Plus size={18} />
+                  Nova
+                </button>
+              ) : null}
+            </div>
           }
         />
 
@@ -96,6 +108,12 @@ export default function CellsPage() {
         {feedback && (
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">
             {feedback}
+          </div>
+        )}
+
+        {cellLoadError && (
+          <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-800">
+            Nao consegui carregar celulas do Supabase: {cellLoadError}
           </div>
         )}
 

@@ -357,6 +357,8 @@ export function useLocalPeople() {
 
 export function useCells() {
   const [items, setItems] = useState<Cell[]>([]);
+  const [isLoadingCells, setIsLoadingCells] = useState(false);
+  const [cellLoadError, setCellLoadError] = useState("");
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -365,22 +367,33 @@ export function useCells() {
     });
   }, []);
 
-  useEffect(() => {
-    async function loadSupabaseCells() {
-      const [{ data, error }, profilesResult] = await Promise.all([
-        supabase
-          .from("cells")
-          .select("id, church_id, name, leader_id, supervisor_id, meeting_day, meeting_time, address, neighborhood, active"),
-        supabase.from("profiles").select("id, name"),
-      ]);
+  async function refreshCells() {
+    setIsLoadingCells(true);
+    setCellLoadError("");
 
-      if (!error && data) {
-        const profileNames = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile.name]));
-        setItems(data.map((cell) => mapSupabaseCell(cell, profileNames.get(cell.leader_id ?? "") ?? "Sem lider")));
-      }
+    const [{ data, error }, profilesResult] = await Promise.all([
+      supabase
+        .from("cells")
+        .select("id, church_id, name, leader_id, supervisor_id, meeting_day, meeting_time, address, neighborhood, active"),
+      supabase.from("profiles").select("id, name"),
+    ]);
+
+    setIsLoadingCells(false);
+
+    if (error) {
+      setCellLoadError(error.message);
+      return { ok: false, error: error.message };
     }
 
-    loadSupabaseCells();
+    const profileNames = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile.name]));
+    setItems((data ?? []).map((cell) => mapSupabaseCell(cell, profileNames.get(cell.leader_id ?? "") ?? "Sem lider")));
+    return { ok: true, cells: data ?? [] };
+  }
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      refreshCells();
+    });
   }, []);
 
   useEffect(() => {
@@ -482,7 +495,7 @@ export function useCells() {
     return { ok: true };
   }
 
-  return { cells: items, addCell, updateCellAssignment };
+  return { cells: items, addCell, updateCellAssignment, refreshCells, isLoadingCells, cellLoadError };
 }
 
 export function useProfiles() {
