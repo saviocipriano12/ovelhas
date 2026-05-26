@@ -685,7 +685,23 @@ export function useProfiles() {
     return { ok: true };
   }
 
-  return { profiles, updateProfileRole };
+  async function deleteProfileUser(input: {
+    userId: string;
+    persistToSupabase?: boolean;
+  }) {
+    if (input.persistToSupabase) {
+      const { error } = await supabase.rpc("delete_user_secure", { target_user_id: input.userId });
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setProfiles((current) => current.filter((profile) => profile.id !== input.userId));
+    return { ok: true };
+  }
+
+  return { profiles, updateProfileRole, deleteProfileUser };
 }
 
 export function useCompletedCare() {

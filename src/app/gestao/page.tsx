@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { AlertTriangle, CheckCircle2, Crown, Eye, Save, ShieldCheck, UserCog } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Crown, Eye, Save, ShieldCheck, Trash2, UserCog } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { MetricCard } from "@/components/metric-card";
@@ -43,7 +43,7 @@ export default function ManagementPage() {
   const { cells, updateCellAssignment } = useCells();
   const { people } = useLocalPeople();
   const { visits } = useSupervisorVisits();
-  const { profiles, updateProfileRole } = useProfiles();
+  const { profiles, updateProfileRole, deleteProfileUser } = useProfiles();
   const { addEvent } = useActivityEvents();
   const [assignmentCellId, setAssignmentCellId] = useState("");
   const [assignmentSupervisorId, setAssignmentSupervisorId] = useState("");
@@ -132,6 +132,34 @@ export default function ManagementPage() {
     }
 
     setFeedback(`${user?.name ?? "Usuario"} agora esta como ${roleLabels[roleValue]}.`);
+  }
+
+  async function handleDeleteUser(userId: string, userName: string) {
+    if (userId === currentUser.id) {
+      setFeedback("Voce nao pode excluir seu proprio usuario enquanto esta logado.");
+      return;
+    }
+
+    const confirmation = window.prompt(
+      `Exclusao definitiva de ${userName}.\n\nIsso remove o login do Supabase e libera o email para novo cadastro.\nDigite EXCLUIR para confirmar.`,
+    );
+
+    if (confirmation !== "EXCLUIR") {
+      setFeedback("Exclusao cancelada.");
+      return;
+    }
+
+    const result = await deleteProfileUser({
+      userId,
+      persistToSupabase: !isDemoMode,
+    });
+
+    if (!result.ok) {
+      setFeedback(`Nao consegui excluir o usuario: ${result.error}`);
+      return;
+    }
+
+    setFeedback(`${userName} foi excluido definitivamente. O email pode ser usado novamente em um novo cadastro.`);
   }
 
   return (
@@ -300,6 +328,33 @@ export default function ManagementPage() {
             })}
           </div>
         </section>
+
+        {canManageRoles && (
+          <section className="rounded-lg border border-rose-100 bg-white/90 p-5 shadow-sm">
+            <SectionHeader eyebrow="Administrador" title="Excluir usuarios" />
+            <div className="mb-4 rounded-lg bg-rose-50 p-4 text-sm font-semibold leading-6 text-rose-800">
+              Exclusao definitiva remove o usuario do login e libera o email para cadastro futuro. Historicos ficam preservados sem vinculo ao usuario apagado.
+            </div>
+            <div className="space-y-3">
+              {visibleProfiles.map((profile) => (
+                <article key={profile.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 p-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-bold text-slate-950">{profile.name}</p>
+                    <p className="text-sm font-semibold text-slate-500">{roleLabels[profile.role]}</p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteUser(profile.id, profile.name)}
+                    disabled={profile.id === currentUser.id}
+                    className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg bg-rose-600 px-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+                  >
+                    <Trash2 size={16} />
+                    Excluir
+                  </button>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
           <SectionHeader eyebrow="Responsabilidade" title="Celulas e cobertura" />

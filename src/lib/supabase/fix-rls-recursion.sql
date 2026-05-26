@@ -49,6 +49,7 @@ drop function if exists public.create_cell_secure(text, uuid, uuid, text, text, 
 drop function if exists public.update_cell_secure(uuid, text, uuid, uuid, text, text, text, text) cascade;
 drop function if exists public.delete_cell_secure(uuid) cascade;
 drop function if exists public.delete_invite_secure(uuid) cascade;
+drop function if exists public.delete_user_secure(uuid) cascade;
 drop function if exists public.get_invite_by_token(text) cascade;
 drop function if exists public.accept_invite(text) cascade;
 drop function if exists public.accept_invite_for_user(uuid, text, text) cascade;
@@ -1153,6 +1154,87 @@ begin
 end;
 $$;
 
+create or replace function public.delete_user_secure(target_user_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, auth
+set row_security = off
+as $$
+declare
+  viewer public.profiles%rowtype;
+  target_profile public.profiles%rowtype;
+  fk_record record;
+begin
+  if auth.uid() is null then
+    raise exception 'Usuario nao autenticado.';
+  end if;
+
+  if target_user_id = auth.uid() then
+    raise exception 'Voce nao pode excluir seu proprio usuario enquanto esta logado.';
+  end if;
+
+  select *
+  into viewer
+  from public.profiles
+  where profiles.id = auth.uid()
+  limit 1;
+
+  select *
+  into target_profile
+  from public.profiles
+  where profiles.id = target_user_id
+  limit 1;
+
+  if viewer.id is null or viewer.role <> 'admin' then
+    raise exception 'Apenas administrador pode excluir usuarios definitivamente.';
+  end if;
+
+  if target_profile.id is null then
+    raise exception 'Usuario nao encontrado.';
+  end if;
+
+  if target_profile.church_id <> viewer.church_id then
+    raise exception 'Usuario pertence a outra igreja.';
+  end if;
+
+  -- Antes de apagar o profile/auth, solta qualquer coluna publica que referencie
+  -- profiles(id). Isso evita erro de foreign key e preserva historico operacional.
+  for fk_record in
+    select
+      c.conrelid::regclass as table_name,
+      a.attname as column_name
+    from pg_constraint c
+    join pg_attribute a
+      on a.attrelid = c.conrelid
+      and a.attnum = c.conkey[1]
+    join pg_class rel on rel.oid = c.conrelid
+    join pg_namespace nsp on nsp.oid = rel.relnamespace
+    where c.contype = 'f'
+      and c.confrelid = 'public.profiles'::regclass
+      and array_length(c.conkey, 1) = 1
+      and nsp.nspname = 'public'
+      and not a.attnotnull
+  loop
+    execute format(
+      'update %s set %I = null where %I = $1',
+      fk_record.table_name,
+      fk_record.column_name,
+      fk_record.column_name
+    )
+    using target_user_id;
+  end loop;
+
+  delete from public.profiles
+  where id = target_user_id;
+
+  delete from auth.users
+  where id = target_user_id;
+
+  return true;
+end;
+$$;
+
 create or replace function public.create_cell_secure(
   cell_name text,
   cell_leader_id uuid default null,
@@ -1252,5 +1334,6 @@ grant execute on function public.create_cell_secure(text, uuid, uuid, text, text
 grant execute on function public.update_cell_secure(uuid, text, uuid, uuid, text, text, text, text) to authenticated;
 grant execute on function public.delete_cell_secure(uuid) to authenticated;
 grant execute on function public.delete_invite_secure(uuid) to authenticated;
+grant execute on function public.delete_user_secure(uuid) to authenticated;
 
 commit;
