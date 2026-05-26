@@ -555,7 +555,72 @@ export function useCells() {
     return { ok: true };
   }
 
-  return { cells: items, addCell, updateCellAssignment, refreshCells, isLoadingCells, cellLoadError };
+  async function updateCell(input: {
+    id: string;
+    name: string;
+    leaderUserId: string;
+    leaderName?: string;
+    supervisorUserId: string;
+    meetingDay: string;
+    meetingTime: string;
+    address: string;
+    neighborhood: string;
+    persistToSupabase?: boolean;
+  }) {
+    if (input.persistToSupabase) {
+      const { error } = await supabase
+        .rpc("update_cell_secure", {
+          target_cell_id: input.id,
+          cell_name: input.name,
+          cell_leader_id: input.leaderUserId || null,
+          cell_supervisor_id: input.supervisorUserId || null,
+          cell_meeting_day: input.meetingDay || null,
+          cell_meeting_time: input.meetingTime || null,
+          cell_address: input.address || null,
+          cell_neighborhood: input.neighborhood || null,
+        })
+        .single();
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setItems((current) =>
+      current.map((cell) =>
+        cell.id === input.id
+          ? {
+              ...cell,
+              name: input.name,
+              leaderUserId: input.leaderUserId,
+              leaderName: input.leaderName || cell.leaderName,
+              supervisorUserId: input.supervisorUserId,
+              meetingDay: input.meetingDay,
+              meetingTime: input.meetingTime,
+              address: input.address,
+              neighborhood: input.neighborhood,
+            }
+          : cell,
+      ),
+    );
+
+    return { ok: true };
+  }
+
+  async function deleteCell(id: string, persistToSupabase?: boolean) {
+    if (persistToSupabase) {
+      const { error } = await supabase.rpc("delete_cell_secure", { target_cell_id: id });
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setItems((current) => current.filter((cell) => cell.id !== id));
+    return { ok: true };
+  }
+
+  return { cells: items, addCell, updateCellAssignment, updateCell, deleteCell, refreshCells, isLoadingCells, cellLoadError };
 }
 
 export function useProfiles() {
@@ -1354,10 +1419,13 @@ export function useInvites() {
     setIsLoadingInvites(true);
     setInviteLoadError("");
 
-    const { data, error } = await supabase
-      .from("invites")
-      .select("id, church_id, token, email, name, role, cell_id, created_by, status, expires_at, accepted_by, accepted_at, created_at")
-      .order("created_at", { ascending: false });
+    const rpcResult = await supabase.rpc("get_my_invites");
+    const { data, error } = rpcResult.error && isMissingRpc(rpcResult.error.message)
+      ? await supabase
+          .from("invites")
+          .select("id, church_id, token, email, name, role, cell_id, created_by, status, expires_at, accepted_by, accepted_at, created_at")
+          .order("created_at", { ascending: false })
+      : rpcResult;
 
     setIsLoadingInvites(false);
 
@@ -1366,7 +1434,7 @@ export function useInvites() {
       return { ok: false, error: error.message };
     }
 
-    setInvites((data ?? []).map((invite) => mapInviteRow(invite)));
+    setInvites(((data ?? []) as Parameters<typeof mapInviteRow>[0][]).map((invite) => mapInviteRow(invite)));
     return { ok: true, invites: data ?? [] };
   }
 
@@ -1400,29 +1468,43 @@ export function useInvites() {
     };
 
     if (input.persistToSupabase) {
-      const { data, error } = await supabase
-        .from("invites")
-        .insert({
-          church_id: input.churchId,
-          token: localInvite.token,
-          email: input.email || null,
-          name: input.name || null,
-          role: input.role,
-          cell_id: input.cellId || null,
-          created_by: input.createdBy,
-          status: "pending",
-          expires_at: localInvite.expiresAt,
+      const rpcResult = await supabase
+        .rpc("create_invite_secure", {
+          invite_token: localInvite.token,
+          invite_email: input.email || null,
+          invite_name: input.name || null,
+          invite_role: input.role,
+          invite_cell_id: input.cellId || null,
+          invite_expires_at: localInvite.expiresAt,
         })
-        .select("id, created_at")
         .single();
+
+      const { data, error } = rpcResult.error && isMissingRpc(rpcResult.error.message)
+        ? await supabase
+            .from("invites")
+            .insert({
+              church_id: input.churchId,
+              token: localInvite.token,
+              email: input.email || null,
+              name: input.name || null,
+              role: input.role,
+              cell_id: input.cellId || null,
+              created_by: input.createdBy,
+              status: "pending",
+              expires_at: localInvite.expiresAt,
+            })
+            .select("id, created_at")
+            .single()
+        : rpcResult;
 
       if (error) {
         return { ok: false, error: error.message };
       }
 
-      if (data) {
-        localInvite.id = data.id;
-        localInvite.createdAt = data.created_at;
+      const createdInvite = data as { id?: string; created_at?: string } | null;
+      if (createdInvite) {
+        localInvite.id = createdInvite.id ?? localInvite.id;
+        localInvite.createdAt = createdInvite.created_at ?? localInvite.createdAt;
       }
     }
 
@@ -1430,7 +1512,26 @@ export function useInvites() {
     return { ok: true, invite: localInvite };
   }
 
-  return { invites, createInvite, refreshInvites, isLoadingInvites, inviteLoadError };
+  async function deleteInvite(id: string) {
+    const { error } = await supabase.rpc("delete_invite_secure", { target_invite_id: id });
+
+    if (error && !isMissingRpc(error.message)) {
+      return { ok: false, error: error.message };
+    }
+
+    if (error && isMissingRpc(error.message)) {
+      const fallback = await supabase.from("invites").delete().eq("id", id);
+
+      if (fallback.error) {
+        return { ok: false, error: fallback.error.message };
+      }
+    }
+
+    setInvites((current) => current.filter((invite) => invite.id !== id));
+    return { ok: true };
+  }
+
+  return { invites, createInvite, deleteInvite, refreshInvites, isLoadingInvites, inviteLoadError };
 }
 
 export function usePastoralNotes() {

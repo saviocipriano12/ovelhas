@@ -146,6 +146,7 @@ export default function InviteAcceptPage() {
       email,
       password,
       options: {
+        emailRedirectTo: `${window.location.origin}/convite/${token}`,
         data: {
           name,
           invite_token: token,

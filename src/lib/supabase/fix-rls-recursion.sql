@@ -390,6 +390,7 @@ begin
   select c.id, c.church_id, c.name, c.leader_id, c.supervisor_id, c.meeting_day, c.meeting_time, c.address, c.neighborhood, c.active
   from public.cells c
   where c.church_id = viewer.church_id
+    and c.active is true
     and (
       viewer.role in ('admin', 'pastor')
       or (viewer.role = 'supervisor' and c.supervisor_id = viewer.id)
@@ -405,6 +406,143 @@ begin
       )
     )
   order by c.created_at desc;
+end;
+$$;
+
+create or replace function public.get_my_invites()
+returns table (
+  id uuid,
+  church_id uuid,
+  token text,
+  email text,
+  name text,
+  role app_role,
+  cell_id uuid,
+  created_by uuid,
+  status text,
+  expires_at timestamptz,
+  accepted_by uuid,
+  accepted_at timestamptz,
+  created_at timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  viewer public.profiles%rowtype;
+begin
+  select *
+  into viewer
+  from public.profiles
+  where profiles.id = auth.uid()
+  limit 1;
+
+  if viewer.id is null or viewer.church_id is null then
+    return;
+  end if;
+
+  return query
+  select i.id, i.church_id, i.token, i.email, i.name, i.role, i.cell_id, i.created_by,
+         i.status, i.expires_at, i.accepted_by, i.accepted_at, i.created_at
+  from public.invites i
+  left join public.cells c on c.id = i.cell_id
+  where i.church_id = viewer.church_id
+    and (
+      viewer.role in ('admin', 'pastor')
+      or i.created_by = viewer.id
+      or (viewer.role = 'supervisor' and c.supervisor_id = viewer.id)
+      or (viewer.role = 'leader' and c.leader_id = viewer.id)
+    )
+  order by i.created_at desc;
+end;
+$$;
+
+create or replace function public.create_invite_secure(
+  invite_token text,
+  invite_email text default null,
+  invite_name text default null,
+  invite_role app_role default 'member',
+  invite_cell_id uuid default null,
+  invite_expires_at timestamptz default null
+)
+returns table (
+  id uuid,
+  church_id uuid,
+  token text,
+  email text,
+  name text,
+  role app_role,
+  cell_id uuid,
+  created_by uuid,
+  status text,
+  expires_at timestamptz,
+  accepted_by uuid,
+  accepted_at timestamptz,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  viewer public.profiles%rowtype;
+  created_invite public.invites%rowtype;
+  target_cell_id uuid;
+begin
+  select *
+  into viewer
+  from public.profiles
+  where profiles.id = auth.uid()
+  limit 1;
+
+  if viewer.id is null or viewer.church_id is null then
+    raise exception 'Usuario sem igreja vinculada.';
+  end if;
+
+  target_cell_id := invite_cell_id;
+
+  if invite_role in ('leader', 'member') and target_cell_id is null then
+    raise exception 'Escolha uma celula para este convite.';
+  end if;
+
+  if not public.can_create_invite(viewer.church_id, invite_role, target_cell_id) then
+    raise exception 'Seu acesso nao permite criar este convite.';
+  end if;
+
+  insert into public.invites (
+    church_id,
+    token,
+    email,
+    name,
+    role,
+    cell_id,
+    created_by,
+    status,
+    expires_at
+  )
+  values (
+    viewer.church_id,
+    invite_token,
+    nullif(trim(coalesce(invite_email, '')), ''),
+    nullif(trim(coalesce(invite_name, '')), ''),
+    invite_role,
+    target_cell_id,
+    viewer.id,
+    'pending',
+    coalesce(invite_expires_at, now() + interval '14 days')
+  )
+  returning *
+  into created_invite;
+
+  return query
+  select created_invite.id, created_invite.church_id, created_invite.token, created_invite.email,
+         created_invite.name, created_invite.role, created_invite.cell_id, created_invite.created_by,
+         created_invite.status, created_invite.expires_at, created_invite.accepted_by,
+         created_invite.accepted_at, created_invite.created_at;
 end;
 $$;
 
@@ -467,6 +605,197 @@ begin
       or (viewer.role = 'member' and pe.person_user_id = viewer.id)
     )
   order by pe.created_at desc;
+end;
+$$;
+
+create or replace function public.update_cell_secure(
+  target_cell_id uuid,
+  cell_name text,
+  cell_leader_id uuid default null,
+  cell_supervisor_id uuid default null,
+  cell_meeting_day text default null,
+  cell_meeting_time text default null,
+  cell_address text default null,
+  cell_neighborhood text default null
+)
+returns table (
+  id uuid,
+  church_id uuid,
+  name text,
+  leader_id uuid,
+  supervisor_id uuid,
+  meeting_day text,
+  meeting_time text,
+  address text,
+  neighborhood text,
+  active boolean
+)
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  viewer public.profiles%rowtype;
+  target_cell public.cells%rowtype;
+  next_supervisor_id uuid;
+begin
+  select *
+  into viewer
+  from public.profiles
+  where profiles.id = auth.uid()
+  limit 1;
+
+  select *
+  into target_cell
+  from public.cells
+  where cells.id = target_cell_id
+  limit 1;
+
+  if viewer.id is null or viewer.church_id is null then
+    raise exception 'Usuario sem igreja vinculada.';
+  end if;
+
+  if target_cell.id is null or target_cell.church_id <> viewer.church_id then
+    raise exception 'Celula nao encontrada.';
+  end if;
+
+  if viewer.role not in ('admin', 'pastor', 'supervisor') then
+    raise exception 'Seu acesso nao permite editar celulas.';
+  end if;
+
+  if viewer.role = 'supervisor' and target_cell.supervisor_id <> viewer.id then
+    raise exception 'Supervisor so pode editar celulas sob sua supervisao.';
+  end if;
+
+  if nullif(trim(cell_name), '') is null then
+    raise exception 'Informe o nome da celula.';
+  end if;
+
+  next_supervisor_id := cell_supervisor_id;
+  if viewer.role = 'supervisor' then
+    next_supervisor_id := viewer.id;
+  end if;
+
+  update public.cells
+  set name = trim(cell_name),
+      leader_id = cell_leader_id,
+      supervisor_id = next_supervisor_id,
+      meeting_day = nullif(trim(coalesce(cell_meeting_day, '')), ''),
+      meeting_time = nullif(trim(coalesce(cell_meeting_time, '')), ''),
+      address = nullif(trim(coalesce(cell_address, '')), ''),
+      neighborhood = nullif(trim(coalesce(cell_neighborhood, '')), '')
+  where cells.id = target_cell_id
+  returning *
+  into target_cell;
+
+  return query
+  select target_cell.id, target_cell.church_id, target_cell.name, target_cell.leader_id,
+         target_cell.supervisor_id, target_cell.meeting_day, target_cell.meeting_time,
+         target_cell.address, target_cell.neighborhood, target_cell.active;
+end;
+$$;
+
+create or replace function public.delete_cell_secure(target_cell_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  viewer public.profiles%rowtype;
+  target_cell public.cells%rowtype;
+begin
+  select *
+  into viewer
+  from public.profiles
+  where profiles.id = auth.uid()
+  limit 1;
+
+  select *
+  into target_cell
+  from public.cells
+  where cells.id = target_cell_id
+  limit 1;
+
+  if viewer.id is null or viewer.church_id is null then
+    raise exception 'Usuario sem igreja vinculada.';
+  end if;
+
+  if target_cell.id is null or target_cell.church_id <> viewer.church_id then
+    raise exception 'Celula nao encontrada.';
+  end if;
+
+  if viewer.role not in ('admin', 'pastor', 'supervisor') then
+    raise exception 'Seu acesso nao permite apagar celulas.';
+  end if;
+
+  if viewer.role = 'supervisor' and target_cell.supervisor_id <> viewer.id then
+    raise exception 'Supervisor so pode apagar celulas sob sua supervisao.';
+  end if;
+
+  update public.cells
+  set active = false
+  where id = target_cell_id;
+
+  return true;
+end;
+$$;
+
+create or replace function public.delete_invite_secure(target_invite_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  viewer public.profiles%rowtype;
+  target_invite public.invites%rowtype;
+  target_cell public.cells%rowtype;
+begin
+  select *
+  into viewer
+  from public.profiles
+  where profiles.id = auth.uid()
+  limit 1;
+
+  select *
+  into target_invite
+  from public.invites
+  where invites.id = target_invite_id
+  limit 1;
+
+  if viewer.id is null or viewer.church_id is null then
+    raise exception 'Usuario sem igreja vinculada.';
+  end if;
+
+  if target_invite.id is null or target_invite.church_id <> viewer.church_id then
+    raise exception 'Convite nao encontrado.';
+  end if;
+
+  if target_invite.cell_id is not null then
+    select *
+    into target_cell
+    from public.cells
+    where cells.id = target_invite.cell_id
+    limit 1;
+  end if;
+
+  if not (
+    viewer.role in ('admin', 'pastor')
+    or target_invite.created_by = viewer.id
+    or (viewer.role = 'supervisor' and target_cell.supervisor_id = viewer.id)
+    or (viewer.role = 'leader' and target_cell.leader_id = viewer.id)
+  ) then
+    raise exception 'Seu acesso nao permite apagar este convite.';
+  end if;
+
+  delete from public.invites
+  where id = target_invite_id;
+
+  return true;
 end;
 $$;
 
@@ -560,6 +889,11 @@ $$;
 grant execute on function public.get_my_profiles() to authenticated;
 grant execute on function public.get_my_cells() to authenticated;
 grant execute on function public.get_my_people() to authenticated;
+grant execute on function public.get_my_invites() to authenticated;
+grant execute on function public.create_invite_secure(text, text, text, app_role, uuid, timestamptz) to authenticated;
 grant execute on function public.create_cell_secure(text, uuid, uuid, text, text, text, text) to authenticated;
+grant execute on function public.update_cell_secure(uuid, text, uuid, uuid, text, text, text, text) to authenticated;
+grant execute on function public.delete_cell_secure(uuid) to authenticated;
+grant execute on function public.delete_invite_secure(uuid) to authenticated;
 
 commit;

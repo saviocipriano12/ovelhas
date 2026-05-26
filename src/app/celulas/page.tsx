@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { CalendarClock, MapPin, Plus, Save, Users, X } from "lucide-react";
+import { CalendarClock, MapPin, Pencil, Plus, Save, Trash2, Users, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { MetricCard } from "@/components/metric-card";
@@ -16,9 +16,10 @@ import { getCellStats } from "@/lib/reports";
 export default function CellsPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { people } = useLocalPeople();
-  const { cells, addCell, refreshCells, isLoadingCells, cellLoadError } = useCells();
+  const { cells, addCell, updateCell, deleteCell, refreshCells, isLoadingCells, cellLoadError } = useCells();
   const { profiles } = useProfiles();
   const [open, setOpen] = useState(false);
+  const [editingCellId, setEditingCellId] = useState("");
   const [feedback, setFeedback] = useState("");
   const visibleCells = isDemoMode ? getVisibleCells(currentUser, cells) : cells;
   const visibleCellIds = new Set(visibleCells.map((cell) => cell.id));
@@ -28,6 +29,17 @@ export default function CellsPage() {
   const supervisors = visibleProfiles.filter((profile) => profile.role === "supervisor");
   const leaders = visibleProfiles.filter((profile) => profile.role === "leader");
   const canCreateNewCell = canCreateCell(currentUser);
+  const editingCell = cells.find((cell) => cell.id === editingCellId);
+
+  function openCreateCell() {
+    setEditingCellId("");
+    setOpen(true);
+  }
+
+  function openEditCell(cellId: string) {
+    setEditingCellId(cellId);
+    setOpen(true);
+  }
 
   async function handleCreateCell(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -44,8 +56,7 @@ export default function CellsPage() {
       return;
     }
 
-    const result = await addCell({
-      churchId: currentUser.churchId,
+    const payload = {
       name,
       supervisorUserId: supervisorId,
       leaderUserId: leaderId,
@@ -55,17 +66,41 @@ export default function CellsPage() {
       address: String(formData.get("address") || "").trim(),
       neighborhood: String(formData.get("neighborhood") || "").trim(),
       persistToSupabase: !isDemoMode,
-    });
+    };
+
+    const result = editingCell
+      ? await updateCell({
+          id: editingCell.id,
+          ...payload,
+        })
+      : await addCell({
+          churchId: currentUser.churchId,
+          ...payload,
+        });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui criar a celula: ${result.error}`);
+      setFeedback(`Nao consegui salvar a celula: ${result.error}`);
       return;
     }
 
-    setFeedback(`${result.cell?.name ?? "Celula"} criada e pronta para receber pessoas.`);
+    setFeedback(editingCell ? "Celula atualizada." : `${name} criada e pronta para receber pessoas.`);
     await refreshCells();
     setOpen(false);
+    setEditingCellId("");
     event.currentTarget.reset();
+  }
+
+  async function handleDeleteCell(cellId: string, cellName: string) {
+    if (!window.confirm(`Apagar a celula ${cellName}? Ela sera arquivada e deixara de aparecer nas listas.`)) {
+      return;
+    }
+
+    const result = await deleteCell(cellId, !isDemoMode);
+    setFeedback(result.ok ? "Celula apagada." : `Nao consegui apagar a celula: ${result.error}`);
+
+    if (result.ok) {
+      await refreshCells();
+    }
   }
 
   return (
@@ -87,7 +122,7 @@ export default function CellsPage() {
               </button>
               {canCreateNewCell ? (
                 <button
-                  onClick={() => setOpen(true)}
+                  onClick={openCreateCell}
                   className="flex h-11 items-center gap-2 rounded-2xl bg-emerald-900 px-4 text-sm font-bold text-white shadow-sm"
                 >
                   <Plus size={18} />
@@ -161,9 +196,25 @@ export default function CellsPage() {
                     <MapPin size={15} className="shrink-0 text-emerald-700" />
                     <span className="truncate">{cell.neighborhood}</span>
                   </span>
-                  <Link href="/relatorios/novo" className="font-bold text-emerald-800">
-                    Novo relatorio
-                  </Link>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      onClick={() => openEditCell(cell.id)}
+                      className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800"
+                      aria-label={`Editar ${cell.name}`}
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCell(cell.id, cell.name)}
+                      className="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-50 text-rose-700"
+                      aria-label={`Apagar ${cell.name}`}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                    <Link href="/relatorios/novo" className="font-bold text-emerald-800">
+                      Novo relatorio
+                    </Link>
+                  </div>
                 </div>
               </article>
             );
@@ -185,11 +236,14 @@ export default function CellsPage() {
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-bold uppercase text-emerald-700">{roleLabels[currentUser.role]}</p>
-                  <h2 className="text-xl font-semibold text-slate-950">Nova celula</h2>
+                  <h2 className="text-xl font-semibold text-slate-950">{editingCell ? "Editar celula" : "Nova celula"}</h2>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={() => {
+                    setOpen(false);
+                    setEditingCellId("");
+                  }}
                   className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600"
                   aria-label="Fechar"
                 >
@@ -201,26 +255,31 @@ export default function CellsPage() {
                 <input
                   name="name"
                   required
+                  defaultValue={editingCell?.name ?? ""}
                   className="min-h-12 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500 sm:col-span-2"
                   placeholder="Nome da celula"
                 />
                 <input
                   name="neighborhood"
+                  defaultValue={editingCell?.neighborhood ?? ""}
                   className="min-h-12 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
                   placeholder="Bairro"
                 />
                 <input
                   name="address"
+                  defaultValue={editingCell?.address ?? ""}
                   className="min-h-12 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
                   placeholder="Endereco"
                 />
                 <input
                   name="meetingDay"
+                  defaultValue={editingCell?.meetingDay ?? ""}
                   className="min-h-12 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
                   placeholder="Dia da semana"
                 />
                 <input
                   name="meetingTime"
+                  defaultValue={editingCell?.meetingTime ?? ""}
                   className="min-h-12 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
                   placeholder="Horario"
                 />
@@ -231,6 +290,7 @@ export default function CellsPage() {
                 ) : (
                   <select
                     name="supervisorId"
+                    defaultValue={editingCell?.supervisorUserId ?? ""}
                     className="min-h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-emerald-500"
                   >
                     <option value="">Sem supervisor por enquanto</option>
@@ -243,6 +303,7 @@ export default function CellsPage() {
                 )}
                 <select
                   name="leaderId"
+                  defaultValue={editingCell?.leaderUserId ?? ""}
                   className="min-h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-emerald-500"
                 >
                   <option value="">Sem lider por enquanto</option>
@@ -256,7 +317,7 @@ export default function CellsPage() {
 
               <button className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-900 px-4 text-sm font-bold text-white">
                 <Save size={18} />
-                Criar celula
+                {editingCell ? "Salvar alteracoes" : "Criar celula"}
               </button>
             </form>
           </div>

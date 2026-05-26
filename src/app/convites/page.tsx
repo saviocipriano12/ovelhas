@@ -4,7 +4,7 @@
 
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { Copy, Link2, MessageCircle, QrCode, Send, Share2, UserPlus } from "lucide-react";
+import { Copy, Link2, MessageCircle, QrCode, Send, Share2, Trash2, UserPlus } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
@@ -36,7 +36,7 @@ function statusTone(status: string) {
 export default function InvitesPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { cells } = useCells();
-  const { invites, createInvite, refreshInvites, isLoadingInvites, inviteLoadError } = useInvites();
+  const { invites, createInvite, deleteInvite, refreshInvites, isLoadingInvites, inviteLoadError } = useInvites();
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -112,6 +112,19 @@ export default function InvitesPage() {
     setEmail("");
     setFeedback(`Convite criado para ${result.invite.name || roleLabels[result.invite.role]}.`);
     await refreshInvites();
+  }
+
+  async function handleDeleteInvite(id: string, inviteName: string) {
+    if (!window.confirm(`Apagar o convite de ${inviteName}?`)) {
+      return;
+    }
+
+    const result = await deleteInvite(id);
+    setFeedback(result.ok ? "Convite apagado." : `Nao consegui apagar o convite: ${result.error}`);
+
+    if (result.ok) {
+      await refreshInvites();
+    }
   }
 
   return (
@@ -257,7 +270,7 @@ export default function InvitesPage() {
                       {invite.status === "pending" ? "Pendente" : invite.status === "accepted" ? "Aceito" : "Expirado"}
                     </span>
                   </div>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <div className="mt-3 grid gap-2 sm:grid-cols-4">
                     <button onClick={() => copyLink(link)} className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-white px-3 text-xs font-bold text-slate-700">
                       <Link2 size={15} />
                       Copiar link
@@ -270,6 +283,13 @@ export default function InvitesPage() {
                       <Send size={15} />
                       Abrir
                     </a>
+                    <button
+                      onClick={() => handleDeleteInvite(invite.id, invite.name || roleLabels[invite.role])}
+                      className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-rose-50 px-3 text-xs font-bold text-rose-700"
+                    >
+                      <Trash2 size={15} />
+                      Apagar
+                    </button>
                   </div>
                   <details className="mt-2">
                     <summary className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-500">
