@@ -36,7 +36,7 @@ function statusTone(status: string) {
 export default function InvitesPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { cells } = useCells();
-  const { invites, createInvite, refreshInvites } = useInvites();
+  const { invites, createInvite, refreshInvites, isLoadingInvites, inviteLoadError } = useInvites();
   const visibleCells = getVisibleCells(currentUser, cells);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -47,7 +47,9 @@ export default function InvitesPage() {
   const [lastLink, setLastLink] = useState("");
   const canInvite = inviteableRoles.length > 0;
   const allowedRoles = inviteableRoles;
-  const visibleInvites = invites.filter((invite) => invite.churchId === currentUser.churchId || isDemoMode);
+  const visibleInvites = isDemoMode
+    ? invites.filter((invite) => invite.churchId === currentUser.churchId)
+    : invites;
   const selectedCell = visibleCells.find((cell) => cell.id === cellId) ?? visibleCells[0];
 
   async function copyLink(link: string) {
@@ -109,6 +111,7 @@ export default function InvitesPage() {
     setName("");
     setEmail("");
     setFeedback(`Convite criado para ${result.invite.name || roleLabels[result.invite.role]}.`);
+    await refreshInvites();
   }
 
   return (
@@ -119,10 +122,13 @@ export default function InvitesPage() {
           title="Convites"
           action={
             <button
-              onClick={refreshInvites}
+              onClick={async () => {
+                const result = await refreshInvites();
+                setFeedback(result.ok ? "Convites atualizados." : `Nao consegui carregar convites: ${result.error}`);
+              }}
               className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800"
             >
-              Atualizar - {visibleInvites.length} links
+              {isLoadingInvites ? "Carregando..." : `Atualizar - ${visibleInvites.length} links`}
             </button>
           }
         />
@@ -133,6 +139,12 @@ export default function InvitesPage() {
             Crie links para cada pessoa entrar no Ovelhas ja com papel, igreja e celula corretos.
           </p>
         </div>
+
+        {inviteLoadError && (
+          <div className="rounded-lg border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-800">
+            Nao consegui carregar convites do Supabase: {inviteLoadError}
+          </div>
+        )}
 
         {canInvite && (
           <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">

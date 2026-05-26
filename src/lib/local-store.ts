@@ -1257,6 +1257,8 @@ function createInviteToken() {
 
 export function useInvites() {
   const [invites, setInvites] = useState<Invite[]>([]);
+  const [isLoadingInvites, setIsLoadingInvites] = useState(false);
+  const [inviteLoadError, setInviteLoadError] = useState("");
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -1272,14 +1274,23 @@ export function useInvites() {
   }, [hydrated, invites]);
 
   async function refreshInvites() {
+    setIsLoadingInvites(true);
+    setInviteLoadError("");
+
     const { data, error } = await supabase
       .from("invites")
       .select("id, church_id, token, email, name, role, cell_id, created_by, status, expires_at, accepted_by, accepted_at, created_at")
       .order("created_at", { ascending: false });
 
-    if (!error && data) {
-      setInvites(data.map((invite) => mapInviteRow(invite)));
+    setIsLoadingInvites(false);
+
+    if (error) {
+      setInviteLoadError(error.message);
+      return { ok: false, error: error.message };
     }
+
+    setInvites((data ?? []).map((invite) => mapInviteRow(invite)));
+    return { ok: true, invites: data ?? [] };
   }
 
   useEffect(() => {
@@ -1342,7 +1353,7 @@ export function useInvites() {
     return { ok: true, invite: localInvite };
   }
 
-  return { invites, createInvite, refreshInvites };
+  return { invites, createInvite, refreshInvites, isLoadingInvites, inviteLoadError };
 }
 
 export function usePastoralNotes() {
