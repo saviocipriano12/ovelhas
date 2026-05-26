@@ -12,10 +12,10 @@ export function SectionHeader({
   return (
     <div className="mb-4 flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <span className="text-xs font-bold uppercase text-emerald-700">{eyebrow}</span>
-        <h2 className="mt-1 text-xl font-semibold leading-tight text-slate-950">{title}</h2>
+        <span className="text-[11px] font-black uppercase text-emerald-700 sm:text-xs">{eyebrow}</span>
+        <h2 className="mt-1 text-[22px] font-semibold leading-[1.08] text-slate-950 sm:text-2xl">{title}</h2>
       </div>
-      {action}
+      {action ? <div className="shrink-0">{action}</div> : null}
     </div>
   );
 }

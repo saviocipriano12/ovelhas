@@ -100,6 +100,11 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function pageLabel(pathname: string) {
+  const item = navItems.find((navItem) => isActive(pathname, navItem.href));
+  return item?.label ?? "Ovelhas";
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { currentUser, isDemoMode, signOut } = useAuth();
@@ -116,6 +121,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     canAccessRoute(currentUser, item.href),
   );
   const homeHref = getDefaultRoute(currentUser);
+  const currentPageLabel = pageLabel(pathname);
 
   return (
     <div className="min-h-screen bg-[#f7f8f3] text-slate-900">
@@ -189,27 +195,28 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="min-h-screen w-full px-4 pb-28 pt-3 lg:ml-72 lg:w-[calc(100%-18rem)] lg:px-8 lg:pb-10 lg:pt-4 xl:px-10">
-        <header className="sticky top-3 z-30 mb-4 lg:hidden">
-          <div className="relative overflow-hidden rounded-[24px] border border-white/70 bg-slate-950/90 p-3 text-white shadow-2xl shadow-slate-900/15 backdrop-blur-2xl">
+      <main className="native-scroll min-h-screen w-full px-3 pb-[calc(7.8rem+env(safe-area-inset-bottom))] pt-[calc(0.75rem+env(safe-area-inset-top))] lg:ml-72 lg:w-[calc(100%-18rem)] lg:px-8 lg:pb-10 lg:pt-4 xl:px-10">
+        <header className="sticky top-[calc(0.6rem+env(safe-area-inset-top))] z-30 mb-4 lg:hidden">
+          <div className="relative overflow-hidden rounded-[26px] border border-white/70 bg-slate-950/90 p-2.5 text-white shadow-2xl shadow-slate-900/15 backdrop-blur-2xl">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,#34d39955_0,transparent_38%),linear-gradient(135deg,#02061700,#064e3b55)]" />
             <div className="relative flex items-center justify-between gap-3">
               <Link href={homeHref} className="flex min-w-0 items-center gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-lg font-black text-emerald-950">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-lg font-black text-emerald-950">
                   O
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-[11px] font-black uppercase tracking-wide text-emerald-200">
+                  <span className="block text-[10px] font-black uppercase text-emerald-200">
                     {roleLabels[currentUser.role]}
                   </span>
-                  <span className="block truncate text-base font-semibold leading-tight">{currentUser.name}</span>
+                  <span className="block truncate text-[15px] font-semibold leading-tight">{currentUser.name}</span>
+                  <span className="block truncate text-xs font-semibold text-slate-300">{currentPageLabel}</span>
                 </span>
               </Link>
 
               <div className="flex shrink-0 items-center gap-2">
                 <Link
                   href="/notificacoes"
-                  className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-white"
+                  className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-white"
                   aria-label="Notificacoes"
                 >
                   <Bell size={19} />
@@ -221,54 +228,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </Link>
                 <button
                   onClick={() => setMobileMenuOpen((current) => !current)}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-400 text-emerald-950 shadow-lg shadow-emerald-950/20"
+                  className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-400 text-emerald-950 shadow-lg shadow-emerald-950/20"
                   aria-label="Menu"
                 >
                   {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
                 </button>
               </div>
             </div>
-
-            {mobileMenuOpen && (
-              <div className="relative mt-3 grid grid-cols-2 gap-2 border-t border-white/10 pt-3">
-                {[
-                  { href: "/meu-discipulado", label: "Meu discipulado", icon: UserRound },
-                  { href: "/instalar", label: "Instalar app", icon: Smartphone },
-                  { href: "/gestao", label: "Meu acesso", icon: ShieldCheck },
-                ].filter((item) => canAccessRoute(currentUser, item.href)).map(({ href, label, icon: Icon }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex min-h-11 items-center gap-2 rounded-2xl bg-white/10 px-3 text-sm font-bold text-white"
-                  >
-                    <Icon size={17} />
-                    {label}
-                  </Link>
-                ))}
-                {isDemoMode ? (
-                  <Link
-                    href="/login"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex min-h-11 items-center gap-2 rounded-2xl bg-emerald-300 px-3 text-sm font-bold text-emerald-950"
-                  >
-                    <LogIn size={17} />
-                    Entrar
-                  </Link>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      signOut();
-                    }}
-                    className="flex min-h-11 items-center gap-2 rounded-2xl bg-white px-3 text-sm font-bold text-slate-950"
-                  >
-                    <LogOut size={17} />
-                    Sair
-                  </button>
-                )}
-              </div>
-            )}
           </div>
         </header>
 
@@ -338,7 +304,92 @@ export function AppShell({ children }: { children: ReactNode }) {
       <PwaStatus />
       <NotificationBridge />
 
-      <nav className="fixed inset-x-3 bottom-3 z-40 rounded-[22px] border border-white/75 bg-white/90 p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-2xl shadow-slate-900/10 backdrop-blur-xl lg:hidden">
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            aria-label="Fechar menu"
+            onClick={() => setMobileMenuOpen(false)}
+            className="absolute inset-0 h-full w-full bg-slate-950/35 backdrop-blur-sm"
+          />
+          <section className="native-scroll absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-y-auto rounded-t-[32px] bg-[#f7f8f3] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl shadow-slate-950/30">
+            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-slate-300" />
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-[24px] bg-slate-950 p-3 text-white">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase text-emerald-200">{roleLabels[currentUser.role]}</p>
+                <p className="truncate text-lg font-semibold">{currentUser.name}</p>
+                <p className="text-xs font-semibold text-slate-300">{isDemoMode ? "Modo demo" : "Acesso real"}</p>
+              </div>
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white"
+                aria-label="Fechar menu"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="grid gap-4">
+              {groupedNavItems.map((group) => (
+                <div key={group.label} className="rounded-[24px] bg-white/90 p-3 shadow-sm">
+                  <p className="mb-2 px-1 text-[11px] font-black uppercase text-slate-400">{group.label}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {group.items.map(({ href, label, icon: Icon }) => {
+                      const active = isActive(pathname, href);
+                      return (
+                        <Link
+                          key={href}
+                          href={href}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={`flex min-h-14 items-center gap-2 rounded-2xl px-3 text-sm font-bold ${
+                            active ? "bg-emerald-900 text-white" : "bg-slate-50 text-slate-700"
+                          }`}
+                        >
+                          <Icon size={18} />
+                          <span className="min-w-0 truncate">{label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              <div className="grid grid-cols-2 gap-2">
+                {isDemoMode ? (
+                  <Link
+                    href="/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-900 px-3 text-sm font-bold text-white"
+                  >
+                    <LogIn size={17} />
+                    Entrar
+                  </Link>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      signOut();
+                    }}
+                    className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-3 text-sm font-bold text-white"
+                  >
+                    <LogOut size={17} />
+                    Sair
+                  </button>
+                )}
+                <Link
+                  href="/instalar"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white px-3 text-sm font-bold text-slate-800 shadow-sm"
+                >
+                  <Smartphone size={17} />
+                  Instalar
+                </Link>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      <nav className="fixed inset-x-3 bottom-[calc(0.65rem+env(safe-area-inset-bottom))] z-40 rounded-[26px] border border-white/75 bg-white/90 p-1.5 shadow-2xl shadow-slate-900/10 backdrop-blur-2xl lg:hidden">
         <div className="grid grid-cols-5 gap-1">
           {visibleMobileNavItems.map(({ href, label, icon: Icon }) => {
             const active = isActive(pathname, href);
@@ -346,8 +397,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Link
                 key={href}
                 href={href}
-                className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold ${
-                  active ? "bg-emerald-900 text-white" : "text-slate-500 hover:bg-slate-100"
+                className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-[10.5px] font-black ${
+                  active ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/20" : "text-slate-500 hover:bg-slate-100"
                 }`}
               >
                 <Icon size={20} strokeWidth={2.35} />
