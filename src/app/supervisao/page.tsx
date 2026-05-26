@@ -7,7 +7,7 @@ import { useAuth } from "@/components/auth-provider";
 import { MetricCard } from "@/components/metric-card";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
-import { getVisibleCells, getVisibleSupervisorVisits } from "@/lib/access-control";
+import { getScopedCells, getScopedSupervisorVisits } from "@/lib/access-control";
 import { useActivityEvents, useCells, useLocalPeople, useSupervisorVisits } from "@/lib/local-store";
 import { getCellStats } from "@/lib/reports";
 
@@ -29,8 +29,8 @@ export default function SupervisionPage() {
   const { people } = useLocalPeople();
   const { visits, addVisit } = useSupervisorVisits();
   const { addEvent } = useActivityEvents();
-  const visibleCells = getVisibleCells(currentUser, cells);
-  const visibleVisits = getVisibleSupervisorVisits(currentUser, visits, cells);
+  const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
+  const visibleVisits = getScopedSupervisorVisits(currentUser, visits, cells, isDemoMode);
   const supervisorCells = visibleCells.filter((cell) =>
     currentUser.role === "supervisor" ? cell.supervisorUserId === currentUser.id || currentUser.cellIds?.includes(cell.id) : true,
   );

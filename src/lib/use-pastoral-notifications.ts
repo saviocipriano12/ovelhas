@@ -3,12 +3,12 @@
 import { useMemo } from "react";
 import { useAuth } from "@/components/auth-provider";
 import {
-  getVisibleCareTasks,
-  getVisibleCells,
-  getVisiblePastoralReminders,
-  getVisiblePeople,
-  getVisiblePrayerRequests,
-  getVisibleSupervisorVisits,
+  getScopedCareTasks,
+  getScopedCells,
+  getScopedPastoralReminders,
+  getScopedPeople,
+  getScopedPrayerRequests,
+  getScopedSupervisorVisits,
 } from "@/lib/access-control";
 import {
   useCareTasks,
@@ -25,7 +25,7 @@ import {
 import { getPastoralNotifications } from "@/lib/notifications";
 
 export function usePastoralNotifications() {
-  const { currentUser } = useAuth();
+  const { currentUser, isDemoMode } = useAuth();
   const { people } = useLocalPeople();
   const { cells } = useCells();
   const { tasks } = useCareTasks();
@@ -37,15 +37,15 @@ export function usePastoralNotifications() {
   const { accesses, progress } = useDiscipleship();
   const reads = useNotificationReads(currentUser.id);
 
-  const visiblePeople = getVisiblePeople(currentUser, people);
-  const visibleCells = getVisibleCells(currentUser, cells);
+  const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
+  const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visibleCellIds = new Set(visibleCells.map((cell) => cell.id));
   const visiblePeopleIds = new Set(visiblePeople.map((person) => person.id));
-  const visibleTasks = getVisibleCareTasks(currentUser, tasks, people).filter((task) => !completedSet.has(task.id));
+  const visibleTasks = getScopedCareTasks(currentUser, tasks, people, isDemoMode).filter((task) => !completedSet.has(task.id));
   const visibleReports = reports.filter((report) => visibleCellIds.has(report.cellId));
-  const visibleVisits = getVisibleSupervisorVisits(currentUser, visits, cells);
-  const visibleReminders = getVisiblePastoralReminders(currentUser, reminders, cells, people);
-  const visiblePrayerRequests = getVisiblePrayerRequests(currentUser, requests, cells, people);
+  const visibleVisits = getScopedSupervisorVisits(currentUser, visits, cells, isDemoMode);
+  const visibleReminders = getScopedPastoralReminders(currentUser, reminders, cells, people, isDemoMode);
+  const visiblePrayerRequests = getScopedPrayerRequests(currentUser, requests, cells, people, isDemoMode);
   const visibleAccesses = accesses.filter((access) => visiblePeopleIds.has(access.personId));
   const visibleProgress = progress.filter((item) => visiblePeopleIds.has(item.personId));
 

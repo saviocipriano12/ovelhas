@@ -98,7 +98,7 @@ export function canAccessRoute(user: AppUser, pathname: string) {
   }
 
   if (pathname === "/configuracao") {
-    return user.role === "admin";
+    return user.role === "admin" || isPendingAccount(user);
   }
 
   if (isPendingAccount(user)) {
@@ -173,6 +173,18 @@ export function getVisiblePeople(user: AppUser, people: Person[]) {
   return people.filter((person) => canViewPerson(user, person));
 }
 
+export function getScopedPeople(user: AppUser, people: Person[], isDemoMode: boolean) {
+  if (isDemoMode) {
+    return getVisiblePeople(user, people);
+  }
+
+  if (user.role === "member") {
+    return people.filter((person) => person.personUserId === user.id || person.id === user.personId);
+  }
+
+  return people.filter((person) => person.churchId === user.churchId);
+}
+
 export function canViewCell(user: AppUser, cell: Cell) {
   if (user.role === "admin" || user.role === "pastor") {
     return user.churchId === cell.churchId;
@@ -193,8 +205,21 @@ export function getVisibleCells(user: AppUser, cells: Cell[]) {
   return cells.filter((cell) => canViewCell(user, cell));
 }
 
+export function getScopedCells(user: AppUser, cells: Cell[], isDemoMode: boolean) {
+  if (isDemoMode) {
+    return getVisibleCells(user, cells);
+  }
+
+  return cells.filter((cell) => cell.churchId === user.churchId);
+}
+
 export function getVisibleCareTasks(user: AppUser, tasks: CareTask[], people: Person[]) {
   const visiblePersonIds = new Set(getVisiblePeople(user, people).map((person) => person.id));
+  return tasks.filter((task) => visiblePersonIds.has(task.personId));
+}
+
+export function getScopedCareTasks(user: AppUser, tasks: CareTask[], people: Person[], isDemoMode: boolean) {
+  const visiblePersonIds = new Set(getScopedPeople(user, people, isDemoMode).map((person) => person.id));
   return tasks.filter((task) => visiblePersonIds.has(task.personId));
 }
 
@@ -216,6 +241,25 @@ export function getVisibleSupervisorVisits(user: AppUser, visits: SupervisorVisi
 
     return visit.leaderUserId === user.id || visibleCellIds.has(visit.cellId);
   });
+}
+
+export function getScopedSupervisorVisits(
+  user: AppUser,
+  visits: SupervisorVisit[],
+  cells: Cell[],
+  isDemoMode: boolean,
+) {
+  if (isDemoMode) {
+    return getVisibleSupervisorVisits(user, visits, cells);
+  }
+
+  const visibleCellIds = new Set(getScopedCells(user, cells, isDemoMode).map((cell) => cell.id));
+
+  if (user.role === "member") {
+    return [];
+  }
+
+  return visits.filter((visit) => visit.churchId === user.churchId || visibleCellIds.has(visit.cellId));
 }
 
 export function getVisibleActivityEvents(user: AppUser, events: ActivityEvent[], cells: Cell[], people: Person[]) {
@@ -245,6 +289,24 @@ export function getVisibleActivityEvents(user: AppUser, events: ActivityEvent[],
 
     return event.visibility === "member" && event.actorUserId === user.id;
   });
+}
+
+export function getScopedActivityEvents(
+  user: AppUser,
+  events: ActivityEvent[],
+  cells: Cell[],
+  people: Person[],
+  isDemoMode: boolean,
+) {
+  if (isDemoMode) {
+    return getVisibleActivityEvents(user, events, cells, people);
+  }
+
+  if (user.role === "member") {
+    return events.filter((event) => event.visibility === "member" && event.actorUserId === user.id);
+  }
+
+  return events.filter((event) => event.churchId === user.churchId && event.visibility !== "member");
 }
 
 export function canViewPastoralNote(user: AppUser, note: PastoralNote, person: Person) {
@@ -297,6 +359,25 @@ export function getVisiblePastoralReminders(
   return reminders.filter((reminder) => canViewPastoralReminder(user, reminder, cells, people));
 }
 
+export function getScopedPastoralReminders(
+  user: AppUser,
+  reminders: PastoralReminder[],
+  cells: Cell[],
+  people: Person[],
+  isDemoMode: boolean,
+) {
+  if (isDemoMode) {
+    return getVisiblePastoralReminders(user, reminders, cells, people);
+  }
+
+  if (user.role === "member") {
+    const personIds = new Set(getScopedPeople(user, people, isDemoMode).map((person) => person.id));
+    return reminders.filter((reminder) => reminder.assignedTo === user.id || Boolean(reminder.personId && personIds.has(reminder.personId)));
+  }
+
+  return reminders.filter((reminder) => reminder.churchId === user.churchId);
+}
+
 export function canViewPrayerRequest(user: AppUser, request: PrayerRequest, cells: Cell[], people: Person[]) {
   const person = people.find((item) => item.id === request.personId);
   const cell = cells.find((item) => item.id === request.cellId);
@@ -335,6 +416,25 @@ export function getVisiblePrayerRequests(
   people: Person[],
 ) {
   return requests.filter((request) => canViewPrayerRequest(user, request, cells, people));
+}
+
+export function getScopedPrayerRequests(
+  user: AppUser,
+  requests: PrayerRequest[],
+  cells: Cell[],
+  people: Person[],
+  isDemoMode: boolean,
+) {
+  if (isDemoMode) {
+    return getVisiblePrayerRequests(user, requests, cells, people);
+  }
+
+  if (user.role === "member") {
+    const personIds = new Set(getScopedPeople(user, people, isDemoMode).map((person) => person.id));
+    return requests.filter((request) => request.createdBy === user.id || personIds.has(request.personId));
+  }
+
+  return requests.filter((request) => request.churchId === user.churchId);
 }
 
 export function describeAccess(user: AppUser) {

@@ -7,18 +7,19 @@ import { useAuth } from "@/components/auth-provider";
 import { MetricCard } from "@/components/metric-card";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
-import { getVisibleCells } from "@/lib/access-control";
+import { getScopedCells, getScopedPeople } from "@/lib/access-control";
 import { useCellReports, useCells, useLocalPeople } from "@/lib/local-store";
 import { buildReportSummary, downloadReportHtml } from "@/lib/report-export";
 import { getCellStats, getOverallStats } from "@/lib/reports";
 
 export default function ReportsPage() {
-  const { currentUser } = useAuth();
+  const { currentUser, isDemoMode } = useAuth();
   const { people } = useLocalPeople();
   const { cells } = useCells();
   const { reports } = useCellReports();
-  const visibleCells = getVisibleCells(currentUser, cells);
-  const overall = getOverallStats(visibleCells, people);
+  const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
+  const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
+  const overall = getOverallStats(visibleCells, visiblePeople);
   const visibleCellIds = new Set(visibleCells.map((cell) => cell.id));
   const visibleReports = reports.filter((report) => visibleCellIds.has(report.cellId));
 
@@ -26,7 +27,7 @@ export default function ReportsPage() {
     downloadReportHtml({
       user: currentUser,
       cells: visibleCells,
-      people,
+      people: visiblePeople,
       reports: visibleReports,
     });
   }
@@ -35,7 +36,7 @@ export default function ReportsPage() {
     const summary = buildReportSummary({
       user: currentUser,
       cells: visibleCells,
-      people,
+      people: visiblePeople,
       reports: visibleReports,
     });
 
@@ -173,7 +174,7 @@ export default function ReportsPage() {
           <SectionHeader eyebrow="Por celula" title="Relatorio para supervisao" />
           <div className="space-y-3">
             {visibleCells.map((cell) => {
-              const stats = getCellStats(cell, people);
+              const stats = getCellStats(cell, visiblePeople);
               return (
                 <article key={cell.id} className="rounded-lg bg-slate-50 p-4">
                   <div className="flex items-start justify-between gap-3">

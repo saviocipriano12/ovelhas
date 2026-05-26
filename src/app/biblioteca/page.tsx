@@ -5,7 +5,7 @@ import { Award, BookOpen, Download, FilePlus2, FileText, Link as LinkIcon, Shiel
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
-import { getVisiblePeople } from "@/lib/access-control";
+import { getScopedPeople } from "@/lib/access-control";
 import type { CertificateRecord, LibraryMaterial } from "@/lib/data";
 import { roleLabels } from "@/lib/data";
 import {
@@ -59,7 +59,7 @@ export default function LibraryPage() {
   const { tracks } = useDiscipleship();
   const { materials, addMaterial } = useLibraryMaterials(currentUser.churchId);
   const { certificates, issueCertificate } = useCertificates(currentUser.churchId);
-  const visiblePeople = getVisiblePeople(currentUser, people);
+  const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const canManage = currentUser.role === "admin" || currentUser.role === "pastor";
   const canIssue = currentUser.role !== "member";
   const [feedback, setFeedback] = useState("");

@@ -13,7 +13,7 @@ import {
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
-import { getVisibleActivityEvents, getVisibleCells, getVisiblePeople } from "@/lib/access-control";
+import { getScopedActivityEvents, getScopedCells, getScopedPeople } from "@/lib/access-control";
 import { roleLabels } from "@/lib/data";
 import {
   useActivityEvents,
@@ -45,9 +45,9 @@ export default function SettingsPage() {
   const { events } = useActivityEvents();
   const { requests } = usePrayerRequests();
   const [feedback, setFeedback] = useState("");
-  const visiblePeople = getVisiblePeople(currentUser, people);
-  const visibleCells = getVisibleCells(currentUser, cells);
-  const visibleEvents = getVisibleActivityEvents(currentUser, events, cells, people);
+  const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
+  const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
+  const visibleEvents = getScopedActivityEvents(currentUser, events, cells, people, isDemoMode);
   const canManage = currentUser.role === "admin" || currentUser.role === "pastor";
   const exportSummary = useMemo(
     () => ({

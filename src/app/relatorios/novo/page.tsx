@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { ArrowLeft, ClipboardCheck } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
-import { getVisibleCells } from "@/lib/access-control";
+import { getScopedCells, getScopedPeople } from "@/lib/access-control";
 import { useCellReports, useCells, useLocalPeople } from "@/lib/local-store";
 import { getCellStats } from "@/lib/reports";
 
@@ -15,16 +15,14 @@ export default function NewReportPage() {
   const { people } = useLocalPeople();
   const { cells } = useCells();
   const { addReport } = useCellReports();
-  const visibleCells = getVisibleCells(currentUser, cells);
+  const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
+  const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const writableCells = visibleCells.filter((cell) => currentUser.role !== "supervisor" || cell.supervisorUserId === currentUser.id);
   const [selectedCellId, setSelectedCellId] = useState(writableCells[0]?.id ?? visibleCells[0]?.id ?? "");
   const [saved, setSaved] = useState("");
 
-  const selectedCell = useMemo(
-    () => cells.find((cell) => cell.id === selectedCellId) ?? writableCells[0] ?? visibleCells[0],
-    [cells, selectedCellId, visibleCells, writableCells],
-  );
-  const stats = selectedCell ? getCellStats(selectedCell, people) : null;
+  const selectedCell = cells.find((cell) => cell.id === selectedCellId) ?? writableCells[0] ?? visibleCells[0];
+  const stats = selectedCell ? getCellStats(selectedCell, visiblePeople) : null;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

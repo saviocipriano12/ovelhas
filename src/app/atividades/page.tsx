@@ -5,7 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { MetricCard } from "@/components/metric-card";
 import { SectionHeader } from "@/components/section-header";
-import { getVisibleActivityEvents } from "@/lib/access-control";
+import { getScopedActivityEvents } from "@/lib/access-control";
 import { useActivityEvents, useCells, useLocalPeople } from "@/lib/local-store";
 import { roleLabels } from "@/lib/data";
 
@@ -19,11 +19,11 @@ function formatDate(value: string) {
 }
 
 export default function ActivitiesPage() {
-  const { currentUser } = useAuth();
+  const { currentUser, isDemoMode } = useAuth();
   const { events } = useActivityEvents();
   const { cells } = useCells();
   const { people } = useLocalPeople();
-  const visibleEvents = getVisibleActivityEvents(currentUser, events, cells, people).sort(
+  const visibleEvents = getScopedActivityEvents(currentUser, events, cells, people, isDemoMode).sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
   const leaderEvents = visibleEvents.filter((event) => event.actorRole === "leader").length;

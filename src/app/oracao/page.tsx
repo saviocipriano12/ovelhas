@@ -5,7 +5,7 @@ import { CheckCircle2, Heart, LockKeyhole, MessageCircle, Plus, ShieldCheck, Spa
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
-import { getVisibleCells, getVisiblePeople, getVisiblePrayerRequests } from "@/lib/access-control";
+import { getScopedCells, getScopedPeople, getScopedPrayerRequests } from "@/lib/access-control";
 import type { PrayerRequest } from "@/lib/data";
 import { roleLabels } from "@/lib/data";
 import { useActivityEvents, useCells, useLocalPeople, usePrayerRequests } from "@/lib/local-store";
@@ -50,9 +50,9 @@ export default function PrayerPage() {
   const { cells } = useCells();
   const { requests, addPrayerRequest, updatePrayerStatus } = usePrayerRequests();
   const { addEvent } = useActivityEvents();
-  const visiblePeople = getVisiblePeople(currentUser, people);
-  const visibleCells = getVisibleCells(currentUser, cells);
-  const visibleRequests = getVisiblePrayerRequests(currentUser, requests, cells, people);
+  const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
+  const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
+  const visibleRequests = getScopedPrayerRequests(currentUser, requests, cells, people, isDemoMode);
   const memberPerson =
     people.find((person) => person.personUserId === currentUser.id || person.id === currentUser.personId) ??
     visiblePeople[0];

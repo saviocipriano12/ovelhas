@@ -146,6 +146,8 @@ function mapInviteRow(invite: {
 
 export function useLocalPeople() {
   const [items, setItems] = useState<Person[]>([]);
+  const [isLoadingPeople, setIsLoadingPeople] = useState(false);
+  const [peopleLoadError, setPeopleLoadError] = useState("");
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -154,70 +156,81 @@ export function useLocalPeople() {
     });
   }, []);
 
-  useEffect(() => {
-    async function loadSupabasePeople() {
-      const [peopleResult, cellsResult, profilesResult, progressResult, meetingsResult, serviceResult] = await Promise.all([
-        supabase
-          .from("people")
-          .select("id, church_id, cell_id, person_user_id, created_by_user_id, leader_user_id, name, phone, email, birth_date, address, neighborhood, status, journey_stage, first_visit_date, notes"),
-        supabase.from("cells").select("id, name, leader_id"),
-        supabase.from("profiles").select("id, name"),
-        supabase.from("video_progress").select("person_id, progress_percent"),
-        supabase.from("cell_meetings").select("id, meeting_date, cell_attendance(person_id, present)").order("meeting_date", { ascending: false }).limit(8),
-        supabase.from("service_attendance").select("person_id, present, church_services(service_date)").order("created_at", { ascending: false }).limit(200),
-      ]);
+  async function refreshPeople() {
+    setIsLoadingPeople(true);
+    setPeopleLoadError("");
 
-      if (!peopleResult.error && peopleResult.data) {
-        const cellNames = new Map((cellsResult.data ?? []).map((cell) => [cell.id, cell.name]));
-        const cellLeaders = new Map((cellsResult.data ?? []).map((cell) => [cell.id, cell.leader_id ?? ""]));
-        const profileNames = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile.name]));
-        const progressByPerson = new Map<string, number[]>();
+    const [peopleResult, cellsResult, profilesResult, progressResult, meetingsResult, serviceResult] = await Promise.all([
+      supabase
+        .from("people")
+        .select("id, church_id, cell_id, person_user_id, created_by_user_id, leader_user_id, name, phone, email, birth_date, address, neighborhood, status, journey_stage, first_visit_date, notes"),
+      supabase.from("cells").select("id, name, leader_id"),
+      supabase.from("profiles").select("id, name"),
+      supabase.from("video_progress").select("person_id, progress_percent"),
+      supabase.from("cell_meetings").select("id, meeting_date, cell_attendance(person_id, present)").order("meeting_date", { ascending: false }).limit(8),
+      supabase.from("service_attendance").select("person_id, present, church_services(service_date)").order("created_at", { ascending: false }).limit(200),
+    ]);
 
-        (progressResult.data ?? []).forEach((item) => {
-          const values = progressByPerson.get(item.person_id) ?? [];
-          values.push(item.progress_percent ?? 0);
-          progressByPerson.set(item.person_id, values);
-        });
+    setIsLoadingPeople(false);
 
-        const absenceStreaks = new Map<string, number>();
-        ((meetingsResult.data ?? []) as { cell_attendance?: { person_id: string; present: boolean }[] }[]).forEach((meeting) => {
-          (meeting.cell_attendance ?? []).forEach((attendance) => {
-            if (absenceStreaks.has(attendance.person_id)) {
-              return;
-            }
-
-            absenceStreaks.set(attendance.person_id, attendance.present ? 0 : 1);
-          });
-        });
-
-        const servicePresence = new Map<string, boolean>();
-        ((serviceResult.data ?? []) as { person_id: string; present: boolean }[]).forEach((attendance) => {
-          if (!servicePresence.has(attendance.person_id)) {
-            servicePresence.set(attendance.person_id, attendance.present);
-          }
-        });
-
-        setItems(
-          peopleResult.data.map((person) => {
-            const leaderId = person.leader_user_id ?? cellLeaders.get(person.cell_id ?? "") ?? "";
-            const progressValues = progressByPerson.get(person.id) ?? [];
-            const progress = progressValues.length
-              ? Math.round(progressValues.reduce((sum, value) => sum + value, 0) / progressValues.length)
-              : 0;
-
-            return mapSupabasePerson(person, {
-              cellName: cellNames.get(person.cell_id ?? "") ?? "Sem celula",
-              leaderName: profileNames.get(leaderId) ?? "Sem lider",
-              progress,
-              cellAbsences: absenceStreaks.get(person.id) ?? 0,
-              servicePresent: servicePresence.get(person.id) ?? false,
-            });
-          }),
-        );
-      }
+    if (peopleResult.error) {
+      setPeopleLoadError(peopleResult.error.message);
+      return { ok: false, error: peopleResult.error.message };
     }
 
-    loadSupabasePeople();
+    const cellNames = new Map((cellsResult.data ?? []).map((cell) => [cell.id, cell.name]));
+    const cellLeaders = new Map((cellsResult.data ?? []).map((cell) => [cell.id, cell.leader_id ?? ""]));
+    const profileNames = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile.name]));
+    const progressByPerson = new Map<string, number[]>();
+
+    (progressResult.data ?? []).forEach((item) => {
+      const values = progressByPerson.get(item.person_id) ?? [];
+      values.push(item.progress_percent ?? 0);
+      progressByPerson.set(item.person_id, values);
+    });
+
+    const absenceStreaks = new Map<string, number>();
+    ((meetingsResult.data ?? []) as { cell_attendance?: { person_id: string; present: boolean }[] }[]).forEach((meeting) => {
+      (meeting.cell_attendance ?? []).forEach((attendance) => {
+        if (absenceStreaks.has(attendance.person_id)) {
+          return;
+        }
+
+        absenceStreaks.set(attendance.person_id, attendance.present ? 0 : 1);
+      });
+    });
+
+    const servicePresence = new Map<string, boolean>();
+    ((serviceResult.data ?? []) as { person_id: string; present: boolean }[]).forEach((attendance) => {
+      if (!servicePresence.has(attendance.person_id)) {
+        servicePresence.set(attendance.person_id, attendance.present);
+      }
+    });
+
+    const mappedPeople = (peopleResult.data ?? []).map((person) => {
+      const leaderId = person.leader_user_id ?? cellLeaders.get(person.cell_id ?? "") ?? "";
+      const progressValues = progressByPerson.get(person.id) ?? [];
+      const progress = progressValues.length
+        ? Math.round(progressValues.reduce((sum, value) => sum + value, 0) / progressValues.length)
+        : 0;
+
+      return mapSupabasePerson(person, {
+        cellName: cellNames.get(person.cell_id ?? "") ?? "Sem celula",
+        leaderName: profileNames.get(leaderId) ?? "Sem lider",
+        progress,
+        cellAbsences: absenceStreaks.get(person.id) ?? 0,
+        servicePresent: servicePresence.get(person.id) ?? false,
+      });
+    });
+
+    setItems(mappedPeople);
+    return { ok: true, people: mappedPeople };
+  }
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      refreshPeople();
+    });
   }, []);
 
   useEffect(() => {
@@ -352,7 +365,7 @@ export function useLocalPeople() {
     return { ok: true };
   }
 
-  return { people: items, addPerson, updatePeople, updatePerson };
+  return { people: items, addPerson, updatePeople, updatePerson, refreshPeople, isLoadingPeople, peopleLoadError };
 }
 
 export function useCells() {

@@ -7,7 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
-import { canManagePeople, getVisiblePeople } from "@/lib/access-control";
+import { canManagePeople, getScopedPeople } from "@/lib/access-control";
 import { useActivityEvents, useDiscipleship, useLocalPeople } from "@/lib/local-store";
 
 function formatDuration(seconds: number) {
@@ -20,7 +20,7 @@ export default function VideosPage() {
   const { people } = useLocalPeople();
   const { tracks, videos, accesses, progress, addTrack, addVideo, releaseTrack } = useDiscipleship();
   const { addEvent } = useActivityEvents();
-  const visiblePeople = getVisiblePeople(currentUser, people);
+  const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const churchTracks = tracks.filter((track) => track.churchId === currentUser.churchId || isDemoMode);
   const [selectedTrackId, setSelectedTrackId] = useState(churchTracks[0]?.id ?? "");
   const selectedTrack = churchTracks.find((track) => track.id === selectedTrackId) ?? churchTracks[0];

@@ -6,7 +6,7 @@ import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { PersonAvatar } from "@/components/person-avatar";
 import { SectionHeader } from "@/components/section-header";
-import { getVisibleCells, getVisiblePeople } from "@/lib/access-control";
+import { getScopedCells, getScopedPeople } from "@/lib/access-control";
 import { rsvpLabel, rsvpTone } from "@/lib/cell-schedule";
 import {
   saveCellAttendance,
@@ -29,8 +29,8 @@ export default function AttendancePage() {
   const { addCareTask } = useCareTasks();
   const { addEvent } = useActivityEvents();
   const { rsvps } = useCellRsvps(currentUser.churchId);
-  const visibleCells = getVisibleCells(currentUser, cells);
-  const visiblePeople = getVisiblePeople(currentUser, people);
+  const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
+  const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const [selectedCellId, setSelectedCellId] = useState(visibleCells[0]?.id ?? "");
   const [meetingDate, setMeetingDate] = useState(todayIso());
   const [serviceDate, setServiceDate] = useState(todayIso());

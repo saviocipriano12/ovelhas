@@ -4,14 +4,14 @@ import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { CareTaskCard } from "@/components/care-task-card";
 import { SectionHeader } from "@/components/section-header";
-import { getVisibleCareTasks } from "@/lib/access-control";
+import { getScopedCareTasks } from "@/lib/access-control";
 import { useCareTasks, useLocalPeople } from "@/lib/local-store";
 
 export default function CarePage() {
   const { currentUser, isDemoMode } = useAuth();
   const { people } = useLocalPeople();
   const { tasks, completeCareTask } = useCareTasks();
-  const visibleTasks = getVisibleCareTasks(currentUser, tasks, people);
+  const visibleTasks = getScopedCareTasks(currentUser, tasks, people, isDemoMode);
   const pendingTasks = visibleTasks;
 
   return (

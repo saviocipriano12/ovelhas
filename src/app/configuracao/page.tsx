@@ -50,7 +50,7 @@ export default function SetupPage() {
     <main className="min-h-screen bg-[#f7f8f3] px-4 py-5 text-slate-900">
       <div className="mx-auto max-w-md">
         <header className="mb-6 flex items-center justify-between">
-          <Link href="/dashboard" className="flex h-11 w-11 items-center justify-center rounded-lg bg-white shadow-sm">
+          <Link href="/aguardando" className="flex h-11 w-11 items-center justify-center rounded-lg bg-white shadow-sm">
             <ArrowLeft size={18} />
           </Link>
           <p className="text-sm font-bold text-emerald-700">Ovelhas by Savio Cipriano</p>

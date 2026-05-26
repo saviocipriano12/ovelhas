@@ -15,7 +15,7 @@ import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
 import { WhatsAppButton } from "@/components/whatsapp-button";
-import { getVisibleCareTasks, getVisibleCells, getVisiblePastoralReminders, getVisiblePeople } from "@/lib/access-control";
+import { getScopedCareTasks, getScopedCells, getScopedPastoralReminders, getScopedPeople } from "@/lib/access-control";
 import type { PastoralReminder } from "@/lib/data";
 import { roleLabels } from "@/lib/data";
 import {
@@ -71,10 +71,10 @@ export default function AgendaPage() {
   const { reminders, addReminder, completeReminder } = usePastoralReminders();
   const [open, setOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const visiblePeople = getVisiblePeople(currentUser, people);
-  const visibleCells = getVisibleCells(currentUser, cells);
-  const visibleTasks = getVisibleCareTasks(currentUser, tasks, people);
-  const visibleReminders = getVisiblePastoralReminders(currentUser, reminders, cells, people);
+  const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
+  const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
+  const visibleTasks = getScopedCareTasks(currentUser, tasks, people, isDemoMode);
+  const visibleReminders = getScopedPastoralReminders(currentUser, reminders, cells, people, isDemoMode);
   const openReminders = visibleReminders.filter((reminder) => reminder.status === "open");
   const todayReminders = openReminders.filter((reminder) => isToday(reminder.dueAt));
   const overdueReminders = openReminders.filter((reminder) => isOverdue(reminder.dueAt));

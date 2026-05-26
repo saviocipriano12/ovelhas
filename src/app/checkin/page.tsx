@@ -5,7 +5,7 @@ import { Copy, QrCode, Share2, UserCheck } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
-import { getVisibleCells } from "@/lib/access-control";
+import { getScopedCells } from "@/lib/access-control";
 import { createCheckInCode, qrCodeUrl } from "@/lib/checkin";
 import { roleLabels } from "@/lib/data";
 import { useCells, useCheckIns } from "@/lib/local-store";
@@ -16,10 +16,10 @@ function publicUrl(path: string) {
 }
 
 export default function CheckInPage() {
-  const { currentUser } = useAuth();
+  const { currentUser, isDemoMode } = useAuth();
   const { cells } = useCells();
   const { checkIns } = useCheckIns(currentUser.churchId);
-  const visibleCells = getVisibleCells(currentUser, cells);
+  const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const [selectedCellId, setSelectedCellId] = useState(visibleCells[0]?.id ?? "");
   const [type, setType] = useState<"cell" | "service">("cell");
   const selectedCell = visibleCells.find((cell) => cell.id === selectedCellId) ?? visibleCells[0];

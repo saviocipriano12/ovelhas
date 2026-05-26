@@ -6,21 +6,21 @@ import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { PersonCard } from "@/components/person-card";
 import { SectionHeader } from "@/components/section-header";
-import { canManagePeople, getVisibleCells, getVisiblePeople } from "@/lib/access-control";
+import { canManagePeople, getScopedCells, getScopedPeople } from "@/lib/access-control";
 import { useCells, useLocalPeople } from "@/lib/local-store";
 
 export default function PeoplePage() {
   const { currentUser, isDemoMode } = useAuth();
-  const { people, addPerson } = useLocalPeople();
-  const { cells } = useCells();
+  const { people, addPerson, refreshPeople, isLoadingPeople, peopleLoadError } = useLocalPeople();
+  const { cells, refreshCells } = useCells();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [created, setCreated] = useState("");
-  const visibleCells = getVisibleCells(currentUser, cells);
+  const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
 
   const filteredPeople = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    const visiblePeople = getVisiblePeople(currentUser, people);
+    const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
 
     if (!normalizedQuery) {
       return visiblePeople;
@@ -32,7 +32,7 @@ export default function PeoplePage() {
         .toLowerCase()
         .includes(normalizedQuery),
     );
-  }, [currentUser, people, query]);
+  }, [currentUser, isDemoMode, people, query]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,6 +69,7 @@ export default function PeoplePage() {
     }
 
     setCreated(`${result.person.name} foi adicionado ao cuidado da celula.`);
+    await Promise.all([refreshPeople(), refreshCells()]);
     setOpen(false);
     event.currentTarget.reset();
   }
@@ -118,6 +119,18 @@ export default function PeoplePage() {
         {created && (
           <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">
             {created}
+          </div>
+        )}
+
+        {peopleLoadError && (
+          <div className="rounded-lg border border-rose-100 bg-rose-50 p-3 text-sm font-semibold text-rose-800">
+            Nao consegui carregar pessoas do Supabase: {peopleLoadError}
+          </div>
+        )}
+
+        {isLoadingPeople && (
+          <div className="rounded-lg border border-sky-100 bg-sky-50 p-3 text-sm font-semibold text-sky-800">
+            Atualizando pessoas...
           </div>
         )}
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Clock3, LogOut, MailCheck, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 
@@ -48,6 +49,12 @@ export default function WaitingAccessPage() {
           </div>
 
           <div className="mt-5">
+            <Link
+              href="/configuracao"
+              className="mb-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-900 px-4 text-sm font-bold text-white"
+            >
+              Configurar primeiro admin
+            </Link>
             <button
               onClick={signOut}
               className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700"

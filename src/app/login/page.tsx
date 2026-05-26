@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Eye, EyeOff, Loader2, LogIn, MailCheck, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 
-type Mode = "signin" | "reset";
+type Mode = "signin" | "reset" | "new-password";
 
 function friendlyAuthError(message: string) {
   const lower = message.toLowerCase();
@@ -36,6 +36,19 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const nextPath = searchParams.get("next") || "/dashboard";
 
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setMode("new-password");
+        setMessage("Agora crie uma nova senha para sua conta.");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
@@ -59,6 +72,21 @@ export default function LoginPage() {
 
       setMessage("Enviamos um link de recuperacao para seu email.");
       setLoading(false);
+      return;
+    }
+
+    if (mode === "new-password") {
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+
+      if (updateError) {
+        setError(friendlyAuthError(updateError.message));
+        setLoading(false);
+        return;
+      }
+
+      setMessage("Senha atualizada. Entrando no Ovelhas...");
+      router.push(nextPath.startsWith("/") ? nextPath : "/dashboard");
+      router.refresh();
       return;
     }
 
@@ -103,7 +131,7 @@ export default function LoginPage() {
             <ShieldCheck size={25} />
           </div>
           <h1 className="mt-5 text-3xl font-semibold leading-tight">
-            {mode === "signin" ? "Entrar no Ovelhas" : "Recuperar senha"}
+            {mode === "signin" ? "Entrar no Ovelhas" : mode === "reset" ? "Recuperar senha" : "Nova senha"}
           </h1>
           <p className="mt-3 text-sm leading-6 text-slate-300">
             Os dados da igreja ficam protegidos por login, perfil e permissoes de pastor, supervisor, lider e membro.
@@ -129,20 +157,22 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => setMode("reset")}
-              className={`min-h-10 rounded-lg text-sm font-bold ${mode === "reset" ? "bg-white text-emerald-900 shadow-sm" : "text-slate-500"}`}
+              className={`min-h-10 rounded-lg text-sm font-bold ${mode === "reset" || mode === "new-password" ? "bg-white text-emerald-900 shadow-sm" : "text-slate-500"}`}
             >
               Senha
             </button>
           </div>
 
           <div className="space-y-3">
-            <input
-              name="email"
-              type="email"
-              required
-              className="min-h-12 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
-              placeholder="Email"
-            />
+            {mode !== "new-password" && (
+              <input
+                name="email"
+                type="email"
+                required
+                className="min-h-12 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                placeholder="Email"
+              />
+            )}
             {mode !== "reset" && (
               <label className="flex min-h-12 items-center rounded-lg border border-slate-200 bg-white px-3 focus-within:border-emerald-500">
                 <input
@@ -151,7 +181,7 @@ export default function LoginPage() {
                   required
                   minLength={6}
                   className="min-h-11 flex-1 bg-transparent text-sm outline-none"
-                  placeholder="Senha"
+                  placeholder={mode === "new-password" ? "Nova senha" : "Senha"}
                 />
                 <button type="button" onClick={() => setShowPassword((current) => !current)} className="text-slate-400">
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -168,7 +198,7 @@ export default function LoginPage() {
             className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-900 px-4 text-sm font-bold text-white disabled:opacity-70"
           >
             {loading ? <Loader2 className="animate-spin" size={18} /> : mode === "reset" ? <MailCheck size={18} /> : <LogIn size={18} />}
-            {mode === "signin" ? "Entrar" : "Enviar recuperacao"}
+            {mode === "signin" ? "Entrar" : mode === "reset" ? "Enviar recuperacao" : "Salvar nova senha"}
           </button>
         </form>
 

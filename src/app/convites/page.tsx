@@ -8,7 +8,7 @@ import { Copy, Link2, MessageCircle, QrCode, Send, Share2, UserPlus } from "luci
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
-import { getInviteableRoles, getVisibleCells } from "@/lib/access-control";
+import { getInviteableRoles, getScopedCells } from "@/lib/access-control";
 import { roleLabels, type UserRole } from "@/lib/data";
 import { useCells, useInvites } from "@/lib/local-store";
 import { whatsappLink } from "@/lib/whatsapp";
@@ -37,7 +37,7 @@ export default function InvitesPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { cells } = useCells();
   const { invites, createInvite, refreshInvites, isLoadingInvites, inviteLoadError } = useInvites();
-  const visibleCells = getVisibleCells(currentUser, cells);
+  const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const inviteableRoles = useMemo(() => getInviteableRoles(currentUser), [currentUser]);
