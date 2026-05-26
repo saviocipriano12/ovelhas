@@ -145,7 +145,7 @@ function mapInviteRow(invite: {
 }
 
 export function useLocalPeople() {
-  const [items, setItems] = useState<Person[]>([]);
+  const [items, setItems] = useState<Person[]>(() => readJson<Person[]>(PEOPLE_KEY, []));
   const [isLoadingPeople, setIsLoadingPeople] = useState(false);
   const [peopleLoadError, setPeopleLoadError] = useState("");
   const [hydrated, setHydrated] = useState(false);
@@ -369,7 +369,7 @@ export function useLocalPeople() {
 }
 
 export function useCells() {
-  const [items, setItems] = useState<Cell[]>([]);
+  const [items, setItems] = useState<Cell[]>(() => readJson<Cell[]>(CELLS_KEY, []));
   const [isLoadingCells, setIsLoadingCells] = useState(false);
   const [cellLoadError, setCellLoadError] = useState("");
   const [hydrated, setHydrated] = useState(false);
@@ -512,7 +512,7 @@ export function useCells() {
 }
 
 export function useProfiles() {
-  const [profiles, setProfiles] = useState<AppUser[]>([]);
+  const [profiles, setProfiles] = useState<AppUser[]>(() => readJson<AppUser[]>(PROFILES_KEY, []));
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -1282,7 +1282,7 @@ function createInviteToken() {
 }
 
 export function useInvites() {
-  const [invites, setInvites] = useState<Invite[]>([]);
+  const [invites, setInvites] = useState<Invite[]>(() => readJson<Invite[]>(INVITES_KEY, []));
   const [isLoadingInvites, setIsLoadingInvites] = useState(false);
   const [inviteLoadError, setInviteLoadError] = useState("");
   const [hydrated, setHydrated] = useState(false);
