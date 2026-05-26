@@ -1,40 +1,65 @@
--- Ovelhas - correcao emergencial de RLS
+-- Ovelhas - reset de seguranca e funcoes de producao
 -- Rode este arquivo inteiro no SQL Editor do Supabase.
--- Ele remove politicas antigas/recursivas de profiles e recria a base segura
--- para celular/desktop carregarem os mesmos dados reais.
+-- Pode rodar mais de uma vez. Ele remove policies antigas/recursivas,
+-- recria funcoes oficiais do app e libera celulas, pessoas e convites
+-- com uma fonte unica de verdade no Supabase.
 
 begin;
 
--- 1) Remove TODAS as policies existentes em profiles. Isso elimina qualquer
--- policy antiga que consulte profiles dentro da propria policy e cause:
--- "infinite recursion detected in policy for relation profiles".
+-- 1) Remove TODAS as policies antigas das tabelas centrais. Isso elimina
+-- policies que chamavam profiles por dentro e causavam recursao.
 do $$
 declare
   policy_record record;
 begin
   for policy_record in
-    select policyname
+    select schemaname, tablename, policyname
     from pg_policies
     where schemaname = 'public'
-      and tablename = 'profiles'
+      and tablename in ('profiles', 'cells', 'people', 'invites')
   loop
-    execute format('drop policy if exists %I on public.profiles', policy_record.policyname);
+    execute format(
+      'drop policy if exists %I on %I.%I',
+      policy_record.policyname,
+      policy_record.schemaname,
+      policy_record.tablename
+    );
   end loop;
 end;
 $$;
 
+drop trigger if exists on_auth_user_created on auth.users;
+
+drop function if exists public.current_app_role() cascade;
+drop function if exists public.current_app_church_id() cascade;
+drop function if exists public.current_app_user() cascade;
+drop function if exists public.can_admin_church(uuid) cascade;
+drop function if exists public.can_view_cell(public.cells) cascade;
+drop function if exists public.can_manage_cell(public.cells) cascade;
+drop function if exists public.can_view_person(public.people) cascade;
+drop function if exists public.can_create_invite(uuid, app_role, uuid) cascade;
+drop function if exists public.can_view_invite(uuid, uuid) cascade;
+drop function if exists public.can_view_invite(uuid, uuid, uuid) cascade;
+drop function if exists public.get_my_profiles() cascade;
+drop function if exists public.get_my_cells() cascade;
+drop function if exists public.get_my_people() cascade;
+drop function if exists public.get_my_invites() cascade;
+drop function if exists public.create_invite_secure(text, text, text, app_role, uuid, timestamptz) cascade;
+drop function if exists public.create_cell_secure(text, uuid, uuid, text, text, text, text) cascade;
+drop function if exists public.update_cell_secure(uuid, text, uuid, uuid, text, text, text, text) cascade;
+drop function if exists public.delete_cell_secure(uuid) cascade;
+drop function if exists public.delete_invite_secure(uuid) cascade;
+drop function if exists public.get_invite_by_token(text) cascade;
+drop function if exists public.accept_invite(text) cascade;
+drop function if exists public.accept_invite_for_user(uuid, text, text) cascade;
+drop function if exists public.handle_new_user() cascade;
+
 alter table public.profiles enable row level security;
+alter table public.cells enable row level security;
+alter table public.people enable row level security;
+alter table public.invites enable row level security;
 
--- 2) Profile pode ser lido por usuarios autenticados. As outras tabelas continuam
--- controlando o escopo de igreja/celula. Essa policy simples nao chama profiles,
--- entao nao gera recursao.
-create policy "profiles_select_authenticated_safe"
-on public.profiles
-for select
-to authenticated
-using (auth.uid() is not null);
-
--- 3) Funcoes de apoio usam security definer e row_security off para consultar
+-- 2) Funcoes de apoio usam security definer e row_security off para consultar
 -- profiles sem disparar policies de profiles dentro de policies de outras tabelas.
 create or replace function public.current_app_role()
 returns app_role
@@ -78,6 +103,57 @@ as $$
     where p.id = auth.uid()
       and p.church_id = target_church_id
       and p.role in ('admin', 'pastor')
+  )
+$$;
+
+create or replace function public.can_view_cell(target public.cells)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+set row_security = off
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.church_id = target.church_id
+      and (
+        p.role in ('admin', 'pastor')
+        or (p.role = 'supervisor' and target.supervisor_id = p.id)
+        or (p.role = 'leader' and target.leader_id = p.id)
+        or (
+          p.role = 'member'
+          and exists (
+            select 1
+            from public.people pe
+            where pe.person_user_id = p.id
+              and pe.cell_id = target.id
+              and pe.church_id = p.church_id
+          )
+        )
+      )
+  )
+$$;
+
+create or replace function public.can_manage_cell(target public.cells)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+set row_security = off
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.church_id = target.church_id
+      and (
+        p.role in ('admin', 'pastor')
+        or (p.role = 'supervisor' and target.supervisor_id = p.id)
+      )
   )
 $$;
 
@@ -175,10 +251,16 @@ begin
 end;
 $$;
 
--- 4) Recria update de profiles sem recursao.
-drop policy if exists "profiles_update_admin" on public.profiles;
-drop policy if exists "profiles_update_admin_or_pastor" on public.profiles;
-drop policy if exists "profiles_update_admin_or_pastor_safe" on public.profiles;
+-- 3) Policies simples e seguras. Elas chamam apenas funcoes security definer,
+-- evitando recursao de profiles.
+create policy "profiles_select_by_church_safe"
+on public.profiles
+for select
+to authenticated
+using (
+  id = auth.uid()
+  or church_id = public.current_app_church_id()
+);
 
 create policy "profiles_update_admin_or_pastor_safe"
 on public.profiles
@@ -187,7 +269,51 @@ to authenticated
 using (public.can_admin_church(profiles.church_id))
 with check (public.can_admin_church(profiles.church_id));
 
--- 5) Recria funcoes de convite sem RLS interno.
+create policy "cells_select_by_role_safe"
+on public.cells
+for select
+to authenticated
+using (public.can_view_cell(cells));
+
+create policy "cells_insert_by_leadership_safe"
+on public.cells
+for insert
+to authenticated
+with check (
+  church_id = public.current_app_church_id()
+  and public.current_app_role() in ('admin', 'pastor', 'supervisor')
+);
+
+create policy "cells_update_by_leadership_safe"
+on public.cells
+for update
+to authenticated
+using (public.can_manage_cell(cells))
+with check (public.can_manage_cell(cells));
+
+create policy "people_select_by_role_safe"
+on public.people
+for select
+to authenticated
+using (public.can_view_person(people));
+
+create policy "people_insert_by_leadership_safe"
+on public.people
+for insert
+to authenticated
+with check (
+  church_id = public.current_app_church_id()
+  and public.current_app_role() in ('admin', 'pastor', 'supervisor', 'leader')
+);
+
+create policy "people_update_by_role_safe"
+on public.people
+for update
+to authenticated
+using (public.can_view_person(people))
+with check (public.can_view_person(people));
+
+-- 4) Funcoes de convite sem RLS interno.
 create or replace function public.can_create_invite(
   target_church_id uuid,
   target_role app_role,
@@ -302,9 +428,36 @@ as $$
   )
 $$;
 
+create policy "invites_select_by_role_safe"
+on public.invites
+for select
+to authenticated
+using (public.can_view_invite(invites.church_id, invites.created_by, invites.cell_id));
+
+create policy "invites_insert_by_role_safe"
+on public.invites
+for insert
+to authenticated
+with check (public.can_create_invite(invites.church_id, invites.role, invites.cell_id));
+
+create policy "invites_update_by_role_safe"
+on public.invites
+for update
+to authenticated
+using (public.can_view_invite(invites.church_id, invites.created_by, invites.cell_id))
+with check (public.can_view_invite(invites.church_id, invites.created_by, invites.cell_id));
+
+create policy "invites_delete_by_role_safe"
+on public.invites
+for delete
+to authenticated
+using (public.can_view_invite(invites.church_id, invites.created_by, invites.cell_id));
+
 grant execute on function public.current_app_role() to authenticated;
 grant execute on function public.current_app_church_id() to authenticated;
 grant execute on function public.can_admin_church(uuid) to authenticated;
+grant execute on function public.can_view_cell(public.cells) to authenticated;
+grant execute on function public.can_manage_cell(public.cells) to authenticated;
 grant execute on function public.can_view_person(public.people) to authenticated;
 grant execute on function public.current_app_user() to authenticated;
 grant execute on function public.can_create_invite(uuid, app_role, uuid) to authenticated;
@@ -545,6 +698,207 @@ begin
          created_invite.accepted_at, created_invite.created_at;
 end;
 $$;
+
+create or replace function public.get_invite_by_token(invite_token text)
+returns table (
+  id uuid,
+  church_id uuid,
+  token text,
+  email text,
+  name text,
+  role app_role,
+  cell_id uuid,
+  created_by uuid,
+  status text,
+  expires_at timestamptz,
+  accepted_by uuid,
+  accepted_at timestamptz,
+  created_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = public
+set row_security = off
+as $$
+  select i.id, i.church_id, i.token, i.email, i.name, i.role, i.cell_id, i.created_by,
+         i.status, i.expires_at, i.accepted_by, i.accepted_at, i.created_at
+  from public.invites i
+  where i.token = invite_token
+  limit 1
+$$;
+
+create or replace function public.accept_invite_for_user(
+  target_user_id uuid,
+  auth_email text,
+  invite_token text
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  target_invite public.invites%rowtype;
+  existing_profile public.profiles%rowtype;
+  target_leader_id uuid;
+begin
+  select *
+  into target_invite
+  from public.invites
+  where token = invite_token
+  limit 1;
+
+  if target_invite.id is null then
+    raise exception 'Convite nao encontrado.';
+  end if;
+
+  if target_invite.status = 'accepted' and target_invite.accepted_by = target_user_id then
+    return true;
+  end if;
+
+  if target_invite.status <> 'pending' or target_invite.expires_at <= now() then
+    raise exception 'Convite expirado ou ja usado.';
+  end if;
+
+  if target_invite.email is not null
+    and target_invite.email <> ''
+    and auth_email is not null
+    and lower(target_invite.email) <> lower(auth_email)
+  then
+    raise exception 'Este convite pertence a outro email.';
+  end if;
+
+  select *
+  into existing_profile
+  from public.profiles
+  where id = target_user_id
+  limit 1;
+
+  insert into public.profiles (id, church_id, name, role)
+  values (
+    target_user_id,
+    target_invite.church_id,
+    coalesce(nullif(target_invite.name, ''), nullif(auth_email, ''), 'Novo usuario'),
+    target_invite.role
+  )
+  on conflict (id) do update
+  set church_id = excluded.church_id,
+      name = coalesce(nullif(excluded.name, ''), public.profiles.name),
+      role = excluded.role;
+
+  if target_invite.role = 'leader' and target_invite.cell_id is not null then
+    update public.cells
+    set leader_id = target_user_id
+    where id = target_invite.cell_id
+      and church_id = target_invite.church_id;
+  end if;
+
+  if target_invite.role = 'supervisor' and target_invite.cell_id is not null then
+    update public.cells
+    set supervisor_id = target_user_id
+    where id = target_invite.cell_id
+      and church_id = target_invite.church_id;
+  end if;
+
+  if target_invite.role = 'member' then
+    select coalesce(c.leader_id, target_invite.created_by)
+    into target_leader_id
+    from public.cells c
+    where c.id = target_invite.cell_id
+      and c.church_id = target_invite.church_id
+    limit 1;
+
+    insert into public.people (
+      church_id,
+      cell_id,
+      person_user_id,
+      created_by_user_id,
+      leader_user_id,
+      name,
+      email,
+      status,
+      journey_stage,
+      first_visit_date
+    )
+    values (
+      target_invite.church_id,
+      target_invite.cell_id,
+      target_user_id,
+      target_invite.created_by,
+      coalesce(target_leader_id, target_invite.created_by),
+      coalesce(nullif(target_invite.name, ''), nullif(auth_email, ''), 'Novo membro'),
+      auth_email,
+      'Novo membro',
+      'Primeiros passos',
+      current_date
+    )
+    on conflict do nothing;
+  end if;
+
+  update public.invites
+  set status = 'accepted',
+      accepted_by = target_user_id,
+      accepted_at = now()
+  where id = target_invite.id;
+
+  return true;
+end;
+$$;
+
+create or replace function public.accept_invite(invite_token text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  user_email text;
+begin
+  if auth.uid() is null then
+    raise exception 'Usuario nao autenticado.';
+  end if;
+
+  select email
+  into user_email
+  from auth.users
+  where id = auth.uid()
+  limit 1;
+
+  return public.accept_invite_for_user(auth.uid(), user_email, invite_token);
+end;
+$$;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+begin
+  insert into public.profiles (id, name, role)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1), 'Novo usuario'),
+    'member'
+  )
+  on conflict (id) do update
+  set name = coalesce(public.profiles.name, excluded.name);
+
+  if new.raw_user_meta_data ? 'invite_token' then
+    perform public.accept_invite_for_user(new.id, new.email, new.raw_user_meta_data->>'invite_token');
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute function public.handle_new_user();
 
 create or replace function public.get_my_people()
 returns table (
@@ -891,6 +1245,9 @@ grant execute on function public.get_my_cells() to authenticated;
 grant execute on function public.get_my_people() to authenticated;
 grant execute on function public.get_my_invites() to authenticated;
 grant execute on function public.create_invite_secure(text, text, text, app_role, uuid, timestamptz) to authenticated;
+grant execute on function public.get_invite_by_token(text) to anon, authenticated;
+grant execute on function public.accept_invite(text) to authenticated;
+grant execute on function public.accept_invite_for_user(uuid, text, text) to authenticated;
 grant execute on function public.create_cell_secure(text, uuid, uuid, text, text, text, text) to authenticated;
 grant execute on function public.update_cell_secure(uuid, text, uuid, uuid, text, text, text, text) to authenticated;
 grant execute on function public.delete_cell_secure(uuid) to authenticated;
