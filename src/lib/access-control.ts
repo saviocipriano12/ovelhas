@@ -16,6 +16,7 @@ const roleRoutes: Record<UserRole, string[]> = {
   pastor: [
     "/dashboard",
     "/celulas",
+    "/celulas/hoje",
     "/pessoas",
     "/presenca",
     "/checkin",
@@ -38,6 +39,7 @@ const roleRoutes: Record<UserRole, string[]> = {
   supervisor: [
     "/dashboard",
     "/celulas",
+    "/celulas/hoje",
     "/pessoas",
     "/agenda",
     "/cuidados",
@@ -58,6 +60,7 @@ const roleRoutes: Record<UserRole, string[]> = {
   leader: [
     "/dashboard",
     "/celulas",
+    "/celulas/hoje",
     "/pessoas",
     "/presenca",
     "/checkin",
@@ -174,15 +177,8 @@ export function getVisiblePeople(user: AppUser, people: Person[]) {
 }
 
 export function getScopedPeople(user: AppUser, people: Person[], isDemoMode: boolean) {
-  if (isDemoMode) {
-    return getVisiblePeople(user, people);
-  }
-
-  if (user.role === "member") {
-    return people.filter((person) => person.personUserId === user.id || person.id === user.personId);
-  }
-
-  return people.filter((person) => person.churchId === user.churchId);
+  void isDemoMode;
+  return getVisiblePeople(user, people);
 }
 
 export function canViewCell(user: AppUser, cell: Cell) {
@@ -206,11 +202,8 @@ export function getVisibleCells(user: AppUser, cells: Cell[]) {
 }
 
 export function getScopedCells(user: AppUser, cells: Cell[], isDemoMode: boolean) {
-  if (isDemoMode) {
-    return getVisibleCells(user, cells);
-  }
-
-  return cells.filter((cell) => cell.churchId === user.churchId);
+  void isDemoMode;
+  return getVisibleCells(user, cells);
 }
 
 export function getVisibleCareTasks(user: AppUser, tasks: CareTask[], people: Person[]) {
@@ -249,17 +242,8 @@ export function getScopedSupervisorVisits(
   cells: Cell[],
   isDemoMode: boolean,
 ) {
-  if (isDemoMode) {
-    return getVisibleSupervisorVisits(user, visits, cells);
-  }
-
-  const visibleCellIds = new Set(getScopedCells(user, cells, isDemoMode).map((cell) => cell.id));
-
-  if (user.role === "member") {
-    return [];
-  }
-
-  return visits.filter((visit) => visit.churchId === user.churchId || visibleCellIds.has(visit.cellId));
+  void isDemoMode;
+  return getVisibleSupervisorVisits(user, visits, cells);
 }
 
 export function getVisibleActivityEvents(user: AppUser, events: ActivityEvent[], cells: Cell[], people: Person[]) {
@@ -298,15 +282,8 @@ export function getScopedActivityEvents(
   people: Person[],
   isDemoMode: boolean,
 ) {
-  if (isDemoMode) {
-    return getVisibleActivityEvents(user, events, cells, people);
-  }
-
-  if (user.role === "member") {
-    return events.filter((event) => event.visibility === "member" && event.actorUserId === user.id);
-  }
-
-  return events.filter((event) => event.churchId === user.churchId && event.visibility !== "member");
+  void isDemoMode;
+  return getVisibleActivityEvents(user, events, cells, people);
 }
 
 export function canViewPastoralNote(user: AppUser, note: PastoralNote, person: Person) {
@@ -366,16 +343,8 @@ export function getScopedPastoralReminders(
   people: Person[],
   isDemoMode: boolean,
 ) {
-  if (isDemoMode) {
-    return getVisiblePastoralReminders(user, reminders, cells, people);
-  }
-
-  if (user.role === "member") {
-    const personIds = new Set(getScopedPeople(user, people, isDemoMode).map((person) => person.id));
-    return reminders.filter((reminder) => reminder.assignedTo === user.id || Boolean(reminder.personId && personIds.has(reminder.personId)));
-  }
-
-  return reminders.filter((reminder) => reminder.churchId === user.churchId);
+  void isDemoMode;
+  return getVisiblePastoralReminders(user, reminders, cells, people);
 }
 
 export function canViewPrayerRequest(user: AppUser, request: PrayerRequest, cells: Cell[], people: Person[]) {
@@ -425,16 +394,8 @@ export function getScopedPrayerRequests(
   people: Person[],
   isDemoMode: boolean,
 ) {
-  if (isDemoMode) {
-    return getVisiblePrayerRequests(user, requests, cells, people);
-  }
-
-  if (user.role === "member") {
-    const personIds = new Set(getScopedPeople(user, people, isDemoMode).map((person) => person.id));
-    return requests.filter((request) => request.createdBy === user.id || personIds.has(request.personId));
-  }
-
-  return requests.filter((request) => request.churchId === user.churchId);
+  void isDemoMode;
+  return getVisiblePrayerRequests(user, requests, cells, people);
 }
 
 export function describeAccess(user: AppUser) {

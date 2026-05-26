@@ -42,6 +42,7 @@ import { usePastoralNotifications } from "@/lib/use-pastoral-notifications";
 
 const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard", label: "Inicio", icon: Home },
+  { href: "/celulas/hoje", label: "Hoje", icon: CalendarCheck },
   { href: "/celulas", label: "Celulas", icon: LayoutGrid },
   { href: "/pessoas", label: "Pessoas", icon: Users },
   { href: "/presenca", label: "Presenca", icon: CalendarCheck },
@@ -64,7 +65,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
 const navGroups = [
   {
     label: "Cuidado",
-    hrefs: ["/dashboard", "/celulas", "/pessoas", "/presenca", "/checkin", "/agenda", "/cuidados"],
+    hrefs: ["/dashboard", "/celulas/hoje", "/celulas", "/pessoas", "/presenca", "/checkin", "/agenda", "/cuidados"],
   },
   {
     label: "Discipulado",
@@ -82,7 +83,7 @@ const navGroups = [
 
 const mobileNavItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard", label: "Inicio", icon: Home },
-  { href: "/celulas", label: "Celulas", icon: LayoutGrid },
+  { href: "/celulas/hoje", label: "Hoje", icon: CalendarCheck },
   { href: "/pessoas", label: "Pessoas", icon: Users },
   { href: "/cuidados", label: "Cuidados", icon: HeartHandshake },
   { href: "/mais", label: "Mais", icon: MoreHorizontal },
@@ -97,6 +98,10 @@ const memberMobileNavItems: { href: string; label: string; icon: LucideIcon }[] 
 ];
 
 function isActive(pathname: string, href: string) {
+  if (href === "/celulas") {
+    return pathname === href;
+  }
+
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

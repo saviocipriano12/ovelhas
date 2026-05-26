@@ -2502,14 +2502,16 @@ export async function saveCellAttendance(input: {
     return { ok: false, error: meetingError?.message ?? "Nao foi possivel criar a reuniao." };
   }
 
-  const { error: attendanceError } = await supabase.from("cell_attendance").insert(
-    input.records.map((record) => ({
-      meeting_id: meeting.id,
-      person_id: record.personId,
-      present: record.present,
-      notes: record.notes || null,
-    })),
-  );
+  const { error: attendanceError } = input.records.length
+    ? await supabase.from("cell_attendance").insert(
+        input.records.map((record) => ({
+          meeting_id: meeting.id,
+          person_id: record.personId,
+          present: record.present,
+          notes: record.notes || null,
+        })),
+      )
+    : { error: null };
 
   if (attendanceError) {
     enqueueOfflineAction({ type: "cell-attendance", payload: input });
@@ -2547,13 +2549,15 @@ export async function saveServiceAttendance(input: {
     return { ok: false, error: serviceError?.message ?? "Nao foi possivel criar o culto." };
   }
 
-  const { error: attendanceError } = await supabase.from("service_attendance").insert(
-    input.records.map((record) => ({
-      service_id: service.id,
-      person_id: record.personId,
-      present: record.present,
-    })),
-  );
+  const { error: attendanceError } = input.records.length
+    ? await supabase.from("service_attendance").insert(
+        input.records.map((record) => ({
+          service_id: service.id,
+          person_id: record.personId,
+          present: record.present,
+        })),
+      )
+    : { error: null };
 
   if (attendanceError) {
     enqueueOfflineAction({ type: "service-attendance", payload: input });

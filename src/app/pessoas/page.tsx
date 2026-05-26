@@ -147,10 +147,10 @@ export default function PeoplePage() {
         )}
 
         {open && (
-          <div className="fixed inset-0 z-50 flex items-end bg-slate-950/35 p-3 backdrop-blur-sm sm:items-center sm:justify-center">
+          <div className="fixed inset-0 z-50 flex items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-3">
             <form
               onSubmit={handleSubmit}
-              className="app-scrollbar animate-enter max-h-[92vh] w-full overflow-y-auto rounded-[22px] bg-white p-5 shadow-2xl shadow-slate-900/20 sm:max-w-md"
+              className="native-scroll app-scrollbar animate-enter max-h-[92dvh] w-full overflow-y-auto rounded-t-[32px] bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl shadow-slate-900/20 sm:max-w-md sm:rounded-[22px]"
             >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
@@ -171,30 +171,30 @@ export default function PeoplePage() {
                 <input
                   name="name"
                   required
-                  className="min-h-12 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                  className="min-h-12 w-full rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
                   placeholder="Nome completo"
                 />
                 <input
                   name="phone"
                   required
                   inputMode="tel"
-                  className="min-h-12 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                  className="min-h-12 w-full rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
                   placeholder="WhatsApp com DDD"
                 />
                 <input
                   name="email"
                   type="email"
-                  className="min-h-12 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                  className="min-h-12 w-full rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
                   placeholder="Email opcional"
                 />
                 <input
                   name="neighborhood"
-                  className="min-h-12 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                  className="min-h-12 w-full rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
                   placeholder="Bairro"
                 />
                 <select
                   name="cellId"
-                  className="min-h-12 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-emerald-500"
+                  className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-emerald-500"
                 >
                   {visibleCells.map((cell) => (
                     <option key={cell.id} value={cell.id}>
@@ -204,7 +204,7 @@ export default function PeoplePage() {
                 </select>
                 <select
                   name="stage"
-                  className="min-h-12 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-emerald-500"
+                  className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-emerald-500"
                 >
                   <option>Visitante</option>
                   <option>Novo membro</option>
@@ -214,7 +214,7 @@ export default function PeoplePage() {
                 </select>
               </div>
 
-              <button className="mt-4 min-h-12 w-full rounded-lg bg-emerald-900 px-4 text-sm font-bold text-white">
+              <button className="mt-4 min-h-12 w-full rounded-2xl bg-emerald-900 px-4 text-sm font-bold text-white">
                 Salvar pessoa
               </button>
             </form>

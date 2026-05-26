@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { CalendarClock, MapPin, Pencil, Plus, Save, Trash2, Users, X } from "lucide-react";
+import { CalendarCheck, CalendarClock, MapPin, Pencil, Plus, Save, Trash2, Users, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { MetricCard } from "@/components/metric-card";
@@ -111,6 +111,13 @@ export default function CellsPage() {
           title="Acompanhamento por celula"
           action={
             <div className="flex items-center gap-2">
+              <Link
+                href="/celulas/hoje"
+                className="flex h-11 items-center gap-2 rounded-2xl bg-slate-950 px-3 text-xs font-bold text-white"
+              >
+                <CalendarCheck size={16} />
+                Hoje
+              </Link>
               <button
                 onClick={async () => {
                   const result = await refreshCells();
@@ -228,10 +235,10 @@ export default function CellsPage() {
         )}
 
         {open && (
-          <div className="fixed inset-0 z-50 flex items-end bg-slate-950/35 p-3 backdrop-blur-sm sm:items-center sm:justify-center">
+          <div className="fixed inset-0 z-50 flex items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-3">
             <form
               onSubmit={handleCreateCell}
-              className="app-scrollbar animate-enter max-h-[92vh] w-full overflow-y-auto rounded-[24px] bg-white p-5 shadow-2xl shadow-slate-900/20 sm:max-w-xl"
+              className="native-scroll app-scrollbar animate-enter max-h-[92dvh] w-full overflow-y-auto rounded-t-[32px] bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl shadow-slate-900/20 sm:max-w-xl sm:rounded-[24px]"
             >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>

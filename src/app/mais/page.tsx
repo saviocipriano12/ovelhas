@@ -31,6 +31,7 @@ import { canAccessRoute } from "@/lib/access-control";
 import { roleLabels } from "@/lib/data";
 
 const menuItems: { href: string; title: string; description: string; icon: LucideIcon }[] = [
+  { href: "/celulas/hoje", title: "Celula de hoje", description: "Preparar, marcar presenca e fechar o relatorio.", icon: CalendarCheck },
   { href: "/celulas", title: "Celulas", description: "Acompanhar lideres, bairros e frequencia.", icon: LayoutGrid },
   { href: "/pessoas", title: "Pessoas", description: "Membros, visitantes e novos cuidados.", icon: Users },
   { href: "/presenca", title: "Presenca", description: "Marcar celula e culto rapidamente.", icon: CalendarCheck },
