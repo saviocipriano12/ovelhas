@@ -1,6 +1,8 @@
 -- Ovelhas - modulo de Consolidacao
 -- Rode este arquivo no SQL Editor depois do reset/fix principal.
 -- Pode rodar mais de uma vez.
+-- Observacao: as permissoes comparam app_role como texto para permitir
+-- adicionar o papel "consolidation" e configurar as policies no mesmo Run.
 
 do $$
 begin
@@ -66,7 +68,7 @@ for select
 to authenticated
 using (
   church_id = public.current_app_church_id()
-  and public.current_app_role() in ('admin', 'pastor', 'consolidation')
+  and public.current_app_role()::text in ('admin', 'pastor', 'consolidation')
 );
 
 create policy "consolidation_reports_insert_by_role"
@@ -75,7 +77,7 @@ for insert
 to authenticated
 with check (
   church_id = public.current_app_church_id()
-  and public.current_app_role() in ('admin', 'pastor', 'consolidation')
+  and public.current_app_role()::text in ('admin', 'pastor', 'consolidation')
 );
 
 create policy "consolidation_reports_delete_by_role"
@@ -85,7 +87,7 @@ to authenticated
 using (
   church_id = public.current_app_church_id()
   and (
-    public.current_app_role() in ('admin', 'pastor')
+    public.current_app_role()::text in ('admin', 'pastor')
     or created_by = auth.uid()
   )
 );
@@ -96,7 +98,7 @@ for select
 to authenticated
 using (
   church_id = public.current_app_church_id()
-  and public.current_app_role() in ('admin', 'pastor', 'consolidation')
+  and public.current_app_role()::text in ('admin', 'pastor', 'consolidation')
 );
 
 create policy "consolidation_visitors_insert_by_role"
@@ -105,7 +107,7 @@ for insert
 to authenticated
 with check (
   church_id = public.current_app_church_id()
-  and public.current_app_role() in ('admin', 'pastor', 'consolidation')
+  and public.current_app_role()::text in ('admin', 'pastor', 'consolidation')
 );
 
 create policy "consolidation_visitors_delete_by_role"
@@ -114,7 +116,7 @@ for delete
 to authenticated
 using (
   church_id = public.current_app_church_id()
-  and public.current_app_role() in ('admin', 'pastor', 'consolidation')
+  and public.current_app_role()::text in ('admin', 'pastor', 'consolidation')
 );
 
 drop policy if exists "people_insert_by_leadership_safe" on public.people;
@@ -124,7 +126,7 @@ for insert
 to authenticated
 with check (
   church_id = public.current_app_church_id()
-  and public.current_app_role() in ('admin', 'pastor', 'supervisor', 'leader', 'consolidation')
+  and public.current_app_role()::text in ('admin', 'pastor', 'supervisor', 'leader', 'consolidation')
 );
 
 create or replace function public.can_create_invite(
@@ -146,11 +148,11 @@ as $$
       and p.church_id = target_church_id
       and (
         (
-          p.role = 'admin'
+          p.role::text = 'admin'
           and (
-            target_role in ('admin', 'pastor', 'supervisor', 'consolidation')
+            target_role::text in ('admin', 'pastor', 'supervisor', 'consolidation')
             or (
-              target_role in ('leader', 'member')
+              target_role::text in ('leader', 'member')
               and exists (
                 select 1 from public.cells c
                 where c.id = target_cell_id
@@ -160,11 +162,11 @@ as $$
           )
         )
         or (
-          p.role = 'pastor'
+          p.role::text = 'pastor'
           and (
-            target_role in ('supervisor', 'consolidation')
+            target_role::text in ('supervisor', 'consolidation')
             or (
-              target_role in ('leader', 'member')
+              target_role::text in ('leader', 'member')
               and exists (
                 select 1 from public.cells c
                 where c.id = target_cell_id
@@ -174,8 +176,8 @@ as $$
           )
         )
         or (
-          p.role = 'supervisor'
-          and target_role in ('leader', 'member')
+          p.role::text = 'supervisor'
+          and target_role::text in ('leader', 'member')
           and exists (
             select 1 from public.cells c
             where c.id = target_cell_id
@@ -184,8 +186,8 @@ as $$
           )
         )
         or (
-          p.role = 'leader'
-          and target_role = 'member'
+          p.role::text = 'leader'
+          and target_role::text = 'member'
           and exists (
             select 1 from public.cells c
             where c.id = target_cell_id
@@ -197,6 +199,6 @@ as $$
   )
 $$;
 
-grant select, insert on public.consolidation_reports to authenticated;
-grant select, insert on public.consolidation_visitors to authenticated;
+grant select, insert, delete on public.consolidation_reports to authenticated;
+grant select, insert, delete on public.consolidation_visitors to authenticated;
 grant execute on function public.can_create_invite(uuid, app_role, uuid) to authenticated;
