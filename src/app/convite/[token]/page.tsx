@@ -30,6 +30,18 @@ function friendlyInviteAuthError(message: string) {
   return message;
 }
 
+function inviteDestination(invite: Invite | null) {
+  if (invite?.role === "member") {
+    return "/meu-discipulado";
+  }
+
+  if (invite?.role === "consolidation") {
+    return "/consolidacao";
+  }
+
+  return "/dashboard";
+}
+
 export default function InviteAcceptPage() {
   const router = useRouter();
   const params = useParams<{ token: string }>();
@@ -93,8 +105,10 @@ export default function InviteAcceptPage() {
     setMessage("Convite aceito. Preparando seu acesso...");
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(PENDING_INVITE_KEY);
+      window.location.assign(inviteDestination(invite));
+      return true;
     }
-    router.push("/dashboard");
+    router.push(inviteDestination(invite));
     router.refresh();
     return true;
   }

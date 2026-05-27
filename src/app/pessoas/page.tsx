@@ -150,7 +150,7 @@ export default function PeoplePage() {
           <div className="fixed inset-0 z-50 flex items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-3">
             <form
               onSubmit={handleSubmit}
-              className="native-scroll app-scrollbar animate-enter max-h-[92dvh] w-full overflow-y-auto rounded-t-[32px] bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl shadow-slate-900/20 sm:max-w-md sm:rounded-[22px]"
+              className="mobile-sheet native-scroll app-scrollbar animate-enter"
             >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
@@ -171,30 +171,30 @@ export default function PeoplePage() {
                 <input
                   name="name"
                   required
-                  className="min-h-12 w-full rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                  className="field-control"
                   placeholder="Nome completo"
                 />
                 <input
                   name="phone"
                   required
                   inputMode="tel"
-                  className="min-h-12 w-full rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                  className="field-control"
                   placeholder="WhatsApp com DDD"
                 />
                 <input
                   name="email"
                   type="email"
-                  className="min-h-12 w-full rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                  className="field-control"
                   placeholder="Email opcional"
                 />
                 <input
                   name="neighborhood"
-                  className="min-h-12 w-full rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                  className="field-control"
                   placeholder="Bairro"
                 />
                 <select
                   name="cellId"
-                  className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-emerald-500"
+                  className="field-control"
                 >
                   {visibleCells.map((cell) => (
                     <option key={cell.id} value={cell.id}>
@@ -204,7 +204,7 @@ export default function PeoplePage() {
                 </select>
                 <select
                   name="stage"
-                  className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-emerald-500"
+                  className="field-control"
                 >
                   <option>Visitante</option>
                   <option>Novo membro</option>
@@ -214,7 +214,7 @@ export default function PeoplePage() {
                 </select>
               </div>
 
-              <button className="mt-4 min-h-12 w-full rounded-2xl bg-emerald-900 px-4 text-sm font-bold text-white">
+              <button className="primary-action mt-4">
                 Salvar pessoa
               </button>
             </form>

@@ -1,4 +1,4 @@
-const CACHE_NAME = "ovelhas-v3";
+const CACHE_NAME = "ovelhas-v4";
 const APP_SHELL = [
   "/",
   "/dashboard",
@@ -6,6 +6,7 @@ const APP_SHELL = [
   "/celulas",
   "/pessoas",
   "/presenca",
+  "/consolidacao",
   "/videos",
   "/cuidados",
   "/supervisao",
@@ -67,6 +68,17 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  const requestUrl = new URL(event.request.url);
+  const isSameOrigin = requestUrl.origin === self.location.origin;
+
+  if (!isSameOrigin) {
+    return;
+  }
+
+  if (requestUrl.pathname.startsWith("/api/")) {
+    return;
+  }
+
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request)
@@ -76,6 +88,23 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(() => caches.match(event.request).then((cached) => cached || caches.match("/offline"))),
+    );
+    return;
+  }
+
+  if (requestUrl.pathname.startsWith("/_next/")) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) {
+          return cached;
+        }
+
+        return fetch(event.request).then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          return response;
+        });
+      }),
     );
     return;
   }

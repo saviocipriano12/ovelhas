@@ -396,7 +396,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
 
       <nav className="fixed inset-x-3 bottom-[calc(0.65rem+env(safe-area-inset-bottom))] z-40 rounded-[26px] border border-white/75 bg-white/90 p-1.5 shadow-2xl shadow-slate-900/10 backdrop-blur-2xl lg:hidden">
-        <div className="grid grid-cols-5 gap-1">
+        <div
+          className="grid gap-1"
+          style={{ gridTemplateColumns: `repeat(${Math.max(visibleMobileNavItems.length, 1)}, minmax(0, 1fr))` }}
+        >
           {visibleMobileNavItems.map(({ href, label, icon: Icon }) => {
             const active = isActive(pathname, href);
             return (

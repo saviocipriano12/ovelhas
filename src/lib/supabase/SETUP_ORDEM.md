@@ -4,7 +4,9 @@ Use esta ordem sempre que criar ou corrigir um banco Supabase do Ovelhas.
 
 ## Caminho recomendado
 
-Rode `full-setup.sql` no SQL Editor do Supabase. Ele consolida todos os scripts abaixo na ordem correta.
+Rode `full-setup.sql` no SQL Editor do Supabase para aplicar o nucleo da plataforma.
+
+Depois rode `consolidation.sql` para aplicar o modulo de consolidacao e o papel `consolidation`.
 
 Depois rode `health-check.sql` para conferir se tabelas e funcoes essenciais existem.
 
@@ -57,6 +59,9 @@ Se o Supabase reclamar por tamanho da consulta, rode um arquivo por vez nesta or
 15. `church-settings.sql`
     Cria configuracoes da igreja, mensagens e identidade. Admin e pastor podem alterar a igreja vinculada a eles.
 
+16. `consolidation.sql`
+    Cria o ministerio de consolidacao, libera o papel `consolidation`, registra cultos, visitantes, decisoes e encaminhamentos para celulas.
+
 ## Primeiro uso real
 
 1. Garantir que a primeira conta admin ja exista ou criar a primeira conta temporariamente antes de fechar o cadastro publico.
@@ -65,7 +70,8 @@ Se o Supabase reclamar por tamanho da consulta, rode um arquivo por vez nesta or
 4. Criar celulas em `/celulas`.
 5. Criar convites em `/convites`.
 6. Atribuir supervisor e lider em `/gestao`.
-7. Rodar `health-check.sql` para conferir tabelas/funcoes essenciais.
+7. Rodar `consolidation.sql` se ele ainda nao estiver dentro do setup usado.
+8. Rodar `health-check.sql` para conferir tabelas/funcoes essenciais.
 
 ## Matriz de acesso esperada
 
@@ -73,6 +79,7 @@ Se o Supabase reclamar por tamanho da consulta, rode um arquivo por vez nesta or
 - Pastor: administra a igreja dele no dia a dia, cria celulas, convida supervisores/lideres/membros, acompanha relatorios, supervisao, atividades e configuracoes da igreja.
 - Supervisor: cria e monitora celulas da sua supervisao, convida lideres/membros, acompanha pessoas, presencas, relatorios e visitas das celulas dele.
 - Lider: ve sua celula, pessoas, presenca, check-in, convites de membro, libera discipulado, videos e cuidados.
+- Consolidacao: registra cultos, visitantes, decisoes e sugestoes de encaminhamento para celulas. Pastor e admin acompanham esses dados.
 - Membro: ve apenas o proprio discipulado, oracao, biblioteca, notificacoes, instalacao e mais.
 
 ## Teste minimo antes de publicar
@@ -87,3 +94,4 @@ Se o Supabase reclamar por tamanho da consulta, rode um arquivo por vez nesta or
 8. Supervisor ve a celula atribuida em `/supervisao`.
 9. Pastor ve tudo em `/relatorios`, `/supervisao` e `/atividades`.
 10. Convite aceito fica como `Aceito` em `/convites`.
+11. Usuario de consolidacao entra em `/consolidacao`, registra um culto e o relatorio aparece em `/relatorios`.

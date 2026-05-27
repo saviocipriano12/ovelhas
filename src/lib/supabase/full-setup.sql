@@ -16,7 +16,15 @@ create extension if not exists "pgcrypto";
 do $$
 begin
   if not exists (select 1 from pg_type where typname = 'app_role') then
-    create type app_role as enum ('admin', 'pastor', 'supervisor', 'leader', 'member');
+    create type app_role as enum ('admin', 'pastor', 'supervisor', 'leader', 'consolidation', 'member');
+  elsif not exists (
+    select 1
+    from pg_enum e
+    join pg_type t on t.oid = e.enumtypid
+    where t.typname = 'app_role'
+      and e.enumlabel = 'consolidation'
+  ) then
+    alter type app_role add value 'consolidation';
   end if;
 end $$;
 

@@ -161,26 +161,26 @@ export default function InvitesPage() {
 
         {canInvite && (
           <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-            <form onSubmit={handleSubmit} className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+            <form onSubmit={handleSubmit} className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm sm:p-5">
               <SectionHeader eyebrow="Novo acesso" title="Criar convite" />
               <div className="space-y-3">
                 <input
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="Nome da pessoa"
-                  className="min-h-12 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                  className="field-control"
                 />
                 <input
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   type="email"
                   placeholder="Email opcional"
-                  className="min-h-12 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                  className="field-control"
                 />
                 <select
                   value={role}
                   onChange={(event) => setRole(event.target.value as UserRole)}
-                  className="min-h-12 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                  className="field-control"
                 >
                   {allowedRoles.map((item) => (
                     <option key={item} value={item}>
@@ -192,7 +192,7 @@ export default function InvitesPage() {
                   <select
                     value={selectedCell?.id ?? ""}
                     onChange={(event) => setCellId(event.target.value)}
-                    className="min-h-12 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                    className="field-control"
                   >
                     {visibleCells.map((cell) => (
                       <option key={cell.id} value={cell.id}>
@@ -202,13 +202,13 @@ export default function InvitesPage() {
                   </select>
                 )}
               </div>
-              <button className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-900 px-4 text-sm font-bold text-white">
+              <button className="primary-action mt-4">
                 <UserPlus size={18} />
                 Gerar link
               </button>
             </form>
 
-            <div className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+            <div className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm sm:p-5">
               <SectionHeader eyebrow="Compartilhar" title="Ultimo convite" />
               {lastLink ? (
                 <div className="space-y-3">

@@ -6,6 +6,22 @@
 
 begin;
 
+do $$
+begin
+  if exists (select 1 from pg_type where typname = 'app_role')
+    and not exists (
+      select 1
+      from pg_enum e
+      join pg_type t on t.oid = e.enumtypid
+      where t.typname = 'app_role'
+        and e.enumlabel = 'consolidation'
+    )
+  then
+    alter type app_role add value 'consolidation';
+  end if;
+end;
+$$;
+
 -- 1) Remove TODAS as policies antigas das tabelas centrais. Isso elimina
 -- policies que chamavam profiles por dentro e causavam recursao.
 do $$
@@ -103,7 +119,7 @@ as $$
     from public.profiles p
     where p.id = auth.uid()
       and p.church_id = target_church_id
-      and p.role in ('admin', 'pastor')
+      and p.role::text in ('admin', 'pastor')
   )
 $$;
 
@@ -121,11 +137,11 @@ as $$
     where p.id = auth.uid()
       and p.church_id = target.church_id
       and (
-        p.role in ('admin', 'pastor')
-        or (p.role = 'supervisor' and target.supervisor_id = p.id)
-        or (p.role = 'leader' and target.leader_id = p.id)
+        p.role::text in ('admin', 'pastor', 'consolidation')
+        or (p.role::text = 'supervisor' and target.supervisor_id = p.id)
+        or (p.role::text = 'leader' and target.leader_id = p.id)
         or (
-          p.role = 'member'
+          p.role::text = 'member'
           and exists (
             select 1
             from public.people pe
@@ -152,8 +168,8 @@ as $$
     where p.id = auth.uid()
       and p.church_id = target.church_id
       and (
-        p.role in ('admin', 'pastor')
-        or (p.role = 'supervisor' and target.supervisor_id = p.id)
+        p.role::text in ('admin', 'pastor')
+        or (p.role::text = 'supervisor' and target.supervisor_id = p.id)
       )
   )
 $$;
@@ -171,9 +187,9 @@ as $$
     from public.profiles p
     where p.id = auth.uid()
     and (
-      (p.role in ('admin', 'pastor') and p.church_id = target.church_id)
+      (p.role::text in ('admin', 'pastor') and p.church_id = target.church_id)
       or (
-        p.role = 'supervisor'
+        p.role::text = 'supervisor'
         and exists (
           select 1
           from public.cells c
@@ -183,7 +199,7 @@ as $$
         )
       )
       or (
-        p.role = 'leader'
+        p.role::text = 'leader'
         and (
           target.leader_user_id = p.id
           or target.created_by_user_id = p.id
@@ -196,7 +212,8 @@ as $$
           )
         )
       )
-      or (p.role = 'member' and target.person_user_id = p.id)
+      or (p.role::text = 'consolidation' and p.church_id = target.church_id and target.created_by_user_id = p.id)
+      or (p.role::text = 'member' and target.person_user_id = p.id)
     )
   )
 $$;
@@ -282,7 +299,7 @@ for insert
 to authenticated
 with check (
   church_id = public.current_app_church_id()
-  and public.current_app_role() in ('admin', 'pastor', 'supervisor')
+  and public.current_app_role()::text in ('admin', 'pastor', 'supervisor')
 );
 
 create policy "cells_update_by_leadership_safe"
@@ -304,7 +321,7 @@ for insert
 to authenticated
 with check (
   church_id = public.current_app_church_id()
-  and public.current_app_role() in ('admin', 'pastor', 'supervisor', 'leader')
+  and public.current_app_role()::text in ('admin', 'pastor', 'supervisor', 'leader', 'consolidation')
 );
 
 create policy "people_update_by_role_safe"
@@ -334,11 +351,11 @@ as $$
       and p.church_id = target_church_id
       and (
         (
-          p.role = 'admin'
+          p.role::text = 'admin'
           and (
-            target_role in ('admin', 'pastor', 'supervisor')
+            target_role::text in ('admin', 'pastor', 'supervisor', 'consolidation')
             or (
-              target_role in ('leader', 'member')
+              target_role::text in ('leader', 'member')
               and exists (
                 select 1 from public.cells c
                 where c.id = target_cell_id
@@ -348,11 +365,11 @@ as $$
           )
         )
         or (
-          p.role = 'pastor'
+          p.role::text = 'pastor'
           and (
-            target_role = 'supervisor'
+            target_role::text in ('supervisor', 'consolidation')
             or (
-              target_role in ('leader', 'member')
+              target_role::text in ('leader', 'member')
               and exists (
                 select 1 from public.cells c
                 where c.id = target_cell_id
@@ -362,8 +379,8 @@ as $$
           )
         )
         or (
-          p.role = 'supervisor'
-          and target_role in ('leader', 'member')
+          p.role::text = 'supervisor'
+          and target_role::text in ('leader', 'member')
           and exists (
             select 1 from public.cells c
             where c.id = target_cell_id
@@ -372,8 +389,8 @@ as $$
           )
         )
         or (
-          p.role = 'leader'
-          and target_role = 'member'
+          p.role::text = 'leader'
+          and target_role::text = 'member'
           and exists (
             select 1 from public.cells c
             where c.id = target_cell_id
@@ -403,10 +420,10 @@ as $$
     where p.id = auth.uid()
       and p.church_id = target_church_id
       and (
-        p.role in ('admin', 'pastor')
+        p.role::text in ('admin', 'pastor')
         or p.id = target_created_by
         or (
-          p.role = 'supervisor'
+          p.role::text = 'supervisor'
           and exists (
             select 1
             from public.cells c
@@ -416,7 +433,7 @@ as $$
           )
         )
         or (
-          p.role = 'leader'
+          p.role::text = 'leader'
           and exists (
             select 1
             from public.cells c
@@ -492,7 +509,7 @@ begin
     return;
   end if;
 
-  if viewer.role = 'member' then
+  if viewer.role::text = 'member' then
     return query
     select p.id, p.church_id, p.name, p.role
     from public.profiles p
@@ -546,11 +563,11 @@ begin
   where c.church_id = viewer.church_id
     and c.active is true
     and (
-      viewer.role in ('admin', 'pastor')
-      or (viewer.role = 'supervisor' and c.supervisor_id = viewer.id)
-      or (viewer.role = 'leader' and c.leader_id = viewer.id)
+      viewer.role::text in ('admin', 'pastor', 'consolidation')
+      or (viewer.role::text = 'supervisor' and c.supervisor_id = viewer.id)
+      or (viewer.role::text = 'leader' and c.leader_id = viewer.id)
       or (
-        viewer.role = 'member'
+        viewer.role::text = 'member'
         and exists (
           select 1
           from public.people pe
@@ -605,10 +622,10 @@ begin
   left join public.cells c on c.id = i.cell_id
   where i.church_id = viewer.church_id
     and (
-      viewer.role in ('admin', 'pastor')
+      viewer.role::text in ('admin', 'pastor')
       or i.created_by = viewer.id
-      or (viewer.role = 'supervisor' and c.supervisor_id = viewer.id)
-      or (viewer.role = 'leader' and c.leader_id = viewer.id)
+      or (viewer.role::text = 'supervisor' and c.supervisor_id = viewer.id)
+      or (viewer.role::text = 'leader' and c.leader_id = viewer.id)
     )
   order by i.created_at desc;
 end;
@@ -659,7 +676,7 @@ begin
 
   target_cell_id := invite_cell_id;
 
-  if invite_role in ('leader', 'member') and target_cell_id is null then
+  if invite_role::text in ('leader', 'member') and target_cell_id is null then
     raise exception 'Escolha uma celula para este convite.';
   end if;
 
@@ -789,21 +806,21 @@ begin
       name = coalesce(nullif(excluded.name, ''), public.profiles.name),
       role = excluded.role;
 
-  if target_invite.role = 'leader' and target_invite.cell_id is not null then
+  if target_invite.role::text = 'leader' and target_invite.cell_id is not null then
     update public.cells
     set leader_id = target_user_id
     where id = target_invite.cell_id
       and church_id = target_invite.church_id;
   end if;
 
-  if target_invite.role = 'supervisor' and target_invite.cell_id is not null then
+  if target_invite.role::text = 'supervisor' and target_invite.cell_id is not null then
     update public.cells
     set supervisor_id = target_user_id
     where id = target_invite.cell_id
       and church_id = target_invite.church_id;
   end if;
 
-  if target_invite.role = 'member' then
+  if target_invite.role::text = 'member' then
     select coalesce(c.leader_id, target_invite.created_by)
     into target_leader_id
     from public.cells c
@@ -947,17 +964,18 @@ begin
   left join public.cells c on c.id = pe.cell_id
   where pe.church_id = viewer.church_id
     and (
-      viewer.role in ('admin', 'pastor')
-      or (viewer.role = 'supervisor' and c.supervisor_id = viewer.id)
+      viewer.role::text in ('admin', 'pastor')
+      or (viewer.role::text = 'supervisor' and c.supervisor_id = viewer.id)
       or (
-        viewer.role = 'leader'
+        viewer.role::text = 'leader'
         and (
           pe.leader_user_id = viewer.id
           or pe.created_by_user_id = viewer.id
           or c.leader_id = viewer.id
         )
       )
-      or (viewer.role = 'member' and pe.person_user_id = viewer.id)
+      or (viewer.role::text = 'consolidation' and pe.created_by_user_id = viewer.id)
+      or (viewer.role::text = 'member' and pe.person_user_id = viewer.id)
     )
   order by pe.created_at desc;
 end;
@@ -1015,11 +1033,11 @@ begin
     raise exception 'Celula nao encontrada.';
   end if;
 
-  if viewer.role not in ('admin', 'pastor', 'supervisor') then
+  if viewer.role::text not in ('admin', 'pastor', 'supervisor') then
     raise exception 'Seu acesso nao permite editar celulas.';
   end if;
 
-  if viewer.role = 'supervisor' and target_cell.supervisor_id <> viewer.id then
+  if viewer.role::text = 'supervisor' and target_cell.supervisor_id <> viewer.id then
     raise exception 'Supervisor so pode editar celulas sob sua supervisao.';
   end if;
 
@@ -1028,7 +1046,7 @@ begin
   end if;
 
   next_supervisor_id := cell_supervisor_id;
-  if viewer.role = 'supervisor' then
+  if viewer.role::text = 'supervisor' then
     next_supervisor_id := viewer.id;
   end if;
 
@@ -1082,11 +1100,11 @@ begin
     raise exception 'Celula nao encontrada.';
   end if;
 
-  if viewer.role not in ('admin', 'pastor', 'supervisor') then
+  if viewer.role::text not in ('admin', 'pastor', 'supervisor') then
     raise exception 'Seu acesso nao permite apagar celulas.';
   end if;
 
-  if viewer.role = 'supervisor' and target_cell.supervisor_id <> viewer.id then
+  if viewer.role::text = 'supervisor' and target_cell.supervisor_id <> viewer.id then
     raise exception 'Supervisor so pode apagar celulas sob sua supervisao.';
   end if;
 
@@ -1139,10 +1157,10 @@ begin
   end if;
 
   if not (
-    viewer.role in ('admin', 'pastor')
+    viewer.role::text in ('admin', 'pastor')
     or target_invite.created_by = viewer.id
-    or (viewer.role = 'supervisor' and target_cell.supervisor_id = viewer.id)
-    or (viewer.role = 'leader' and target_cell.leader_id = viewer.id)
+    or (viewer.role::text = 'supervisor' and target_cell.supervisor_id = viewer.id)
+    or (viewer.role::text = 'leader' and target_cell.leader_id = viewer.id)
   ) then
     raise exception 'Seu acesso nao permite apagar este convite.';
   end if;
@@ -1186,7 +1204,7 @@ begin
   where profiles.id = target_user_id
   limit 1;
 
-  if viewer.id is null or viewer.role <> 'admin' then
+  if viewer.id is null or viewer.role::text <> 'admin' then
     raise exception 'Apenas administrador pode excluir usuarios definitivamente.';
   end if;
 
@@ -1276,13 +1294,13 @@ begin
     raise exception 'Usuario sem igreja vinculada.';
   end if;
 
-  if viewer.role not in ('admin', 'pastor', 'supervisor') then
+  if viewer.role::text not in ('admin', 'pastor', 'supervisor') then
     raise exception 'Seu acesso nao permite criar celulas.';
   end if;
 
   next_supervisor_id := cell_supervisor_id;
 
-  if viewer.role = 'supervisor' then
+  if viewer.role::text = 'supervisor' then
     next_supervisor_id := viewer.id;
   end if;
 

@@ -8,7 +8,7 @@ import { useAuth } from "@/components/auth-provider";
 import { MetricCard } from "@/components/metric-card";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
-import { canCreateCell, getVisibleCells } from "@/lib/access-control";
+import { canCreateCell, getScopedCells } from "@/lib/access-control";
 import { roleLabels } from "@/lib/data";
 import { useCells, useLocalPeople, useProfiles } from "@/lib/local-store";
 import { getCellStats } from "@/lib/reports";
@@ -21,7 +21,7 @@ export default function CellsPage() {
   const [open, setOpen] = useState(false);
   const [editingCellId, setEditingCellId] = useState("");
   const [feedback, setFeedback] = useState("");
-  const visibleCells = isDemoMode ? getVisibleCells(currentUser, cells) : cells;
+  const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visibleCellIds = new Set(visibleCells.map((cell) => cell.id));
   const visiblePeople = people.filter((person) => visibleCellIds.has(person.cellId));
   const attention = visiblePeople.filter((person) => person.cellAbsences >= 2 || person.progress < 20).length;
@@ -110,10 +110,10 @@ export default function CellsPage() {
           eyebrow="Celulas"
           title="Acompanhamento por celula"
           action={
-            <div className="flex items-center gap-2">
+            <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
               <Link
                 href="/presenca"
-                className="flex h-11 items-center gap-2 rounded-2xl bg-slate-950 px-3 text-xs font-bold text-white"
+                className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-3 text-xs font-bold text-white"
               >
                 <CalendarCheck size={16} />
                 Registrar
@@ -123,14 +123,14 @@ export default function CellsPage() {
                   const result = await refreshCells();
                   setFeedback(result.ok ? "Celulas atualizadas." : `Nao consegui carregar celulas: ${result.error}`);
                 }}
-                className="flex h-11 items-center rounded-2xl bg-emerald-50 px-3 text-xs font-bold text-emerald-800"
+                className="flex h-11 items-center justify-center rounded-2xl bg-emerald-50 px-3 text-xs font-bold text-emerald-800"
               >
                 {isLoadingCells ? "Carregando..." : "Atualizar"}
               </button>
               {canCreateNewCell ? (
                 <button
                   onClick={openCreateCell}
-                  className="flex h-11 items-center gap-2 rounded-2xl bg-emerald-900 px-4 text-sm font-bold text-white shadow-sm"
+                  className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-emerald-900 px-4 text-sm font-bold text-white shadow-sm"
                 >
                   <Plus size={18} />
                   Nova
@@ -238,7 +238,7 @@ export default function CellsPage() {
           <div className="fixed inset-0 z-50 flex items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-3">
             <form
               onSubmit={handleCreateCell}
-              className="native-scroll app-scrollbar animate-enter max-h-[92dvh] w-full overflow-y-auto rounded-t-[32px] bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl shadow-slate-900/20 sm:max-w-xl sm:rounded-[24px]"
+              className="mobile-sheet native-scroll app-scrollbar animate-enter"
             >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
@@ -263,42 +263,42 @@ export default function CellsPage() {
                   name="name"
                   required
                   defaultValue={editingCell?.name ?? ""}
-                  className="min-h-12 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500 sm:col-span-2"
+                  className="field-control sm:col-span-2"
                   placeholder="Nome da celula"
                 />
                 <input
                   name="neighborhood"
                   defaultValue={editingCell?.neighborhood ?? ""}
-                  className="min-h-12 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                  className="field-control"
                   placeholder="Bairro"
                 />
                 <input
                   name="address"
                   defaultValue={editingCell?.address ?? ""}
-                  className="min-h-12 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                  className="field-control"
                   placeholder="Endereco"
                 />
                 <input
                   name="meetingDay"
                   defaultValue={editingCell?.meetingDay ?? ""}
-                  className="min-h-12 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                  className="field-control"
                   placeholder="Dia da semana"
                 />
                 <input
                   name="meetingTime"
                   defaultValue={editingCell?.meetingTime ?? ""}
-                  className="min-h-12 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
+                  className="field-control"
                   placeholder="Horario"
                 />
                 {currentUser.role === "supervisor" ? (
-                  <div className="flex min-h-12 items-center rounded-xl border border-emerald-100 bg-emerald-50 px-3 text-sm font-bold text-emerald-900">
+                  <div className="flex min-h-[3.25rem] items-center rounded-2xl border border-emerald-100 bg-emerald-50 px-3 text-sm font-bold text-emerald-900">
                     Supervisor: {currentUser.name}
                   </div>
                 ) : (
                   <select
                     name="supervisorId"
                     defaultValue={editingCell?.supervisorUserId ?? ""}
-                    className="min-h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-emerald-500"
+                    className="field-control"
                   >
                     <option value="">Sem supervisor por enquanto</option>
                     {supervisors.map((supervisor) => (
@@ -311,7 +311,7 @@ export default function CellsPage() {
                 <select
                   name="leaderId"
                   defaultValue={editingCell?.leaderUserId ?? ""}
-                  className="min-h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-emerald-500"
+                  className="field-control"
                 >
                   <option value="">Sem lider por enquanto</option>
                   {leaders.map((leader) => (
@@ -322,7 +322,7 @@ export default function CellsPage() {
                 </select>
               </div>
 
-              <button className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-900 px-4 text-sm font-bold text-white">
+              <button className="primary-action mt-4">
                 <Save size={18} />
                 {editingCell ? "Salvar alteracoes" : "Criar celula"}
               </button>

@@ -252,7 +252,7 @@ export default function ConsolidationPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <MetricCard icon={UsersRound} label="Publico" value={String(monthTotals.attendance)} accent="bg-sky-500" />
           <MetricCard icon={UserRoundPlus} label="Visitantes" value={String(monthTotals.visitors)} accent="bg-emerald-500" />
           <MetricCard icon={Sparkles} label="Decisoes" value={String(monthTotals.decisions)} accent="bg-amber-500" />
@@ -279,7 +279,7 @@ export default function ConsolidationPage() {
                 type="date"
                 value={serviceDate}
                 onChange={(event) => setServiceDate(event.target.value)}
-                className="mt-2 min-h-12 w-full rounded-2xl border border-slate-200 px-3 text-sm font-bold outline-none focus:border-emerald-500"
+                className="field-control mt-2"
               />
             </label>
             <label>
@@ -287,7 +287,7 @@ export default function ConsolidationPage() {
               <input
                 value={serviceTitle}
                 onChange={(event) => setServiceTitle(event.target.value)}
-                className="mt-2 min-h-12 w-full rounded-2xl border border-slate-200 px-3 text-sm font-bold outline-none focus:border-emerald-500"
+                className="field-control mt-2"
               />
             </label>
             <label>
@@ -297,7 +297,7 @@ export default function ConsolidationPage() {
                 min="0"
                 value={totalAttendance}
                 onChange={(event) => setTotalAttendance(Number(event.target.value))}
-                className="mt-2 min-h-12 w-full rounded-2xl border border-slate-200 px-3 text-sm font-bold outline-none focus:border-emerald-500"
+                className="field-control mt-2"
               />
             </label>
             <label>
@@ -307,7 +307,7 @@ export default function ConsolidationPage() {
                 min="0"
                 value={servingCount}
                 onChange={(event) => setServingCount(Number(event.target.value))}
-                className="mt-2 min-h-12 w-full rounded-2xl border border-slate-200 px-3 text-sm font-bold outline-none focus:border-emerald-500"
+                className="field-control mt-2"
               />
             </label>
           </div>
@@ -315,7 +315,7 @@ export default function ConsolidationPage() {
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
             rows={3}
-            className="mt-3 w-full resize-none rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-emerald-500"
+            className="field-control mt-3 min-h-24 resize-none py-3"
             placeholder="Observacoes do culto, fluxo de recepcao, pontos de atencao..."
           />
         </section>
@@ -323,20 +323,20 @@ export default function ConsolidationPage() {
         <form onSubmit={addVisitor} className="rounded-[28px] border border-white/80 bg-white/90 p-4 shadow-sm">
           <SectionHeader eyebrow="Novo contato" title="Cadastrar visitante ou decisao" />
           <div className="grid gap-3 sm:grid-cols-2">
-            <input name="name" required placeholder="Nome completo" className="min-h-12 rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500 sm:col-span-2" />
-            <input name="phone" required inputMode="tel" placeholder="WhatsApp com DDD" className="min-h-12 rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
-            <input name="email" type="email" placeholder="Email opcional" className="min-h-12 rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
-            <input name="neighborhood" placeholder="Bairro" className="min-h-12 rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
-            <input name="address" placeholder="Endereco" className="min-h-12 rounded-2xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
-            <select name="decision" className="min-h-12 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 sm:col-span-2">
+            <input name="name" required placeholder="Nome completo" className="field-control sm:col-span-2" />
+            <input name="phone" required inputMode="tel" placeholder="WhatsApp com DDD" className="field-control" />
+            <input name="email" type="email" placeholder="Email opcional" className="field-control" />
+            <input name="neighborhood" placeholder="Bairro" className="field-control" />
+            <input name="address" placeholder="Endereco" className="field-control" />
+            <select name="decision" className="field-control sm:col-span-2">
               <option value="visitante">Visitante</option>
               <option value="aceitou_jesus">Aceitou Jesus</option>
               <option value="batismo">Decisao pelo batismo</option>
               <option value="reconciliacao">Reconciliacao</option>
             </select>
-            <textarea name="notes" rows={2} placeholder="Observacao rapida" className="resize-none rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-emerald-500 sm:col-span-2" />
+            <textarea name="notes" rows={2} placeholder="Observacao rapida" className="field-control min-h-24 resize-none py-3 sm:col-span-2" />
           </div>
-          <button className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-900 px-4 text-sm font-black text-white">
+          <button className="primary-action mt-4">
             <Plus size={18} />
             Adicionar contato
           </button>

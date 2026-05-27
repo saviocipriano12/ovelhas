@@ -15,6 +15,7 @@ const roleRoutes: Record<UserRole, string[]> = {
   admin: ["*"],
   pastor: [
     "/dashboard",
+    "/consolidacao",
     "/celulas",
     "/celulas/hoje",
     "/pessoas",
