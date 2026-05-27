@@ -55,8 +55,10 @@ alter table public.consolidation_visitors enable row level security;
 
 drop policy if exists "consolidation_reports_select_by_role" on public.consolidation_reports;
 drop policy if exists "consolidation_reports_insert_by_role" on public.consolidation_reports;
+drop policy if exists "consolidation_reports_delete_by_role" on public.consolidation_reports;
 drop policy if exists "consolidation_visitors_select_by_role" on public.consolidation_visitors;
 drop policy if exists "consolidation_visitors_insert_by_role" on public.consolidation_visitors;
+drop policy if exists "consolidation_visitors_delete_by_role" on public.consolidation_visitors;
 
 create policy "consolidation_reports_select_by_role"
 on public.consolidation_reports
@@ -76,6 +78,18 @@ with check (
   and public.current_app_role() in ('admin', 'pastor', 'consolidation')
 );
 
+create policy "consolidation_reports_delete_by_role"
+on public.consolidation_reports
+for delete
+to authenticated
+using (
+  church_id = public.current_app_church_id()
+  and (
+    public.current_app_role() in ('admin', 'pastor')
+    or created_by = auth.uid()
+  )
+);
+
 create policy "consolidation_visitors_select_by_role"
 on public.consolidation_visitors
 for select
@@ -90,6 +104,15 @@ on public.consolidation_visitors
 for insert
 to authenticated
 with check (
+  church_id = public.current_app_church_id()
+  and public.current_app_role() in ('admin', 'pastor', 'consolidation')
+);
+
+create policy "consolidation_visitors_delete_by_role"
+on public.consolidation_visitors
+for delete
+to authenticated
+using (
   church_id = public.current_app_church_id()
   and public.current_app_role() in ('admin', 'pastor', 'consolidation')
 );

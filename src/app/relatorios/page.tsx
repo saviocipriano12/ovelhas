@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, BarChart3, CheckCircle2, Church, Clipboard, Download, FileText, Plus, Users } from "lucide-react";
+import { AlertTriangle, BarChart3, CheckCircle2, Church, Clipboard, Download, FileText, Plus, Sparkles, UserRoundPlus, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { MetricCard } from "@/components/metric-card";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
 import { getScopedCells, getScopedPeople } from "@/lib/access-control";
-import { useCellReports, useCells, useLocalPeople } from "@/lib/local-store";
+import { useCellReports, useCells, useConsolidationReports, useLocalPeople } from "@/lib/local-store";
 import { buildReportSummary, downloadReportHtml } from "@/lib/report-export";
 import { getCellStats, getOverallStats } from "@/lib/reports";
 
@@ -17,11 +17,19 @@ export default function ReportsPage() {
   const { people } = useLocalPeople();
   const { cells } = useCells();
   const { reports } = useCellReports();
+  const { reports: consolidationReports } = useConsolidationReports(currentUser.churchId);
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const overall = getOverallStats(visibleCells, visiblePeople);
   const visibleCellIds = new Set(visibleCells.map((cell) => cell.id));
   const visibleReports = reports.filter((report) => visibleCellIds.has(report.cellId));
+  const consolidationTotals = consolidationReports.reduce(
+    (totals, report) => ({
+      visitors: totals.visitors + report.visitorsCount,
+      decisions: totals.decisions + report.acceptedJesusCount + report.baptismDecisionCount,
+    }),
+    { visitors: 0, decisions: 0 },
+  );
 
   function handleDownload() {
     downloadReportHtml({
@@ -29,6 +37,7 @@ export default function ReportsPage() {
       cells: visibleCells,
       people: visiblePeople,
       reports: visibleReports,
+      consolidationReports,
     });
   }
 
@@ -38,6 +47,7 @@ export default function ReportsPage() {
       cells: visibleCells,
       people: visiblePeople,
       reports: visibleReports,
+      consolidationReports,
     });
 
     await navigator.clipboard.writeText(summary);
@@ -60,11 +70,13 @@ export default function ReportsPage() {
           }
         />
 
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-6">
           <MetricCard icon={Church} label="Celulas" value={String(overall.cells)} accent="bg-emerald-500" />
           <MetricCard icon={Users} label="Pessoas" value={String(overall.people)} accent="bg-sky-500" />
           <MetricCard icon={CheckCircle2} label="No culto" value={String(overall.servicePresent)} accent="bg-violet-500" />
           <MetricCard icon={AlertTriangle} label="Atencao" value={String(overall.attention)} accent="bg-amber-500" />
+          <MetricCard icon={UserRoundPlus} label="Visitantes" value={String(consolidationTotals.visitors)} accent="bg-emerald-500" />
+          <MetricCard icon={Sparkles} label="Decisoes" value={String(consolidationTotals.decisions)} accent="bg-orange-500" />
         </div>
 
         <section className="rounded-lg border border-emerald-100 bg-emerald-50 p-4 shadow-sm">
@@ -165,6 +177,54 @@ export default function ReportsPage() {
             {visibleReports.length === 0 && (
               <p className="rounded-lg bg-slate-50 p-4 text-sm font-medium text-slate-500">
                 Nenhum relatorio enviado para as celulas visiveis neste perfil.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+          <SectionHeader eyebrow="Cultos" title="Consolidacao enviada" />
+          <div className="space-y-3">
+            {consolidationReports.slice(0, 5).map((report) => (
+              <article key={report.id} className="rounded-lg bg-slate-50 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-800">
+                    <UserRoundPlus size={18} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-950">{report.serviceTitle}</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {report.serviceDate} - Equipe: {report.createdByName}
+                        </p>
+                      </div>
+                      <span className="rounded-lg bg-white px-2 py-1 text-xs font-bold text-slate-600">
+                        {report.visitorsCount} visitantes
+                      </span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-lg bg-white p-2">
+                        <p className="text-base font-semibold">{report.totalAttendance}</p>
+                        <p className="text-[11px] font-medium text-slate-400">culto</p>
+                      </div>
+                      <div className="rounded-lg bg-white p-2">
+                        <p className="text-base font-semibold">{report.servingCount}</p>
+                        <p className="text-[11px] font-medium text-slate-400">servindo</p>
+                      </div>
+                      <div className="rounded-lg bg-white p-2">
+                        <p className="text-base font-semibold">{report.acceptedJesusCount + report.baptismDecisionCount}</p>
+                        <p className="text-[11px] font-medium text-slate-400">decisoes</p>
+                      </div>
+                    </div>
+                    {report.notes && <p className="mt-3 text-sm leading-5 text-slate-600">{report.notes}</p>}
+                  </div>
+                </div>
+              </article>
+            ))}
+            {consolidationReports.length === 0 && (
+              <p className="rounded-lg bg-slate-50 p-4 text-sm font-medium text-slate-500">
+                Nenhuma consolidacao de culto enviada ainda.
               </p>
             )}
           </div>

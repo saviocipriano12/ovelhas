@@ -1,4 +1,4 @@
-import type { AppUser, Cell, CellReport, Person } from "@/lib/data";
+import type { AppUser, Cell, CellReport, ConsolidationReport, Person } from "@/lib/data";
 import { roleLabels } from "@/lib/data";
 import { getCellStats, getOverallStats } from "@/lib/reports";
 
@@ -25,11 +25,13 @@ export function buildReportSummary({
   cells,
   people,
   reports,
+  consolidationReports = [],
 }: {
   user: AppUser;
   cells: Cell[];
   people: Person[];
   reports: CellReport[];
+  consolidationReports?: ConsolidationReport[];
 }) {
   const overall = getOverallStats(cells, people);
   const attendance = overall.people ? Math.round((overall.present / overall.people) * 100) : 0;
@@ -44,9 +46,14 @@ export function buildReportSummary({
     `Pessoas no culto: ${overall.servicePresent}`,
     `Pessoas em atencao: ${overall.attention}`,
     `Progresso medio no discipulado: ${overall.averageProgress}%`,
+    `Visitantes no culto: ${consolidationReports.reduce((sum, report) => sum + report.visitorsCount, 0)}`,
+    `Decisoes no culto: ${consolidationReports.reduce((sum, report) => sum + report.acceptedJesusCount + report.baptismDecisionCount, 0)}`,
     "",
     "Relatorios recentes:",
     ...reports.slice(0, 5).map((report) => `- ${report.cellName} (${report.meetingDate}): ${report.highlights}`),
+    "",
+    "Consolidacao recente:",
+    ...consolidationReports.slice(0, 5).map((report) => `- ${report.serviceTitle} (${report.serviceDate}): ${report.visitorsCount} visitantes, ${report.acceptedJesusCount + report.baptismDecisionCount} decisoes`),
   ].join("\n");
 }
 
@@ -55,11 +62,13 @@ export function buildReportHtml({
   cells,
   people,
   reports,
+  consolidationReports = [],
 }: {
   user: AppUser;
   cells: Cell[];
   people: Person[];
   reports: CellReport[];
+  consolidationReports?: ConsolidationReport[];
 }) {
   const overall = getOverallStats(cells, people);
   const attendance = overall.people ? Math.round((overall.present / overall.people) * 100) : 0;
@@ -67,6 +76,15 @@ export function buildReportHtml({
     dateStyle: "full",
     timeStyle: "short",
   }).format(new Date());
+  const consolidationTotals = consolidationReports.reduce(
+    (totals, report) => ({
+      attendance: totals.attendance + report.totalAttendance,
+      visitors: totals.visitors + report.visitorsCount,
+      serving: totals.serving + report.servingCount,
+      decisions: totals.decisions + report.acceptedJesusCount + report.baptismDecisionCount,
+    }),
+    { attendance: 0, visitors: 0, serving: 0, decisions: 0 },
+  );
 
   const cellRows = cells
     .map((cell) => {
@@ -123,6 +141,32 @@ export function buildReportHtml({
         )
         .join("")
     : `<div class="empty">Nenhum relatorio recente registrado.</div>`;
+
+  const consolidationCards = consolidationReports.length
+    ? consolidationReports
+        .slice(0, 8)
+        .map(
+          (report) => `
+            <article class="report-card">
+              <div class="report-head">
+                <div>
+                  <p class="eyebrow">${escapeHtml(report.serviceDate)}</p>
+                  <h3>${escapeHtml(report.serviceTitle)}</h3>
+                  <p>Equipe: ${escapeHtml(report.createdByName)}</p>
+                </div>
+                <strong>${escapeHtml(report.visitorsCount)} visitantes</strong>
+              </div>
+              <div class="mini-grid">
+                <span><b>${escapeHtml(report.totalAttendance)}</b> culto</span>
+                <span><b>${escapeHtml(report.servingCount)}</b> servindo</span>
+                <span><b>${escapeHtml(report.acceptedJesusCount + report.baptismDecisionCount)}</b> decisoes</span>
+              </div>
+              <p>${escapeHtml(report.notes || "Sem observacoes registradas.")}</p>
+            </article>
+          `,
+        )
+        .join("")
+    : `<div class="empty">Nenhuma consolidacao recente registrada.</div>`;
 
   return `<!doctype html>
 <html lang="pt-BR">
@@ -220,6 +264,8 @@ export function buildReportHtml({
       <div class="stat"><span>Pessoas</span><strong>${overall.people}</strong></div>
       <div class="stat"><span>Presenca</span><strong>${attendance}%</strong></div>
       <div class="stat"><span>Atencao</span><strong>${overall.attention}</strong></div>
+      <div class="stat"><span>Visitantes culto</span><strong>${consolidationTotals.visitors}</strong></div>
+      <div class="stat"><span>Decisoes culto</span><strong>${consolidationTotals.decisions}</strong></div>
     </div>
 
     <section>
@@ -243,6 +289,11 @@ export function buildReportHtml({
     <section>
       <h2>Relatorios recentes</h2>
       <div class="reports">${reportCards}</div>
+    </section>
+
+    <section>
+      <h2>Consolidacao dos cultos</h2>
+      <div class="reports">${consolidationCards}</div>
     </section>
 
     <p class="footer">Relatorio gerado pelo Ovelhas, by Savio Cipriano. Para salvar como PDF, use imprimir e escolha salvar em PDF.</p>

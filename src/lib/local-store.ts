@@ -2574,7 +2574,20 @@ export function useConsolidationReports(churchId: string) {
     return { ok: true, report: localReport };
   }
 
-  return { reports, addReport, refreshReports, isLoadingReports, reportLoadError };
+  async function deleteReport(reportId: string, persistToSupabase?: boolean) {
+    if (persistToSupabase) {
+      const { error } = await supabase.from("consolidation_reports").delete().eq("id", reportId);
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setReports((current) => current.filter((report) => report.id !== reportId));
+    return { ok: true };
+  }
+
+  return { reports, addReport, deleteReport, refreshReports, isLoadingReports, reportLoadError };
 }
 
 export function useNotificationReads(userId: string) {

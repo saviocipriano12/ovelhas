@@ -62,7 +62,7 @@ export default function ConsolidationPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { cells } = useCells();
   const { addPerson, refreshPeople } = useLocalPeople();
-  const { reports, addReport, refreshReports, isLoadingReports, reportLoadError } = useConsolidationReports(currentUser.churchId);
+  const { reports, addReport, deleteReport, refreshReports, isLoadingReports, reportLoadError } = useConsolidationReports(currentUser.churchId);
   const { addEvent } = useActivityEvents();
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const [serviceDate, setServiceDate] = useState(todayIso());
@@ -200,6 +200,15 @@ export default function ConsolidationPage() {
     setVisitors([]);
     setSaving(false);
     setFeedback("Consolidacao salva. Visitantes foram cadastrados e encaminhados para cuidado.");
+  }
+
+  async function handleDeleteReport(reportId: string, title: string) {
+    if (!window.confirm(`Apagar a consolidacao de ${title}?`)) {
+      return;
+    }
+
+    const result = await deleteReport(reportId, !isDemoMode);
+    setFeedback(result.ok ? "Consolidacao apagada." : `Nao consegui apagar: ${result.error}`);
   }
 
   return (
@@ -381,9 +390,18 @@ export default function ConsolidationPage() {
                   <p className="font-black text-slate-950">{report.serviceTitle}</p>
                   <p className="mt-1 text-sm font-semibold text-slate-500">{report.serviceDate} · {report.createdByName}</p>
                 </div>
-                <span className="rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-900">
-                  {report.visitorsCount} visitantes
-                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-900">
+                    {report.visitorsCount} visitantes
+                  </span>
+                  <button
+                    onClick={() => handleDeleteReport(report.id, report.serviceTitle)}
+                    className="flex h-9 w-9 items-center justify-center rounded-2xl bg-rose-50 text-rose-700"
+                    aria-label={`Apagar ${report.serviceTitle}`}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-2xl bg-slate-50 p-3">
