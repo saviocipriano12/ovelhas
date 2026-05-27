@@ -61,17 +61,17 @@ export default function DashboardPage() {
             </div>
           </div>
           <Link
-            href="/celulas/hoje"
+            href="/presenca"
             className="mt-4 flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-400 px-4 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-950/20"
           >
             <CalendarCheck size={18} />
-            Abrir ciclo da celula
+            Registrar presenca
           </Link>
         </div>
 
         <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {[
-            { href: "/celulas/hoje", label: "Ciclo", icon: CalendarCheck },
+            { href: "/presenca", label: "Presenca", icon: CalendarCheck },
             { href: "/celulas", label: "Celulas", icon: LayoutGrid },
             { href: "/relatorios/novo", label: "Relatorio", icon: FileText },
             { href: "/agenda", label: "Agenda", icon: CalendarDays },

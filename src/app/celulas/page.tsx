@@ -112,11 +112,11 @@ export default function CellsPage() {
           action={
             <div className="flex items-center gap-2">
               <Link
-                href="/celulas/hoje"
+                href="/presenca"
                 className="flex h-11 items-center gap-2 rounded-2xl bg-slate-950 px-3 text-xs font-bold text-white"
               >
                 <CalendarCheck size={16} />
-                Hoje
+                Registrar
               </Link>
               <button
                 onClick={async () => {

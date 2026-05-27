@@ -9,6 +9,7 @@ import {
   BookOpen,
   CalendarDays,
   CalendarCheck,
+  ClipboardList,
   ChartNoAxesCombined,
   Activity,
   UserPlus,
@@ -42,9 +43,9 @@ import { usePastoralNotifications } from "@/lib/use-pastoral-notifications";
 
 const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard", label: "Inicio", icon: Home },
-  { href: "/celulas/hoje", label: "Hoje", icon: CalendarCheck },
   { href: "/celulas", label: "Celulas", icon: LayoutGrid },
   { href: "/pessoas", label: "Pessoas", icon: Users },
+  { href: "/consolidacao", label: "Consolidacao", icon: ClipboardList },
   { href: "/presenca", label: "Presenca", icon: CalendarCheck },
   { href: "/checkin", label: "Check-in", icon: QrCode },
   { href: "/agenda", label: "Agenda", icon: CalendarDays },
@@ -65,7 +66,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
 const navGroups = [
   {
     label: "Cuidado",
-    hrefs: ["/dashboard", "/celulas/hoje", "/celulas", "/pessoas", "/presenca", "/checkin", "/agenda", "/cuidados"],
+    hrefs: ["/dashboard", "/celulas", "/pessoas", "/consolidacao", "/presenca", "/checkin", "/agenda", "/cuidados"],
   },
   {
     label: "Discipulado",
@@ -83,9 +84,9 @@ const navGroups = [
 
 const mobileNavItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard", label: "Inicio", icon: Home },
-  { href: "/celulas/hoje", label: "Hoje", icon: CalendarCheck },
+  { href: "/presenca", label: "Presenca", icon: CalendarCheck },
   { href: "/pessoas", label: "Pessoas", icon: Users },
-  { href: "/cuidados", label: "Cuidados", icon: HeartHandshake },
+  { href: "/consolidacao", label: "Culto", icon: ClipboardList },
   { href: "/mais", label: "Mais", icon: MoreHorizontal },
 ];
 

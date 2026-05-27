@@ -1,5 +1,5 @@
 export type Priority = "Baixa" | "Media" | "Alta" | "Urgente";
-export type UserRole = "admin" | "pastor" | "supervisor" | "leader" | "member";
+export type UserRole = "admin" | "pastor" | "supervisor" | "leader" | "consolidation" | "member";
 
 export type AppUser = {
   id: string;
@@ -219,6 +219,37 @@ export type CheckInEvent = {
   createdAt: string;
 };
 
+export type ConsolidationVisitor = {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  address?: string;
+  neighborhood?: string;
+  decision: "visitante" | "aceitou_jesus" | "batismo" | "reconciliacao";
+  notes?: string;
+  suggestedCellId?: string;
+  suggestedCellName?: string;
+  personId?: string;
+};
+
+export type ConsolidationReport = {
+  id: string;
+  churchId: string;
+  serviceDate: string;
+  serviceTitle: string;
+  totalAttendance: number;
+  servingCount: number;
+  visitorsCount: number;
+  acceptedJesusCount: number;
+  baptismDecisionCount: number;
+  notes: string;
+  createdBy: string;
+  createdByName: string;
+  createdAt: string;
+  visitors: ConsolidationVisitor[];
+};
+
 export type CellRsvp = {
   id: string;
   churchId: string;
@@ -300,6 +331,7 @@ export const roleLabels: Record<UserRole, string> = {
   pastor: "Pastor",
   supervisor: "Supervisor",
   leader: "Lider de celula",
+  consolidation: "Consolidacao",
   member: "Membro",
 };
 

@@ -276,6 +276,7 @@ export default function ManagementPage() {
                     >
                       <option value="member">Membro</option>
                       <option value="leader">Lider</option>
+                      <option value="consolidation">Consolidacao</option>
                       <option value="supervisor">Supervisor</option>
                       <option value="pastor">Pastor</option>
                       <option value="admin">Administrador</option>
@@ -300,7 +301,7 @@ export default function ManagementPage() {
         <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
           <SectionHeader eyebrow="Papeis" title="Quem pode fazer o que" />
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {(["pastor", "supervisor", "leader", "member"] as UserRole[]).map((role) => {
+            {(["pastor", "supervisor", "leader", "consolidation", "member"] as UserRole[]).map((role) => {
               const roleUsers = visibleProfiles.filter((profile) => profile.role === role);
 
               return (
@@ -310,6 +311,7 @@ export default function ManagementPage() {
                     {role === "pastor" && "Administra a igreja no dia a dia: celulas, supervisores, lideres e membros."}
                     {role === "supervisor" && "Cria e monitora celulas, chama lideres e membros, e presta relatorio ao pastor."}
                     {role === "leader" && "Cuida da propria celula, membros, presencas e discipulado."}
+                    {role === "consolidation" && "Registra cultos, visitantes, decisoes, batismos e encaminhamentos."}
                     {role === "member" && "Acessa apenas o proprio discipulado e informacoes pessoais."}
                   </p>
                   <div className="mt-4 space-y-2">

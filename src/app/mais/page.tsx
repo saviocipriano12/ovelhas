@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   CalendarCheck,
+  ClipboardList,
   CalendarDays,
   Building2,
   ChartNoAxesCombined,
@@ -31,10 +32,10 @@ import { canAccessRoute } from "@/lib/access-control";
 import { roleLabels } from "@/lib/data";
 
 const menuItems: { href: string; title: string; description: string; icon: LucideIcon }[] = [
-  { href: "/celulas/hoje", title: "Celula de hoje", description: "Preparar, marcar presenca e fechar o relatorio.", icon: CalendarCheck },
   { href: "/celulas", title: "Celulas", description: "Acompanhar lideres, bairros e frequencia.", icon: LayoutGrid },
   { href: "/pessoas", title: "Pessoas", description: "Membros, visitantes e novos cuidados.", icon: Users },
-  { href: "/presenca", title: "Presenca", description: "Marcar celula e culto rapidamente.", icon: CalendarCheck },
+  { href: "/consolidacao", title: "Consolidacao", description: "Cultos, visitantes, decisoes e encaminhamento para celulas.", icon: ClipboardList },
+  { href: "/presenca", title: "Presenca", description: "Preparar, marcar presenca e fechar o relatorio da celula.", icon: CalendarCheck },
   { href: "/checkin", title: "Check-in", description: "QR Code para presenca em celula e culto.", icon: QrCode },
   { href: "/agenda", title: "Agenda", description: "Lembretes, visitas, discipulados e aniversarios.", icon: CalendarDays },
   { href: "/cuidados", title: "Cuidados", description: "Fila de mensagens e acompanhamentos.", icon: HeartHandshake },

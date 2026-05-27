@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   ActivityEvent,
   AppUser,
   CareTask,
   Cell,
+  ConsolidationReport,
+  ConsolidationVisitor,
   CellReport,
   CellRsvp,
   CheckInEvent,
@@ -53,6 +55,7 @@ const CERTIFICATES_KEY = "ovelhas:certificates";
 const CHECKINS_KEY = "ovelhas:checkins";
 const CELL_RSVPS_KEY = "ovelhas:cell-rsvps";
 const NOTIFICATION_READS_KEY = "ovelhas:notification-reads";
+const CONSOLIDATION_REPORTS_KEY = "ovelhas:consolidation-reports";
 
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") {
@@ -2391,6 +2394,187 @@ export function useCellRsvps(churchId: string) {
   }
 
   return { rsvps, saveRsvp };
+}
+
+export function useConsolidationReports(churchId: string) {
+  const storageKey = `${CONSOLIDATION_REPORTS_KEY}:${churchId || "demo"}`;
+  const [reports, setReports] = useState<ConsolidationReport[]>([]);
+  const [isLoadingReports, setIsLoadingReports] = useState(false);
+  const [reportLoadError, setReportLoadError] = useState("");
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setReports(readJson<ConsolidationReport[]>(storageKey, []));
+      setHydrated(true);
+    });
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (hydrated) {
+      writeJson(storageKey, reports);
+    }
+  }, [hydrated, reports, storageKey]);
+
+  const refreshReports = useCallback(async () => {
+    setIsLoadingReports(true);
+    setReportLoadError("");
+
+    const { data, error } = await supabase
+      .from("consolidation_reports")
+      .select(
+        "id, church_id, service_date, service_title, total_attendance, serving_count, visitors_count, accepted_jesus_count, baptism_decision_count, notes, created_by, created_by_name, created_at, consolidation_visitors(id, name, phone, email, address, neighborhood, decision, notes, suggested_cell_id, suggested_cell_name, person_id)",
+      )
+      .eq("church_id", churchId)
+      .order("service_date", { ascending: false });
+
+    setIsLoadingReports(false);
+
+    if (error) {
+      setReportLoadError(error.message);
+      return { ok: false, error: error.message };
+    }
+
+    const mappedReports = ((data ?? []) as Array<{
+      id: string;
+      church_id: string;
+      service_date: string;
+      service_title: string;
+      total_attendance: number;
+      serving_count: number;
+      visitors_count: number;
+      accepted_jesus_count: number;
+      baptism_decision_count: number;
+      notes: string | null;
+      created_by: string | null;
+      created_by_name: string | null;
+      created_at: string;
+      consolidation_visitors?: Array<{
+        id: string;
+        name: string;
+        phone: string;
+        email: string | null;
+        address: string | null;
+        neighborhood: string | null;
+        decision: ConsolidationVisitor["decision"];
+        notes: string | null;
+        suggested_cell_id: string | null;
+        suggested_cell_name: string | null;
+        person_id: string | null;
+      }>;
+    }>).map((report) => ({
+      id: report.id,
+      churchId: report.church_id,
+      serviceDate: report.service_date,
+      serviceTitle: report.service_title,
+      totalAttendance: report.total_attendance,
+      servingCount: report.serving_count,
+      visitorsCount: report.visitors_count,
+      acceptedJesusCount: report.accepted_jesus_count,
+      baptismDecisionCount: report.baptism_decision_count,
+      notes: report.notes ?? "",
+      createdBy: report.created_by ?? "",
+      createdByName: report.created_by_name ?? "Consolidacao",
+      createdAt: report.created_at,
+      visitors: (report.consolidation_visitors ?? []).map((visitor) => ({
+        id: visitor.id,
+        name: visitor.name,
+        phone: visitor.phone,
+        email: visitor.email ?? undefined,
+        address: visitor.address ?? undefined,
+        neighborhood: visitor.neighborhood ?? undefined,
+        decision: visitor.decision,
+        notes: visitor.notes ?? undefined,
+        suggestedCellId: visitor.suggested_cell_id ?? undefined,
+        suggestedCellName: visitor.suggested_cell_name ?? undefined,
+        personId: visitor.person_id ?? undefined,
+      })),
+    }));
+
+    setReports(mappedReports);
+    return { ok: true, reports: mappedReports };
+  }, [churchId]);
+
+  useEffect(() => {
+    if (churchId) {
+      queueMicrotask(() => {
+        refreshReports();
+      });
+    }
+  }, [churchId, refreshReports]);
+
+  async function addReport(
+    input: Omit<ConsolidationReport, "id" | "createdAt"> & { persistToSupabase?: boolean },
+  ): Promise<{ ok: boolean; report?: ConsolidationReport; error?: string }> {
+    const localReport: ConsolidationReport = {
+      ...input,
+      id: `consolidacao-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (input.persistToSupabase) {
+      const { data, error } = await supabase
+        .from("consolidation_reports")
+        .insert({
+          church_id: input.churchId,
+          service_date: input.serviceDate,
+          service_title: input.serviceTitle,
+          total_attendance: input.totalAttendance,
+          serving_count: input.servingCount,
+          visitors_count: input.visitorsCount,
+          accepted_jesus_count: input.acceptedJesusCount,
+          baptism_decision_count: input.baptismDecisionCount,
+          notes: input.notes || null,
+          created_by: input.createdBy,
+          created_by_name: input.createdByName,
+        })
+        .select("id, created_at")
+        .single();
+
+      if (error || !data) {
+        return { ok: false, error: error?.message ?? "Nao foi possivel salvar a consolidacao." };
+      }
+
+      localReport.id = data.id;
+      localReport.createdAt = data.created_at;
+
+      if (input.visitors.length > 0) {
+        const { data: visitorRows, error: visitorsError } = await supabase
+          .from("consolidation_visitors")
+          .insert(
+            input.visitors.map((visitor) => ({
+              report_id: localReport.id,
+              church_id: input.churchId,
+              name: visitor.name,
+              phone: visitor.phone.replace(/\D/g, ""),
+              email: visitor.email || null,
+              address: visitor.address || null,
+              neighborhood: visitor.neighborhood || null,
+              decision: visitor.decision,
+              notes: visitor.notes || null,
+              suggested_cell_id: visitor.suggestedCellId || null,
+              suggested_cell_name: visitor.suggestedCellName || null,
+              person_id: visitor.personId || null,
+            })),
+          )
+          .select("id");
+
+        if (visitorsError) {
+          return { ok: false, error: visitorsError.message };
+        }
+
+        localReport.visitors = localReport.visitors.map((visitor, index) => ({
+          ...visitor,
+          id: visitorRows?.[index]?.id ?? visitor.id,
+        }));
+      }
+    }
+
+    setReports((current) => [localReport, ...current]);
+    return { ok: true, report: localReport };
+  }
+
+  return { reports, addReport, refreshReports, isLoadingReports, reportLoadError };
 }
 
 export function useNotificationReads(userId: string) {

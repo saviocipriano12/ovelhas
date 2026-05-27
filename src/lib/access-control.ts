@@ -76,6 +76,18 @@ const roleRoutes: Record<UserRole, string[]> = {
     "/instalar",
     "/mais",
   ],
+  consolidation: [
+    "/dashboard",
+    "/consolidacao",
+    "/pessoas",
+    "/agenda",
+    "/cuidados",
+    "/oracao",
+    "/biblioteca",
+    "/notificacoes",
+    "/instalar",
+    "/mais",
+  ],
   member: ["/meu-discipulado", "/oracao", "/biblioteca", "/notificacoes", "/instalar", "/mais"],
 };
 
@@ -86,6 +98,10 @@ export function isPendingAccount(user: AppUser) {
 export function getDefaultRoute(user: AppUser) {
   if (isPendingAccount(user)) {
     return "/aguardando";
+  }
+
+  if (user.role === "consolidation") {
+    return "/consolidacao";
   }
 
   if (user.role === "member") {
@@ -121,7 +137,13 @@ export function canAccessRoute(user: AppUser, pathname: string) {
 }
 
 export function canManagePeople(user: AppUser) {
-  return user.role === "admin" || user.role === "pastor" || user.role === "supervisor" || user.role === "leader";
+  return (
+    user.role === "admin" ||
+    user.role === "pastor" ||
+    user.role === "supervisor" ||
+    user.role === "leader" ||
+    user.role === "consolidation"
+  );
 }
 
 export function canCreateCell(user: AppUser) {
@@ -134,11 +156,11 @@ export function canAssignCellResponsibility(user: AppUser) {
 
 export function getInviteableRoles(user: AppUser): UserRole[] {
   if (user.role === "admin") {
-    return ["admin", "pastor", "supervisor", "leader", "member"];
+    return ["admin", "pastor", "supervisor", "leader", "consolidation", "member"];
   }
 
   if (user.role === "pastor") {
-    return ["supervisor", "leader", "member"];
+    return ["supervisor", "leader", "consolidation", "member"];
   }
 
   if (user.role === "supervisor") {
@@ -169,6 +191,10 @@ export function canViewPerson(user: AppUser, person: Person) {
     return person.leaderUserId === user.id || person.createdByUserId === user.id || user.cellIds?.includes(person.cellId);
   }
 
+  if (user.role === "consolidation") {
+    return user.churchId === person.churchId && person.createdByUserId === user.id;
+  }
+
   return person.personUserId === user.id || person.id === user.personId;
 }
 
@@ -192,6 +218,10 @@ export function canViewCell(user: AppUser, cell: Cell) {
 
   if (user.role === "leader") {
     return cell.leaderUserId === user.id || Boolean(user.cellIds?.includes(cell.id));
+  }
+
+  if (user.role === "consolidation") {
+    return user.churchId === cell.churchId;
   }
 
   return false;
@@ -220,6 +250,10 @@ export function getVisibleSupervisorVisits(user: AppUser, visits: SupervisorVisi
   const visibleCellIds = new Set(getVisibleCells(user, cells).map((cell) => cell.id));
 
   if (user.role === "member") {
+    return [];
+  }
+
+  if (user.role === "consolidation") {
     return [];
   }
 
@@ -271,6 +305,10 @@ export function getVisibleActivityEvents(user: AppUser, events: ActivityEvent[],
       );
     }
 
+    if (user.role === "consolidation") {
+      return event.actorUserId === user.id || (event.churchId === user.churchId && event.targetType === "person");
+    }
+
     return event.visibility === "member" && event.actorUserId === user.id;
   });
 }
@@ -299,13 +337,23 @@ export function canViewPastoralNote(user: AppUser, note: PastoralNote, person: P
     return user.role === "admin" || user.role === "pastor";
   }
 
-  return user.role === "admin" || user.role === "pastor" || user.role === "supervisor" || user.role === "leader";
+  return (
+    user.role === "admin" ||
+    user.role === "pastor" ||
+    user.role === "supervisor" ||
+    user.role === "leader" ||
+    user.role === "consolidation"
+  );
 }
 
 export function canWritePastoralNote(user: AppUser, person: Person) {
   return (
     canViewPerson(user, person) &&
-    (user.role === "admin" || user.role === "pastor" || user.role === "supervisor" || user.role === "leader")
+    (user.role === "admin" ||
+      user.role === "pastor" ||
+      user.role === "supervisor" ||
+      user.role === "leader" ||
+      user.role === "consolidation")
   );
 }
 
@@ -375,6 +423,10 @@ export function canViewPrayerRequest(user: AppUser, request: PrayerRequest, cell
     );
   }
 
+  if (user.role === "consolidation") {
+    return request.createdBy === user.id;
+  }
+
   return Boolean(person && request.visibility === "cell_public" && user.cellIds?.includes(person.cellId));
 }
 
@@ -413,6 +465,10 @@ export function describeAccess(user: AppUser) {
 
   if (user.role === "leader") {
     return "Cuida da propria celula, dos membros e do discipulado dessas pessoas.";
+  }
+
+  if (user.role === "consolidation") {
+    return "Registra cultos, visitantes, decisoes e encaminhamentos para celulas.";
   }
 
   return "Ve apenas seu proprio discipulado e informacoes pessoais.";
