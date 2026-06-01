@@ -275,7 +275,8 @@ export function getScopedSupervisorVisits(
 
 export function getVisibleActivityEvents(user: AppUser, events: ActivityEvent[], cells: Cell[], people: Person[]) {
   const visibleCellIds = new Set(getVisibleCells(user, cells).map((cell) => cell.id));
-  const visiblePersonIds = new Set(getVisiblePeople(user, people).map((person) => person.id));
+  const visiblePeople = getVisiblePeople(user, people);
+  const visiblePersonIds = new Set(visiblePeople.map((person) => person.id));
 
   return events.filter((event) => {
     if (user.role === "admin" || user.role === "pastor") {
@@ -302,7 +303,14 @@ export function getVisibleActivityEvents(user: AppUser, events: ActivityEvent[],
       return event.actorUserId === user.id || (event.churchId === user.churchId && event.targetType === "person");
     }
 
-    return event.visibility === "member" && event.actorUserId === user.id;
+    return (
+      event.visibility === "member" &&
+      (
+        event.actorUserId === user.id ||
+        Boolean(event.personId && visiblePersonIds.has(event.personId)) ||
+        Boolean(event.cellId && visiblePeople.some((person) => person.cellId === event.cellId))
+      )
+    );
   });
 }
 

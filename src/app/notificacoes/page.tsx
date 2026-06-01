@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import {
   Bell,
   BellRing,
@@ -13,13 +13,17 @@ import {
   HeartHandshake,
   Heart,
   PlayCircle,
+  Send,
   ShieldAlert,
   UserRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
+import { getScopedCells } from "@/lib/access-control";
 import { notificationsEnabled, requestDeviceNotificationPermission } from "@/lib/device-notifications";
+import { useActivityEvents, useCells } from "@/lib/local-store";
 import type { PastoralNotification } from "@/lib/notifications";
 import { usePastoralNotifications } from "@/lib/use-pastoral-notifications";
 
@@ -33,6 +37,7 @@ const typeIcons: Record<PastoralNotification["type"], LucideIcon> = {
   agenda: Bell,
   structure: ShieldAlert,
   prayer: Heart,
+  notice: BellRing,
 };
 
 function priorityTone(priority: PastoralNotification["priority"]) {
@@ -62,20 +67,58 @@ function typeLabel(type: PastoralNotification["type"]) {
     agenda: "Agenda",
     structure: "Gestao",
     prayer: "Oracao",
+    notice: "Aviso",
   };
   return labels[type];
 }
 
 export default function NotificationsPage() {
+  const { currentUser, isDemoMode } = useAuth();
+  const { cells } = useCells();
+  const { addEvent } = useActivityEvents();
   const { notifications, unread, readSet, markRead, markUnread, markAllRead } = usePastoralNotifications();
   const [filter, setFilter] = useState<"all" | "unread" | PastoralNotification["priority"]>("unread");
   const [deviceEnabled, setDeviceEnabled] = useState(() => notificationsEnabled());
   const [feedback, setFeedback] = useState("");
+  const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
+  const canSendCellNotice = ["admin", "pastor", "supervisor", "leader"].includes(currentUser.role) && visibleCells.length > 0;
 
   async function enableDeviceNotifications() {
     const result = await requestDeviceNotificationPermission();
     setDeviceEnabled(result.ok);
     setFeedback(result.ok ? "Avisos do aparelho ativados." : "Nao consegui ativar os avisos neste aparelho.");
+  }
+
+  async function sendCellNotice(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const cellId = String(formData.get("cellId") || visibleCells[0]?.id || "");
+    const title = String(formData.get("title") || "Aviso da celula").trim();
+    const message = String(formData.get("message") || "").trim();
+    const cell = visibleCells.find((item) => item.id === cellId);
+
+    if (!cell || !message) {
+      setFeedback("Escolha a celula e escreva o aviso.");
+      return;
+    }
+
+    await addEvent({
+      churchId: currentUser.churchId,
+      actorUserId: currentUser.id,
+      actorName: currentUser.name,
+      actorRole: currentUser.role,
+      action: title,
+      description: message,
+      targetType: "cell",
+      targetId: cell.id,
+      targetName: cell.name,
+      cellId: cell.id,
+      visibility: "member",
+      persistToSupabase: !isDemoMode,
+    });
+
+    event.currentTarget.reset();
+    setFeedback(`Aviso enviado para ${cell.name}.`);
   }
 
   const filteredNotifications = notifications.filter((notification) => {
@@ -121,6 +164,41 @@ export default function NotificationsPage() {
         />
 
         {feedback && <p className="rounded-lg bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{feedback}</p>}
+
+        {canSendCellNotice && (
+          <form onSubmit={sendCellNotice} className="rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-sm">
+            <div className="flex items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800">
+                <Send size={19} />
+              </span>
+              <div>
+                <p className="text-xs font-black uppercase text-emerald-700">Aviso para membros</p>
+                <h2 className="text-lg font-black text-slate-950">Enviar comunicado para uma celula</h2>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <select name="cellId" className="field-control">
+                {visibleCells.map((cell) => (
+                  <option key={cell.id} value={cell.id}>
+                    {cell.name}
+                  </option>
+                ))}
+              </select>
+              <input name="title" className="field-control" placeholder="Titulo do aviso" defaultValue="Aviso da celula" />
+              <textarea
+                name="message"
+                required
+                rows={3}
+                className="field-control min-h-28 resize-none py-3 sm:col-span-2"
+                placeholder="Ex: Nesta semana a celula sera em outro endereco..."
+              />
+            </div>
+            <button className="primary-action mt-3">
+              <Send size={17} />
+              Enviar aviso
+            </button>
+          </form>
+        )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-lg bg-slate-950 p-4 text-white">

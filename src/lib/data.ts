@@ -50,6 +50,7 @@ export type Person = {
   photoUrl?: string;
   birthDate?: string;
   address?: string;
+  familyPhone?: string;
   maritalStatus?: string;
   gender?: string;
   tags?: string[];
@@ -118,6 +119,7 @@ export type Invite = {
   name: string;
   role: UserRole;
   cellId: string;
+  personId?: string;
   createdBy: string;
   status: "pending" | "accepted" | "expired";
   expiresAt: string;

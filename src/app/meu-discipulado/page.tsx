@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, CalendarCheck, CheckCircle2, ExternalLink, Lock, MessageCircle, PlayCircle, Save, X } from "lucide-react";
-import { useState } from "react";
+import { Bell, CalendarCheck, CheckCircle2, ExternalLink, Heart, Lock, MessageCircle, PlayCircle, Save, UserRound, X } from "lucide-react";
+import { FormEvent, useState } from "react";
+import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ProgressBar } from "@/components/progress-bar";
@@ -19,7 +20,7 @@ function formatDuration(seconds: number) {
 
 export default function MemberDiscipleshipPage() {
   const { currentUser, isDemoMode } = useAuth();
-  const { people } = useLocalPeople();
+  const { people, updatePerson } = useLocalPeople();
   const { cells } = useCells();
   const { tracks, videos, accesses, progress, updateVideoProgress } = useDiscipleship();
   const { addEvent } = useActivityEvents();
@@ -34,8 +35,8 @@ export default function MemberDiscipleshipPage() {
 
   if (!member) {
     return (
-      <main className="min-h-screen bg-[#f7f8f3] px-4 pb-8 pt-4 text-slate-900">
-        <div className="mx-auto max-w-xl">
+      <AppShell>
+        <section className="mx-auto max-w-xl">
           <section className="rounded-[24px] bg-slate-950 p-6 text-white shadow-xl shadow-slate-900/10">
             <h1 className="text-2xl font-semibold leading-tight">Perfil de membro nao vinculado</h1>
             <p className="mt-3 text-sm leading-6 text-slate-300">
@@ -45,8 +46,8 @@ export default function MemberDiscipleshipPage() {
               Voltar
             </Link>
           </section>
-        </div>
-      </main>
+        </section>
+      </AppShell>
     );
   }
 
@@ -178,20 +179,81 @@ export default function MemberDiscipleshipPage() {
     setRsvpPopupDismissed(true);
   }
 
+  async function saveMemberProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!member) {
+      return;
+    }
+
+    const formData = new FormData(event.currentTarget);
+    const result = await updatePerson(member.id, {
+      name: String(formData.get("name") || member.name).trim(),
+      phone: String(formData.get("phone") || member.phone).trim(),
+      email: String(formData.get("email") || member.email).trim(),
+      birthDate: String(formData.get("birthDate") || member.birthDate || ""),
+      address: String(formData.get("address") || member.address || ""),
+      familyPhone: String(formData.get("familyPhone") || member.familyPhone || ""),
+      photoUrl: String(formData.get("photoUrl") || member.photoUrl || ""),
+      persistToSupabase: !isDemoMode,
+    });
+
+    setFeedback(result.ok ? "Perfil atualizado." : `Nao consegui atualizar seu perfil: ${result.error}`);
+  }
+
   return (
-    <main className="min-h-screen bg-[#f7f8f3] px-4 pb-8 pt-4 text-slate-900">
-      <div className="mx-auto max-w-xl">
-        <header className="mb-5 flex items-center justify-between gap-3">
-          <Link
-            href="/dashboard"
-            className="flex h-11 w-11 items-center justify-center rounded-lg bg-white text-slate-700 shadow-sm"
-            aria-label="Voltar"
-          >
-            <ArrowLeft size={19} />
-          </Link>
-          <p className="text-sm font-bold text-emerald-700">Meu discipulado</p>
-          <PersonAvatar person={member} size="sm" />
+    <AppShell>
+      <section className="mx-auto max-w-2xl animate-enter space-y-5 pb-6">
+        <header className="rounded-[26px] border border-white/80 bg-white/90 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <PersonAvatar person={member} size="md" />
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase text-emerald-700">Membro</p>
+              <h1 className="truncate text-xl font-black text-slate-950">{member.name}</h1>
+              <p className="truncate text-sm font-semibold text-slate-500">{memberCell?.name ?? "Sem celula vinculada"}</p>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-4 gap-2">
+            <Link href="/meu-discipulado" className="rounded-2xl bg-emerald-900 p-3 text-center text-xs font-black text-white">
+              <UserRound className="mx-auto mb-1" size={17} />
+              Inicio
+            </Link>
+            <Link href="/oracao" className="rounded-2xl bg-slate-50 p-3 text-center text-xs font-black text-slate-700">
+              <Heart className="mx-auto mb-1" size={17} />
+              Oracao
+            </Link>
+            <Link href="/notificacoes" className="rounded-2xl bg-slate-50 p-3 text-center text-xs font-black text-slate-700">
+              <Bell className="mx-auto mb-1" size={17} />
+              Avisos
+            </Link>
+            <a href="#perfil" className="rounded-2xl bg-slate-50 p-3 text-center text-xs font-black text-slate-700">
+              <UserRound className="mx-auto mb-1" size={17} />
+              Perfil
+            </a>
+          </div>
         </header>
+
+        <section className="grid grid-cols-2 gap-3">
+          <div className="rounded-[22px] border border-white/80 bg-white/90 p-4 shadow-sm">
+            <p className="text-xs font-black uppercase text-emerald-700">Meu processo</p>
+            <h2 className="mt-1 text-lg font-black leading-tight text-slate-950">{member.stage}</h2>
+            <p className="mt-2 text-xs font-bold text-slate-500">{member.status}</p>
+          </div>
+          <div className="rounded-[22px] border border-white/80 bg-white/90 p-4 shadow-sm">
+            <p className="text-xs font-black uppercase text-emerald-700">Lider</p>
+            <h2 className="mt-1 truncate text-lg font-black leading-tight text-slate-950">{member.leader}</h2>
+            <p className="mt-2 text-xs font-bold text-slate-500">Responsavel pelo cuidado</p>
+          </div>
+          <div className="rounded-[22px] border border-white/80 bg-white/90 p-4 shadow-sm">
+            <p className="text-xs font-black uppercase text-sky-700">Culto</p>
+            <h2 className="mt-1 text-lg font-black leading-tight text-slate-950">{member.servicePresent ? "Presente" : "Acompanhar"}</h2>
+            <p className="mt-2 text-xs font-bold text-slate-500">Ultimo registro no culto</p>
+          </div>
+          <div className="rounded-[22px] border border-white/80 bg-white/90 p-4 shadow-sm">
+            <p className="text-xs font-black uppercase text-violet-700">Discipulado</p>
+            <h2 className="mt-1 text-lg font-black leading-tight text-slate-950">{trackProgress}%</h2>
+            <p className="mt-2 text-xs font-bold text-slate-500">{activeTrack?.title ?? "Aguardando liberacao"}</p>
+          </div>
+        </section>
 
         {showRsvpPopup && (
           <div className="fixed inset-0 z-50 flex items-end bg-slate-950/45 p-3 backdrop-blur-sm sm:items-center">
@@ -229,7 +291,7 @@ export default function MemberDiscipleshipPage() {
           </div>
         )}
 
-        <section className="rounded-lg bg-slate-950 p-5 text-white shadow-lg shadow-slate-900/10">
+        <section className="rounded-[26px] bg-slate-950 p-5 text-white shadow-lg shadow-slate-900/10">
           <p className="text-sm font-semibold text-emerald-200">Ola, {member.name}</p>
           <h1 className="mt-2 text-3xl font-semibold leading-tight">Sua caminhada continua hoje.</h1>
           <p className="mt-3 text-sm leading-6 text-slate-300">
@@ -409,7 +471,24 @@ export default function MemberDiscipleshipPage() {
           <MessageCircle size={14} />
           Lider responsavel: {member.leader}
         </div>
-      </div>
-    </main>
+
+        <section id="perfil" className="rounded-[26px] border border-white/80 bg-white/90 p-5 shadow-sm">
+          <SectionHeader eyebrow="Meu perfil" title="Atualizar meus dados" />
+          <form onSubmit={saveMemberProfile} className="space-y-3">
+            <input name="photoUrl" defaultValue={member.photoUrl} className="field-control" placeholder="URL da foto de perfil" />
+            <input name="name" defaultValue={member.name} className="field-control" placeholder="Nome completo" />
+            <input name="phone" defaultValue={member.phone} inputMode="tel" className="field-control" placeholder="WhatsApp" />
+            <input name="email" defaultValue={member.email} type="email" className="field-control" placeholder="Email" />
+            <input name="birthDate" defaultValue={member.birthDate} type="date" className="field-control" aria-label="Data de nascimento" />
+            <input name="address" defaultValue={member.address} className="field-control" placeholder="Endereco completo" />
+            <input name="familyPhone" defaultValue={member.familyPhone} inputMode="tel" className="field-control" placeholder="Telefone de familiar" />
+            <button className="primary-action">
+              <Save size={17} />
+              Salvar perfil
+            </button>
+          </form>
+        </section>
+      </section>
+    </AppShell>
   );
 }

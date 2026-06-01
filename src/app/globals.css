@@ -144,18 +144,21 @@ a:active {
 }
 
 .mobile-sheet {
-  max-height: min(92dvh, 720px);
+  max-height: calc(100dvh - 0.5rem);
   width: 100%;
   overflow-y: auto;
   border-radius: 32px 32px 0 0;
   background: white;
-  padding: 1.25rem;
-  padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+  padding: 1rem;
+  padding-top: calc(0.75rem + env(safe-area-inset-top));
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
   box-shadow: 0 28px 80px rgb(15 23 42 / 0.22);
+  overscroll-behavior: contain;
+  scroll-padding-top: 5rem;
 }
 
 .field-control {
-  min-height: 3.25rem;
+  min-height: 3.35rem;
   width: 100%;
   border-radius: 1rem;
   border: 1px solid rgb(226 232 240);
@@ -165,6 +168,7 @@ a:active {
   font-weight: 600;
   color: rgb(15 23 42);
   outline: none;
+  touch-action: manipulation;
 }
 
 .field-control::placeholder {
@@ -196,5 +200,6 @@ a:active {
   .mobile-sheet {
     max-width: 36rem;
     border-radius: 1.5rem;
+    padding: 1.25rem;
   }
 }

@@ -1,4 +1,5 @@
 import type {
+  ActivityEvent,
   CareTask,
   Cell,
   CellReport,
@@ -14,7 +15,7 @@ export type PastoralNotification = {
   id: string;
   title: string;
   description: string;
-  type: "care" | "absence" | "birthday" | "video" | "report" | "supervision" | "agenda" | "structure" | "prayer";
+  type: "care" | "absence" | "birthday" | "video" | "report" | "supervision" | "agenda" | "structure" | "prayer" | "notice";
   priority: "Baixa" | "Media" | "Alta" | "Urgente";
   href: string;
   createdAt: string;
@@ -80,6 +81,7 @@ export function getPastoralNotifications(input: {
   visits: SupervisorVisit[];
   reminders: PastoralReminder[];
   prayerRequests: PrayerRequest[];
+  events: ActivityEvent[];
   accesses: PersonTrackAccess[];
   progress: VideoProgressRecord[];
 }) {
@@ -99,6 +101,22 @@ export function getPastoralNotifications(input: {
         createdAt: request.createdAt,
         personId: request.personId,
         cellId: request.cellId,
+      });
+    });
+
+  input.events
+    .filter((event) => event.visibility === "member")
+    .forEach((event) => {
+      notifications.push({
+        id: `notice-${event.id}`,
+        title: event.action || "Aviso da celula",
+        description: event.description,
+        type: "notice",
+        priority: "Media",
+        href: "/notificacoes",
+        createdAt: event.createdAt,
+        personId: event.personId,
+        cellId: event.cellId,
       });
     });
 

@@ -101,6 +101,8 @@ export default function PersonProfilePage() {
       email: String(formData.get("email") || "").trim(),
       birthDate: String(formData.get("birthDate") || "").trim(),
       address: String(formData.get("address") || "").trim(),
+      familyPhone: String(formData.get("familyPhone") || "").trim(),
+      photoUrl: String(formData.get("photoUrl") || "").trim(),
       neighborhood: String(formData.get("neighborhood") || "").trim(),
       status: String(formData.get("status") || activePerson.status).trim(),
       stage: String(formData.get("stage") || activePerson.stage).trim(),
@@ -256,7 +258,9 @@ export default function PersonProfilePage() {
               <SectionHeader eyebrow="Dados" title="Editar perfil" />
               <div className="grid gap-3 md:grid-cols-2">
                 <input name="name" defaultValue={person.name} className="field-control" placeholder="Nome" />
+                <input name="photoUrl" defaultValue={person.photoUrl} className="field-control" placeholder="URL da foto" />
                 <input name="phone" defaultValue={person.phone} className="field-control" placeholder="WhatsApp" />
+                <input name="familyPhone" defaultValue={person.familyPhone} className="field-control" placeholder="Telefone familiar" />
                 <input name="email" defaultValue={person.email} className="field-control" placeholder="Email" />
                 <input name="birthDate" type="date" defaultValue={person.birthDate} className="field-control" />
                 <input name="neighborhood" defaultValue={person.neighborhood} className="field-control" placeholder="Bairro" />

@@ -1,21 +1,33 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { Filter, Plus, X } from "lucide-react";
+import { Copy, Filter, MessageCircle, Plus, Share2, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { PersonCard } from "@/components/person-card";
 import { SectionHeader } from "@/components/section-header";
 import { canManagePeople, getScopedCells, getScopedPeople } from "@/lib/access-control";
-import { useCells, useLocalPeople } from "@/lib/local-store";
+import { useCells, useInvites, useLocalPeople } from "@/lib/local-store";
+import { whatsappLink } from "@/lib/whatsapp";
+
+function inviteUrl(token: string) {
+  if (typeof window === "undefined") {
+    return `/convite/${token}`;
+  }
+
+  return `${window.location.origin}/convite/${token}`;
+}
 
 export default function PeoplePage() {
   const { currentUser, isDemoMode } = useAuth();
   const { people, addPerson, refreshPeople, isLoadingPeople, peopleLoadError } = useLocalPeople();
   const { cells, refreshCells } = useCells();
+  const { createInvite } = useInvites();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [created, setCreated] = useState("");
+  const [lastInviteLink, setLastInviteLink] = useState("");
+  const [lastInviteName, setLastInviteName] = useState("");
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
 
   const filteredPeople = useMemo(() => {
@@ -42,6 +54,9 @@ export default function PeoplePage() {
     const stage = String(formData.get("stage") || "Visitante");
     const neighborhood = String(formData.get("neighborhood") || "").trim();
     const email = String(formData.get("email") || "").trim();
+    const birthDate = String(formData.get("birthDate") || "").trim();
+    const address = String(formData.get("address") || "").trim();
+    const familyPhone = String(formData.get("familyPhone") || "").trim();
     const cellId = String(formData.get("cellId") || visibleCells[0]?.id || "");
     const selectedCell = visibleCells.find((cell) => cell.id === cellId);
 
@@ -55,6 +70,9 @@ export default function PeoplePage() {
       stage,
       neighborhood,
       email,
+      birthDate,
+      address,
+      familyPhone,
       createdByUserId: currentUser.id,
       leaderUserId: selectedCell?.leaderUserId || (currentUser.role === "leader" ? currentUser.id : undefined),
       churchId: currentUser.churchId,
@@ -69,9 +87,46 @@ export default function PeoplePage() {
     }
 
     setCreated(`${result.person.name} foi adicionado ao cuidado da celula.`);
+
+    const inviteResult = await createInvite({
+      churchId: currentUser.churchId,
+      name: result.person.name,
+      email: result.person.email,
+      role: "member",
+      cellId: result.person.cellId,
+      personId: result.person.id,
+      createdBy: currentUser.id,
+      persistToSupabase: !isDemoMode,
+    });
+
+    if (inviteResult.ok && inviteResult.invite) {
+      setLastInviteLink(inviteUrl(inviteResult.invite.token));
+      setLastInviteName(result.person.name);
+      setCreated(`${result.person.name} foi cadastrado. Convite pronto para enviar ao membro.`);
+    } else {
+      setCreated(`${result.person.name} foi cadastrado, mas nao consegui gerar convite: ${inviteResult.error}`);
+    }
+
     await Promise.all([refreshPeople(), refreshCells()]);
     setOpen(false);
     event.currentTarget.reset();
+  }
+
+  async function copyLastInvite() {
+    await navigator.clipboard?.writeText(lastInviteLink);
+    setCreated("Link do convite copiado.");
+  }
+
+  async function shareLastInvite() {
+    const text = `Ola, ${lastInviteName}! Aqui esta seu convite para entrar no Ovelhas: ${lastInviteLink}`;
+
+    if (navigator.share) {
+      await navigator.share({ title: `Convite Ovelhas - ${lastInviteName}`, text, url: lastInviteLink });
+      return;
+    }
+
+    await navigator.clipboard?.writeText(text);
+    setCreated("Mensagem do convite copiada.");
   }
 
   return (
@@ -122,6 +177,33 @@ export default function PeoplePage() {
           </div>
         )}
 
+        {lastInviteLink && (
+          <section className="rounded-[24px] border border-emerald-100 bg-white/95 p-4 shadow-sm">
+            <p className="text-xs font-black uppercase text-emerald-700">Convite do membro</p>
+            <h3 className="mt-1 text-lg font-black text-slate-950">{lastInviteName}</h3>
+            <p className="mt-2 break-all rounded-2xl bg-slate-50 p-3 text-xs font-bold text-slate-600">{lastInviteLink}</p>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <button onClick={copyLastInvite} className="flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-3 text-xs font-black text-white">
+                <Copy size={15} />
+                Copiar
+              </button>
+              <button onClick={shareLastInvite} className="flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-sky-700 px-3 text-xs font-black text-white">
+                <Share2 size={15} />
+                Enviar
+              </button>
+              <a
+                href={whatsappLink("", `Ola, ${lastInviteName}! Aqui esta seu convite para entrar no Ovelhas: ${lastInviteLink}`)}
+                target="_blank"
+                rel="noreferrer"
+                className="flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[#25d366] px-3 text-xs font-black text-white"
+              >
+                <MessageCircle size={15} />
+                WhatsApp
+              </a>
+            </div>
+          </section>
+        )}
+
         {peopleLoadError && (
           <div className="rounded-lg border border-rose-100 bg-rose-50 p-3 text-sm font-semibold text-rose-800">
             Nao consegui carregar pessoas do Supabase: {peopleLoadError}
@@ -147,12 +229,12 @@ export default function PeoplePage() {
         )}
 
         {open && (
-          <div className="fixed inset-0 z-50 flex items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-3">
+          <div className="fixed inset-0 z-[999] flex items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-3">
             <form
               onSubmit={handleSubmit}
               className="mobile-sheet native-scroll app-scrollbar animate-enter"
             >
-              <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="sticky top-0 z-10 -mx-1 mb-4 flex items-center justify-between gap-3 rounded-b-2xl bg-white/95 px-1 pb-3 pt-2 backdrop-blur">
                 <div>
                   <p className="text-xs font-bold uppercase text-emerald-700">Novo cuidado</p>
                   <h2 className="text-xl font-semibold text-slate-950">Adicionar pessoa</h2>
@@ -188,9 +270,26 @@ export default function PeoplePage() {
                   placeholder="Email opcional"
                 />
                 <input
+                  name="birthDate"
+                  type="date"
+                  className="field-control"
+                  aria-label="Data de nascimento"
+                />
+                <input
                   name="neighborhood"
                   className="field-control"
                   placeholder="Bairro"
+                />
+                <input
+                  name="address"
+                  className="field-control"
+                  placeholder="Endereco completo"
+                />
+                <input
+                  name="familyPhone"
+                  inputMode="tel"
+                  className="field-control"
+                  placeholder="Telefone de familiar"
                 />
                 <select
                   name="cellId"

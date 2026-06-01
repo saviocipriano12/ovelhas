@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useAuth } from "@/components/auth-provider";
 import {
+  getScopedActivityEvents,
   getScopedCareTasks,
   getScopedCells,
   getScopedPastoralReminders,
@@ -11,6 +12,7 @@ import {
   getScopedSupervisorVisits,
 } from "@/lib/access-control";
 import {
+  useActivityEvents,
   useCareTasks,
   useCellReports,
   useCells,
@@ -34,6 +36,7 @@ export function usePastoralNotifications() {
   const { visits } = useSupervisorVisits();
   const { reminders } = usePastoralReminders();
   const { requests } = usePrayerRequests();
+  const { events } = useActivityEvents();
   const { accesses, progress } = useDiscipleship();
   const reads = useNotificationReads(currentUser.id);
 
@@ -46,6 +49,7 @@ export function usePastoralNotifications() {
   const visibleVisits = getScopedSupervisorVisits(currentUser, visits, cells, isDemoMode);
   const visibleReminders = getScopedPastoralReminders(currentUser, reminders, cells, people, isDemoMode);
   const visiblePrayerRequests = getScopedPrayerRequests(currentUser, requests, cells, people, isDemoMode);
+  const visibleEvents = getScopedActivityEvents(currentUser, events, cells, people, isDemoMode);
   const visibleAccesses = accesses.filter((access) => visiblePeopleIds.has(access.personId));
   const visibleProgress = progress.filter((item) => visiblePeopleIds.has(item.personId));
 
@@ -59,6 +63,7 @@ export function usePastoralNotifications() {
         visits: visibleVisits,
         reminders: visibleReminders,
         prayerRequests: visiblePrayerRequests,
+        events: visibleEvents,
         accesses: visibleAccesses,
         progress: visibleProgress,
       }),
@@ -67,6 +72,7 @@ export function usePastoralNotifications() {
       visibleCells,
       visiblePeople,
       visiblePrayerRequests,
+      visibleEvents,
       visibleProgress,
       visibleReminders,
       visibleReports,

@@ -2,14 +2,15 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import {
+  BarChart3,
   ClipboardCheck,
   MapPin,
+  MessageCircle,
   Plus,
   Save,
-  Sparkles,
+  TrendingDown,
   Trash2,
   UserRoundPlus,
-  UsersRound,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
@@ -18,6 +19,7 @@ import { SectionHeader } from "@/components/section-header";
 import { getScopedCells } from "@/lib/access-control";
 import type { Cell, ConsolidationVisitor } from "@/lib/data";
 import { useActivityEvents, useCells, useConsolidationReports } from "@/lib/local-store";
+import { whatsappLink } from "@/lib/whatsapp";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -75,6 +77,48 @@ function createEmptyMinistryCounts() {
   return Object.fromEntries(ministries.map((ministry) => [ministry.key, 0])) as MinistryCounts;
 }
 
+function serviceKind(report: { serviceTitle: string; serviceDate: string }) {
+  const title = normalize(report.serviceTitle);
+  const day = new Date(`${report.serviceDate}T00:00:00`).getDay();
+
+  if (title.includes("domingo") || day === 0) {
+    return "domingo";
+  }
+
+  if (title.includes("quarta") || day === 3) {
+    return "quarta";
+  }
+
+  return "outro";
+}
+
+function averageAttendance(reports: { totalAttendance: number }[]) {
+  if (!reports.length) {
+    return 0;
+  }
+
+  return Math.round(reports.reduce((total, report) => total + report.totalAttendance, 0) / reports.length);
+}
+
+function attendanceDrop(reports: { totalAttendance: number; serviceDate: string; serviceTitle: string }[]) {
+  if (reports.length < 3) {
+    return null;
+  }
+
+  const [latest, ...previous] = [...reports].sort((a, b) => b.serviceDate.localeCompare(a.serviceDate));
+  const previousAverage = averageAttendance(previous.slice(0, 4));
+
+  if (!previousAverage || latest.totalAttendance >= previousAverage * 0.9) {
+    return null;
+  }
+
+  return {
+    latest: latest.totalAttendance,
+    previousAverage,
+    percent: Math.round(((previousAverage - latest.totalAttendance) / previousAverage) * 100),
+  };
+}
+
 export default function ConsolidationPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { cells } = useCells();
@@ -95,18 +139,30 @@ export default function ConsolidationPage() {
   const baptismDecisionCount = visitors.filter((visitor) => visitor.decision === "batismo").length;
   const servingCount = Object.values(ministryCounts).reduce((total, value) => total + Number(value || 0), 0);
   const latestReports = reports.slice(0, 4);
-  const monthTotals = useMemo(
-    () =>
-      reports.reduce(
-        (totals, report) => ({
-          attendance: totals.attendance + report.totalAttendance,
-          visitors: totals.visitors + report.visitorsCount,
-          decisions: totals.decisions + report.acceptedJesusCount + report.baptismDecisionCount,
-        }),
-        { attendance: 0, visitors: 0, decisions: 0 },
+  const consolidationStats = useMemo(() => {
+    const sundayReports = reports.filter((report) => serviceKind(report) === "domingo");
+    const wednesdayReports = reports.filter((report) => serviceKind(report) === "quarta");
+    const visitors = reports.flatMap((report) =>
+      report.visitors.map((visitor) => ({
+        ...visitor,
+        reportId: report.id,
+        serviceDate: report.serviceDate,
+        serviceTitle: report.serviceTitle,
+      })),
+    );
+
+    return {
+      sundayAverage: averageAttendance(sundayReports),
+      wednesdayAverage: averageAttendance(wednesdayReports),
+      sundayDrop: attendanceDrop(sundayReports),
+      wednesdayDrop: attendanceDrop(wednesdayReports),
+      visitors,
+      decisions: reports.reduce(
+        (total, report) => total + report.acceptedJesusCount + report.baptismDecisionCount,
+        0,
       ),
-    [reports],
-  );
+    };
+  }, [reports]);
 
   function addVisitor(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -229,9 +285,9 @@ export default function ConsolidationPage() {
 
         <div className="rounded-[28px] bg-slate-950 p-5 text-white shadow-xl shadow-slate-950/10">
           <p className="text-xs font-black uppercase text-emerald-200">Porta de entrada</p>
-          <h2 className="mt-1 text-2xl font-black leading-tight">Culto, visitantes e decisoes em um fluxo so</h2>
+          <h2 className="mt-1 text-2xl font-black leading-tight">Consolidacao com leitura de frequencia, contatos e decisoes</h2>
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            Registre o culto, visitantes, decisoes e ministerios servindo. A sugestao de celula aparece pelo bairro ou endereco informado.
+            Aqui o foco nao e somar publico culto apos culto. O painel acompanha medias, queda de frequencia, visitantes do dia e contatos para retorno.
           </p>
           <div className="mt-4 grid grid-cols-3 gap-2">
             <div className="rounded-2xl bg-white/10 p-3">
@@ -250,10 +306,31 @@ export default function ConsolidationPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <MetricCard icon={UsersRound} label="Publico" value={String(monthTotals.attendance)} accent="bg-sky-500" />
-          <MetricCard icon={UserRoundPlus} label="Visitantes" value={String(monthTotals.visitors)} accent="bg-emerald-500" />
-          <MetricCard icon={Sparkles} label="Decisoes" value={String(monthTotals.decisions)} accent="bg-amber-500" />
+          <MetricCard icon={BarChart3} label="Media domingo" value={String(consolidationStats.sundayAverage)} accent="bg-sky-500" />
+          <MetricCard icon={BarChart3} label="Media quarta" value={String(consolidationStats.wednesdayAverage)} accent="bg-violet-500" />
+          <MetricCard icon={UserRoundPlus} label="Contatos gerados" value={String(consolidationStats.visitors.length)} accent="bg-emerald-500" />
         </div>
+
+        {(consolidationStats.sundayDrop || consolidationStats.wednesdayDrop) && (
+          <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-4 text-amber-950">
+            <div className="flex items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-100">
+                <TrendingDown size={21} />
+              </span>
+              <div>
+                <p className="font-black">Atencao: frequencia diminuindo</p>
+                <p className="mt-1 text-sm font-semibold leading-6">
+                  {consolidationStats.sundayDrop
+                    ? `Domingo caiu ${consolidationStats.sundayDrop.percent}%: ultimo culto com ${consolidationStats.sundayDrop.latest}, media anterior ${consolidationStats.sundayDrop.previousAverage}. `
+                    : ""}
+                  {consolidationStats.wednesdayDrop
+                    ? `Quarta caiu ${consolidationStats.wednesdayDrop.percent}%: ultimo culto com ${consolidationStats.wednesdayDrop.latest}, media anterior ${consolidationStats.wednesdayDrop.previousAverage}.`
+                    : ""}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {feedback && (
           <div className="rounded-3xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-bold text-emerald-900">
@@ -459,6 +536,43 @@ export default function ConsolidationPage() {
               )}
             </article>
           ))}
+        </section>
+
+        <section className="space-y-3">
+          <SectionHeader eyebrow="Retorno" title="Carteira de visitantes e decisoes" />
+          {consolidationStats.visitors.slice(0, 12).map((visitor) => (
+            <article key={`${visitor.reportId}-${visitor.id}`} className="rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-lg font-black text-slate-950">{visitor.name}</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    {decisionLabels[visitor.decision]} - {visitor.serviceTitle} em {visitor.serviceDate}
+                  </p>
+                  <p className="mt-1 text-xs font-bold text-slate-400">
+                    {visitor.neighborhood || visitor.address || "Sem endereco informado"}
+                  </p>
+                </div>
+                <a
+                  href={whatsappLink(visitor.phone, `Ola, ${visitor.name}! Aqui e da equipe de consolidacao. Foi uma alegria receber voce no culto. Como podemos ajudar voce nos proximos passos?`)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#25d366] text-white"
+                  aria-label={`Enviar WhatsApp para ${visitor.name}`}
+                >
+                  <MessageCircle size={18} />
+                </a>
+              </div>
+              <div className="mt-3 rounded-2xl bg-emerald-50 p-3 text-sm font-bold text-emerald-950">
+                <MapPin className="mr-2 inline" size={15} />
+                Sugestao de celula: {visitor.suggestedCellName ?? "sem sugestao"}
+              </div>
+            </article>
+          ))}
+          {consolidationStats.visitors.length === 0 && (
+            <p className="rounded-3xl bg-white/90 p-5 text-center text-sm font-semibold text-slate-500">
+              Nenhum visitante registrado ainda. Quando a consolidacao cadastrar, o contato fica salvo aqui para retorno.
+            </p>
+          )}
         </section>
       </section>
     </AppShell>

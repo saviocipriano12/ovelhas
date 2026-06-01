@@ -29,6 +29,8 @@ type SupabasePerson = {
   first_visit_date: string | null;
   birth_date?: string | null;
   address?: string | null;
+  photo_url?: string | null;
+  family_phone?: string | null;
   notes?: string | null;
 };
 
@@ -83,6 +85,8 @@ export function mapSupabasePerson(
     firstVisit: person.first_visit_date ?? "--/--",
     birthDate: person.birth_date ?? "",
     address: person.address ?? "",
+    photoUrl: person.photo_url ?? "",
+    familyPhone: person.family_phone ?? "",
     privateNotes: person.notes ?? "",
     birthday: "--/--",
     progress: options.progress ?? 0,

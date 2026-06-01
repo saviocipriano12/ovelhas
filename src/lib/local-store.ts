@@ -123,6 +123,7 @@ function mapInviteRow(invite: {
   name: string | null;
   role: UserRole;
   cell_id: string | null;
+  person_id?: string | null;
   created_by: string | null;
   status: Invite["status"];
   expires_at: string;
@@ -138,6 +139,7 @@ function mapInviteRow(invite: {
     name: invite.name ?? "",
     role: invite.role,
     cellId: invite.cell_id ?? "",
+    personId: invite.person_id ?? undefined,
     createdBy: invite.created_by ?? "",
     status: invite.status,
     expiresAt: invite.expires_at,
@@ -150,6 +152,11 @@ function mapInviteRow(invite: {
 function isMissingRpc(message?: string) {
   const lower = (message ?? "").toLowerCase();
   return lower.includes("could not find the function") || (lower.includes("function") && lower.includes("does not exist"));
+}
+
+function isMissingColumn(message: string | undefined, columns: string[]) {
+  const lower = (message ?? "").toLowerCase();
+  return columns.some((column) => lower.includes(column.toLowerCase())) || lower.includes("schema cache");
 }
 
 export function useLocalPeople() {
@@ -172,10 +179,10 @@ export function useLocalPeople() {
     const peopleQuery = peopleRpcResult.error && isMissingRpc(peopleRpcResult.error.message)
       ? supabase
           .from("people")
-          .select("id, church_id, cell_id, person_user_id, created_by_user_id, leader_user_id, name, phone, email, birth_date, address, neighborhood, status, journey_stage, first_visit_date, notes")
+          .select("id, church_id, cell_id, person_user_id, created_by_user_id, leader_user_id, name, phone, email, birth_date, address, photo_url, family_phone, neighborhood, status, journey_stage, first_visit_date, notes")
       : Promise.resolve(peopleRpcResult);
 
-    const [peopleResult, cellsRpcResult, profilesRpcResult, progressResult, meetingsResult, serviceResult] = await Promise.all([
+    const [initialPeopleResult, cellsRpcResult, profilesRpcResult, progressResult, meetingsResult, serviceResult] = await Promise.all([
       peopleQuery,
       supabase.rpc("get_my_cells"),
       supabase.rpc("get_my_profiles"),
@@ -183,6 +190,13 @@ export function useLocalPeople() {
       supabase.from("cell_meetings").select("id, meeting_date, cell_attendance(person_id, present)").order("meeting_date", { ascending: false }).limit(8),
       supabase.from("service_attendance").select("person_id, present, church_services(service_date)").order("created_at", { ascending: false }).limit(200),
     ]);
+    let peopleResult = initialPeopleResult;
+
+    if (peopleResult.error && isMissingColumn(peopleResult.error.message, ["photo_url", "family_phone"])) {
+      peopleResult = await supabase
+        .from("people")
+        .select("id, church_id, cell_id, person_user_id, created_by_user_id, leader_user_id, name, phone, email, birth_date, address, neighborhood, status, journey_stage, first_visit_date, notes");
+    }
 
     const [cellsResult, profilesResult] = await Promise.all([
       cellsRpcResult.error && isMissingRpc(cellsRpcResult.error.message)
@@ -269,6 +283,10 @@ export function useLocalPeople() {
     stage: string;
     neighborhood: string;
     email?: string;
+    birthDate?: string;
+    address?: string;
+    photoUrl?: string;
+    familyPhone?: string;
     createdByUserId?: string;
     leaderUserId?: string;
     churchId?: string;
@@ -285,6 +303,9 @@ export function useLocalPeople() {
       status: input.stage === "Visitante" ? "Boas-vindas" : "Novo cuidado",
       phone: input.phone.replace(/\D/g, ""),
       email: input.email || "",
+      birthDate: input.birthDate || "",
+      address: input.address || "",
+      familyPhone: input.familyPhone?.replace(/\D/g, "") || "",
       cell: input.cellName || "Casa da Paz",
       leader: "Rafael Lima",
       discipleshipLeader: "Rafael Lima",
@@ -306,29 +327,49 @@ export function useLocalPeople() {
       return { ok: true, person: localPerson };
     }
 
-    const { data, error } = await supabase
-      .from("people")
-      .insert({
-        church_id: input.churchId,
-        cell_id: input.cellId || null,
-        created_by_user_id: input.createdByUserId || null,
-        leader_user_id: input.leaderUserId || null,
-        name: input.name,
-        phone: input.phone.replace(/\D/g, ""),
-        email: input.email || null,
-        neighborhood: input.neighborhood || null,
-        status: input.stage,
-        journey_stage: input.stage,
-        first_visit_date: new Date().toISOString().slice(0, 10),
-      })
-      .select("id, church_id, cell_id, person_user_id, created_by_user_id, leader_user_id, name, phone, email, neighborhood, status, journey_stage, first_visit_date")
-      .single();
+    const legacyInsertPayload = {
+      church_id: input.churchId,
+      cell_id: input.cellId || null,
+      created_by_user_id: input.createdByUserId || null,
+      leader_user_id: input.leaderUserId || null,
+      name: input.name,
+      phone: input.phone.replace(/\D/g, ""),
+      email: input.email || null,
+      birth_date: input.birthDate || null,
+      address: input.address || null,
+      neighborhood: input.neighborhood || null,
+      status: input.stage,
+      journey_stage: input.stage,
+      first_visit_date: new Date().toISOString().slice(0, 10),
+    };
+    const insertPayload = {
+      ...legacyInsertPayload,
+      photo_url: input.photoUrl || null,
+      family_phone: input.familyPhone?.replace(/\D/g, "") || null,
+    };
+    const insertPerson = async (includeExtendedColumns: boolean) => {
+      return supabase
+        .from("people")
+        .insert(includeExtendedColumns ? insertPayload : legacyInsertPayload)
+        .select(
+          includeExtendedColumns
+            ? "id, church_id, cell_id, person_user_id, created_by_user_id, leader_user_id, name, phone, email, birth_date, address, photo_url, family_phone, neighborhood, status, journey_stage, first_visit_date, notes"
+            : "id, church_id, cell_id, person_user_id, created_by_user_id, leader_user_id, name, phone, email, birth_date, address, neighborhood, status, journey_stage, first_visit_date, notes",
+        )
+        .single();
+    };
+    const firstInsert = await insertPerson(true);
+    const retryInsert =
+      isMissingColumn(firstInsert.error?.message, ["photo_url", "family_phone"])
+        ? await insertPerson(false)
+        : null;
+    const { data, error } = retryInsert ?? firstInsert;
 
     if (error || !data) {
       return { ok: false, error: error?.message ?? "Nao foi possivel cadastrar a pessoa." };
     }
 
-    const newPerson = mapSupabasePerson(data, { cellName: input.cellName });
+    const newPerson = mapSupabasePerson(data as unknown as Parameters<typeof mapSupabasePerson>[0], { cellName: input.cellName });
     setItems((current) => [newPerson, ...current]);
     return { ok: true, person: newPerson };
   }
@@ -339,14 +380,12 @@ export function useLocalPeople() {
 
   async function updatePerson(
     personId: string,
-    input: Partial<Pick<Person, "name" | "phone" | "email" | "stage" | "status" | "neighborhood" | "birthDate" | "address" | "maritalStatus" | "privateNotes">> & {
+    input: Partial<Pick<Person, "name" | "phone" | "email" | "stage" | "status" | "neighborhood" | "birthDate" | "address" | "familyPhone" | "maritalStatus" | "privateNotes" | "photoUrl">> & {
       persistToSupabase?: boolean;
     },
   ) {
     if (input.persistToSupabase) {
-      const { error } = await supabase
-        .from("people")
-        .update({
+      const legacyUpdatePayload = {
           name: input.name,
           phone: input.phone?.replace(/\D/g, ""),
           email: input.email || null,
@@ -357,8 +396,24 @@ export function useLocalPeople() {
           journey_stage: input.stage,
           notes: input.privateNotes || null,
           updated_at: new Date().toISOString(),
-        })
-        .eq("id", personId);
+        };
+      const updatePayload = {
+        ...legacyUpdatePayload,
+        photo_url: input.photoUrl || null,
+        family_phone: input.familyPhone?.replace(/\D/g, "") || null,
+      };
+      const updateRecord = async (includeExtendedColumns: boolean) => {
+        return supabase
+          .from("people")
+          .update(includeExtendedColumns ? updatePayload : legacyUpdatePayload)
+          .eq("id", personId);
+      };
+      const firstUpdate = await updateRecord(true);
+      const retryUpdate =
+        firstUpdate.error && isMissingColumn(firstUpdate.error.message, ["photo_url", "family_phone"])
+          ? await updateRecord(false)
+          : null;
+      const { error } = retryUpdate ?? firstUpdate;
 
       if (error) {
         return { ok: false, error: error.message };
@@ -379,8 +434,10 @@ export function useLocalPeople() {
               neighborhood: input.neighborhood ?? person.neighborhood,
               birthDate: input.birthDate ?? person.birthDate,
               address: input.address ?? person.address,
+              familyPhone: input.familyPhone ? input.familyPhone.replace(/\D/g, "") : person.familyPhone,
               maritalStatus: input.maritalStatus ?? person.maritalStatus,
               privateNotes: input.privateNotes ?? person.privateNotes,
+              photoUrl: input.photoUrl ?? person.photoUrl,
             }
           : person,
       ),
@@ -1572,12 +1629,22 @@ export function useInvites() {
     setInviteLoadError("");
 
     const rpcResult = await supabase.rpc("get_my_invites");
-    const { data, error } = rpcResult.error && isMissingRpc(rpcResult.error.message)
-      ? await supabase
-          .from("invites")
-          .select("id, church_id, token, email, name, role, cell_id, created_by, status, expires_at, accepted_by, accepted_at, created_at")
-          .order("created_at", { ascending: false })
-      : rpcResult;
+    const fallbackInvites = async (includePersonId: boolean) =>
+      supabase
+        .from("invites")
+        .select(
+          includePersonId
+            ? "id, church_id, token, email, name, role, cell_id, person_id, created_by, status, expires_at, accepted_by, accepted_at, created_at"
+            : "id, church_id, token, email, name, role, cell_id, created_by, status, expires_at, accepted_by, accepted_at, created_at",
+        )
+        .order("created_at", { ascending: false });
+    const fallbackResult = rpcResult.error && isMissingRpc(rpcResult.error.message)
+      ? await fallbackInvites(true)
+      : null;
+    const retryFallbackResult = fallbackResult?.error?.message.toLowerCase().includes("person_id")
+      ? await fallbackInvites(false)
+      : null;
+    const { data, error } = retryFallbackResult ?? fallbackResult ?? rpcResult;
 
     setIsLoadingInvites(false);
 
@@ -1602,6 +1669,7 @@ export function useInvites() {
     name: string;
     role: UserRole;
     cellId: string;
+    personId?: string;
     createdBy: string;
     persistToSupabase?: boolean;
   }) {
@@ -1613,6 +1681,7 @@ export function useInvites() {
       name: input.name,
       role: input.role,
       cellId: input.cellId,
+      personId: input.personId,
       createdBy: input.createdBy,
       status: "pending",
       expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString(),
@@ -1620,19 +1689,31 @@ export function useInvites() {
     };
 
     if (input.persistToSupabase) {
-      const rpcResult = await supabase
-        .rpc("create_invite_secure", {
-          invite_token: localInvite.token,
-          invite_email: input.email || null,
-          invite_name: input.name || null,
-          invite_role: input.role,
-          invite_cell_id: input.cellId || null,
-          invite_expires_at: localInvite.expiresAt,
-        })
-        .single();
-
-      const { data, error } = rpcResult.error && isMissingRpc(rpcResult.error.message)
+      const rpcResult = input.personId
         ? await supabase
+            .rpc("create_invite_for_person", {
+              invite_token: localInvite.token,
+              invite_email: input.email || null,
+              invite_name: input.name || null,
+              invite_role: input.role,
+              invite_cell_id: input.cellId || null,
+              invite_person_id: input.personId,
+              invite_expires_at: localInvite.expiresAt,
+            })
+            .single()
+        : await supabase
+            .rpc("create_invite_secure", {
+              invite_token: localInvite.token,
+              invite_email: input.email || null,
+              invite_name: input.name || null,
+              invite_role: input.role,
+              invite_cell_id: input.cellId || null,
+              invite_expires_at: localInvite.expiresAt,
+            })
+            .single();
+
+      const fallbackInsert = async (includePersonId: boolean) =>
+        supabase
             .from("invites")
             .insert({
               church_id: input.churchId,
@@ -1641,13 +1722,22 @@ export function useInvites() {
               name: input.name || null,
               role: input.role,
               cell_id: input.cellId || null,
+              ...(includePersonId ? { person_id: input.personId || null } : {}),
               created_by: input.createdBy,
               status: "pending",
               expires_at: localInvite.expiresAt,
             })
             .select("id, created_at")
-            .single()
-        : rpcResult;
+            .single();
+
+      const fallbackResult = rpcResult.error && isMissingRpc(rpcResult.error.message)
+        ? await fallbackInsert(Boolean(input.personId))
+        : null;
+      const retryFallbackResult =
+        fallbackResult?.error && input.personId && fallbackResult.error.message.toLowerCase().includes("person_id")
+          ? await fallbackInsert(false)
+          : null;
+      const { data, error } = retryFallbackResult ?? fallbackResult ?? rpcResult;
 
       if (error) {
         return { ok: false, error: error.message };
