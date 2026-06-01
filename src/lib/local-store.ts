@@ -389,7 +389,20 @@ export function useLocalPeople() {
     return { ok: true };
   }
 
-  return { people: items, addPerson, updatePeople, updatePerson, refreshPeople, isLoadingPeople, peopleLoadError };
+  async function deletePerson(personId: string, persistToSupabase?: boolean) {
+    if (persistToSupabase) {
+      const { error } = await supabase.from("people").delete().eq("id", personId);
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setItems((current) => current.filter((person) => person.id !== personId));
+    return { ok: true };
+  }
+
+  return { people: items, addPerson, updatePeople, updatePerson, deletePerson, refreshPeople, isLoadingPeople, peopleLoadError };
 }
 
 export function useCells() {
@@ -1304,6 +1317,113 @@ export function useDiscipleship() {
     return { ok: true, video: localVideo };
   }
 
+  async function updateTrack(input: {
+    id: string;
+    title: string;
+    description: string;
+    persistToSupabase?: boolean;
+  }) {
+    if (input.persistToSupabase) {
+      const { error } = await supabase
+        .from("discipleship_tracks")
+        .update({
+          title: input.title,
+          description: input.description || null,
+        })
+        .eq("id", input.id);
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setTracks((current) =>
+      current.map((track) =>
+        track.id === input.id
+          ? {
+              ...track,
+              title: input.title,
+              description: input.description,
+            }
+          : track,
+      ),
+    );
+
+    return { ok: true };
+  }
+
+  async function deleteTrack(trackId: string, persistToSupabase?: boolean) {
+    if (persistToSupabase) {
+      const { error } = await supabase.from("discipleship_tracks").delete().eq("id", trackId);
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    const removedVideoIds = new Set(videos.filter((video) => video.trackId === trackId).map((video) => video.id));
+    setTracks((current) => current.filter((track) => track.id !== trackId));
+    setVideos((current) => current.filter((video) => video.trackId !== trackId));
+    setAccesses((current) => current.filter((access) => access.trackId !== trackId));
+    setProgress((current) => current.filter((item) => !removedVideoIds.has(item.videoId)));
+    return { ok: true };
+  }
+
+  async function updateVideo(input: {
+    id: string;
+    title: string;
+    description: string;
+    videoUrl: string;
+    durationSeconds: number;
+    persistToSupabase?: boolean;
+  }) {
+    if (input.persistToSupabase) {
+      const { error } = await supabase
+        .from("discipleship_videos")
+        .update({
+          title: input.title,
+          description: input.description || null,
+          video_url: input.videoUrl,
+          duration_seconds: input.durationSeconds,
+        })
+        .eq("id", input.id);
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setVideos((current) =>
+      current.map((video) =>
+        video.id === input.id
+          ? {
+              ...video,
+              title: input.title,
+              description: input.description,
+              videoUrl: input.videoUrl,
+              durationSeconds: input.durationSeconds,
+            }
+          : video,
+      ),
+    );
+
+    return { ok: true };
+  }
+
+  async function deleteVideo(videoId: string, persistToSupabase?: boolean) {
+    if (persistToSupabase) {
+      const { error } = await supabase.from("discipleship_videos").delete().eq("id", videoId);
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setVideos((current) => current.filter((video) => video.id !== videoId));
+    setProgress((current) => current.filter((item) => item.videoId !== videoId));
+    return { ok: true };
+  }
+
   async function releaseTrack(input: {
     personId: string;
     trackId: string;
@@ -1408,7 +1528,20 @@ export function useDiscipleship() {
     return { ok: true, progress: localProgress };
   }
 
-  return { tracks, videos, accesses, progress, addTrack, addVideo, releaseTrack, updateVideoProgress };
+  return {
+    tracks,
+    videos,
+    accesses,
+    progress,
+    addTrack,
+    addVideo,
+    updateTrack,
+    deleteTrack,
+    updateVideo,
+    deleteVideo,
+    releaseTrack,
+    updateVideoProgress,
+  };
 }
 
 function createInviteToken() {
@@ -2422,9 +2555,7 @@ export function useConsolidationReports(churchId: string) {
 
     const { data, error } = await supabase
       .from("consolidation_reports")
-      .select(
-        "id, church_id, service_date, service_title, total_attendance, serving_count, visitors_count, accepted_jesus_count, baptism_decision_count, notes, created_by, created_by_name, created_at, consolidation_visitors(id, name, phone, email, address, neighborhood, decision, notes, suggested_cell_id, suggested_cell_name, person_id)",
-      )
+      .select("*, consolidation_visitors(*)")
       .eq("church_id", churchId)
       .order("service_date", { ascending: false });
 
@@ -2442,6 +2573,8 @@ export function useConsolidationReports(churchId: string) {
       service_title: string;
       total_attendance: number;
       serving_count: number;
+      ministry_counts?: Record<string, number> | null;
+      kids_count?: number | null;
       visitors_count: number;
       accepted_jesus_count: number;
       baptism_decision_count: number;
@@ -2454,6 +2587,7 @@ export function useConsolidationReports(churchId: string) {
         name: string;
         phone: string;
         email: string | null;
+        age?: number | null;
         address: string | null;
         neighborhood: string | null;
         decision: ConsolidationVisitor["decision"];
@@ -2469,6 +2603,8 @@ export function useConsolidationReports(churchId: string) {
       serviceTitle: report.service_title,
       totalAttendance: report.total_attendance,
       servingCount: report.serving_count,
+      ministryCounts: report.ministry_counts ?? {},
+      kidsCount: report.kids_count ?? 0,
       visitorsCount: report.visitors_count,
       acceptedJesusCount: report.accepted_jesus_count,
       baptismDecisionCount: report.baptism_decision_count,
@@ -2481,6 +2617,7 @@ export function useConsolidationReports(churchId: string) {
         name: visitor.name,
         phone: visitor.phone,
         email: visitor.email ?? undefined,
+        age: visitor.age ?? undefined,
         address: visitor.address ?? undefined,
         neighborhood: visitor.neighborhood ?? undefined,
         decision: visitor.decision,
@@ -2513,23 +2650,42 @@ export function useConsolidationReports(churchId: string) {
     };
 
     if (input.persistToSupabase) {
-      const { data, error } = await supabase
+      const reportPayload = {
+        church_id: input.churchId,
+        service_date: input.serviceDate,
+        service_title: input.serviceTitle,
+        total_attendance: input.totalAttendance,
+        serving_count: input.servingCount,
+        ministry_counts: input.ministryCounts ?? {},
+        kids_count: input.kidsCount ?? 0,
+        visitors_count: input.visitorsCount,
+        accepted_jesus_count: input.acceptedJesusCount,
+        baptism_decision_count: input.baptismDecisionCount,
+        notes: input.notes || null,
+        created_by: input.createdBy,
+        created_by_name: input.createdByName,
+      };
+
+      let { data, error } = await supabase
         .from("consolidation_reports")
-        .insert({
-          church_id: input.churchId,
-          service_date: input.serviceDate,
-          service_title: input.serviceTitle,
-          total_attendance: input.totalAttendance,
-          serving_count: input.servingCount,
-          visitors_count: input.visitorsCount,
-          accepted_jesus_count: input.acceptedJesusCount,
-          baptism_decision_count: input.baptismDecisionCount,
-          notes: input.notes || null,
-          created_by: input.createdBy,
-          created_by_name: input.createdByName,
-        })
+        .insert(reportPayload)
         .select("id, created_at")
         .single();
+
+      if (error && (error.message.includes("ministry_counts") || error.message.includes("kids_count"))) {
+        const fallbackPayload = { ...reportPayload };
+        delete (fallbackPayload as Partial<typeof reportPayload>).ministry_counts;
+        delete (fallbackPayload as Partial<typeof reportPayload>).kids_count;
+
+        const fallback = await supabase
+          .from("consolidation_reports")
+          .insert(fallbackPayload)
+          .select("id, created_at")
+          .single();
+
+        data = fallback.data;
+        error = fallback.error;
+      }
 
       if (error || !data) {
         return { ok: false, error: error?.message ?? "Nao foi possivel salvar a consolidacao." };
@@ -2539,25 +2695,42 @@ export function useConsolidationReports(churchId: string) {
       localReport.createdAt = data.created_at;
 
       if (input.visitors.length > 0) {
-        const { data: visitorRows, error: visitorsError } = await supabase
+        const visitorPayload = input.visitors.map((visitor) => ({
+          report_id: localReport.id,
+          church_id: input.churchId,
+          name: visitor.name,
+          phone: visitor.phone.replace(/\D/g, ""),
+          email: visitor.email || null,
+          age: visitor.age ?? null,
+          address: visitor.address || null,
+          neighborhood: visitor.neighborhood || null,
+          decision: visitor.decision,
+          notes: visitor.notes || null,
+          suggested_cell_id: visitor.suggestedCellId || null,
+          suggested_cell_name: visitor.suggestedCellName || null,
+          person_id: visitor.personId || null,
+        }));
+
+        let { data: visitorRows, error: visitorsError } = await supabase
           .from("consolidation_visitors")
-          .insert(
-            input.visitors.map((visitor) => ({
-              report_id: localReport.id,
-              church_id: input.churchId,
-              name: visitor.name,
-              phone: visitor.phone.replace(/\D/g, ""),
-              email: visitor.email || null,
-              address: visitor.address || null,
-              neighborhood: visitor.neighborhood || null,
-              decision: visitor.decision,
-              notes: visitor.notes || null,
-              suggested_cell_id: visitor.suggestedCellId || null,
-              suggested_cell_name: visitor.suggestedCellName || null,
-              person_id: visitor.personId || null,
-            })),
-          )
+          .insert(visitorPayload)
           .select("id");
+
+        if (visitorsError && visitorsError.message.includes("age")) {
+          const fallbackVisitors = await supabase
+            .from("consolidation_visitors")
+            .insert(
+              visitorPayload.map((visitor) => {
+                const fallbackVisitor = { ...visitor };
+                delete (fallbackVisitor as { age?: number | null }).age;
+                return fallbackVisitor;
+              }),
+            )
+            .select("id");
+
+          visitorRows = fallbackVisitors.data;
+          visitorsError = fallbackVisitors.error;
+        }
 
         if (visitorsError) {
           return { ok: false, error: visitorsError.message };

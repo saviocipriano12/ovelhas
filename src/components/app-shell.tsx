@@ -98,6 +98,11 @@ const memberMobileNavItems: { href: string; label: string; icon: LucideIcon }[] 
   { href: "/mais", label: "Mais", icon: MoreHorizontal },
 ];
 
+const consolidationMobileNavItems: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/consolidacao", label: "Culto", icon: ClipboardList },
+  { href: "/instalar", label: "Instalar", icon: Smartphone },
+];
+
 function isActive(pathname: string, href: string) {
   if (href === "/celulas") {
     return pathname === href;
@@ -123,11 +128,16 @@ export function AppShell({ children }: { children: ReactNode }) {
       items: visibleNavItems.filter((item) => group.hrefs.includes(item.href)),
     }))
     .filter((group) => group.items.length > 0);
-  const visibleMobileNavItems = (currentUser.role === "member" ? memberMobileNavItems : mobileNavItems).filter((item) =>
-    canAccessRoute(currentUser, item.href),
-  );
+  const mobileNavSource =
+    currentUser.role === "member"
+      ? memberMobileNavItems
+      : currentUser.role === "consolidation"
+        ? consolidationMobileNavItems
+        : mobileNavItems;
+  const visibleMobileNavItems = mobileNavSource.filter((item) => canAccessRoute(currentUser, item.href));
   const homeHref = getDefaultRoute(currentUser);
   const currentPageLabel = pageLabel(pathname);
+  const canSeeNotifications = canAccessRoute(currentUser, "/notificacoes");
 
   return (
     <div className="min-h-screen bg-[#f7f8f3] text-slate-900">
@@ -220,18 +230,20 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Link>
 
               <div className="flex shrink-0 items-center gap-2">
-                <Link
-                  href="/notificacoes"
-                  className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-white"
-                  aria-label="Notificacoes"
-                >
-                  <Bell size={19} />
-                  {unread.length > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-300 px-1 text-[10px] font-black text-slate-950 ring-2 ring-slate-950">
-                      {unread.length > 9 ? "9+" : unread.length}
-                    </span>
-                  )}
-                </Link>
+                {canSeeNotifications ? (
+                  <Link
+                    href="/notificacoes"
+                    className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-white"
+                    aria-label="Notificacoes"
+                  >
+                    <Bell size={19} />
+                    {unread.length > 0 && (
+                      <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-300 px-1 text-[10px] font-black text-slate-950 ring-2 ring-slate-950">
+                        {unread.length > 9 ? "9+" : unread.length}
+                      </span>
+                    )}
+                  </Link>
+                ) : null}
                 <button
                   onClick={() => setMobileMenuOpen((current) => !current)}
                   className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-400 text-emerald-950 shadow-lg shadow-emerald-950/20"
@@ -257,18 +269,20 @@ export function AppShell({ children }: { children: ReactNode }) {
               >
                 <Search size={19} />
               </button>
-              <Link
-                href="/notificacoes"
-                className="relative flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-900 text-white shadow-sm"
-                aria-label="Notificacoes"
-              >
-                <Bell size={19} />
-                {unread.length > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1 text-[10px] font-black text-emerald-950 ring-2 ring-emerald-900">
-                    {unread.length > 9 ? "9+" : unread.length}
-                  </span>
-                )}
-              </Link>
+              {canSeeNotifications ? (
+                <Link
+                  href="/notificacoes"
+                  className="relative flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-900 text-white shadow-sm"
+                  aria-label="Notificacoes"
+                >
+                  <Bell size={19} />
+                  {unread.length > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1 text-[10px] font-black text-emerald-950 ring-2 ring-emerald-900">
+                      {unread.length > 9 ? "9+" : unread.length}
+                    </span>
+                  )}
+                </Link>
+              ) : null}
               <Link
                 href="/acesso"
                 className="hidden h-11 w-11 items-center justify-center rounded-lg bg-slate-950 text-white shadow-sm"

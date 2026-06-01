@@ -54,7 +54,22 @@ export default function ManagementPage() {
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const visibleVisits = getScopedSupervisorVisits(currentUser, visits, cells, isDemoMode);
-  const visibleProfiles = profiles.filter((profile) => profile.churchId === currentUser.churchId || isDemoMode);
+  const visibleCellIds = new Set(visibleCells.map((cell) => cell.id));
+  const visibleLeaderIds = new Set(visibleCells.map((cell) => cell.leaderUserId).filter(Boolean));
+  const visibleMemberUserIds = new Set(visiblePeople.map((person) => person.personUserId).filter(Boolean));
+  const churchProfiles = profiles.filter((profile) => profile.churchId === currentUser.churchId || isDemoMode);
+  const visibleProfiles =
+    currentUser.role === "admin" || currentUser.role === "pastor"
+      ? churchProfiles
+      : currentUser.role === "supervisor"
+        ? churchProfiles.filter(
+            (profile) =>
+              profile.id === currentUser.id ||
+              visibleLeaderIds.has(profile.id) ||
+              visibleMemberUserIds.has(profile.id) ||
+              profile.cellIds?.some((cellId) => visibleCellIds.has(cellId)),
+          )
+        : churchProfiles.filter((profile) => profile.id === currentUser.id);
   const supervisors = visibleProfiles.filter((user) => user.role === "supervisor");
   const leaders = visibleProfiles.filter((user) => user.role === "leader");
   const cellsWithoutSupervisor = visibleCells.filter((cell) => !cell.supervisorUserId).length;

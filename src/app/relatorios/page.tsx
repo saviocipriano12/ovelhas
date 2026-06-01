@@ -217,6 +217,29 @@ export default function ReportsPage() {
                         <p className="text-[11px] font-medium text-slate-400">decisoes</p>
                       </div>
                     </div>
+                    {report.ministryCounts && Object.keys(report.ministryCounts).length > 0 && (
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {[
+                          ["louvor", "Louvor"],
+                          ["palavra", "Palavra"],
+                          ["midia", "Midia"],
+                          ["diaconato", "Diaconato"],
+                          ["intercessao", "Intercessao"],
+                          ["kids", "Kids"],
+                          ["baby", "Baby"],
+                          ["vagalumes", "Vagalumes"],
+                        ].map(([key, label]) => (
+                          <div key={key} className="rounded-lg bg-white p-2 text-center">
+                            <p className="text-sm font-bold">{report.ministryCounts?.[key] ?? 0}</p>
+                            <p className="text-[10px] font-bold uppercase text-slate-400">{label}</p>
+                          </div>
+                        ))}
+                        <div className="rounded-lg bg-emerald-50 p-2 text-center">
+                          <p className="text-sm font-bold text-emerald-950">{report.kidsCount ?? 0}</p>
+                          <p className="text-[10px] font-bold uppercase text-emerald-700">Criancas kids</p>
+                        </div>
+                      </div>
+                    )}
                     {report.notes && <p className="mt-3 text-sm leading-5 text-slate-600">{report.notes}</p>}
                   </div>
                 </div>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { BookOpenCheck, Lock, Play, Plus, Send, Video } from "lucide-react";
+import { BookOpenCheck, Edit3, Lock, Play, Plus, Save, Send, Trash2, Video, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { ProgressBar } from "@/components/progress-bar";
@@ -18,7 +18,7 @@ function formatDuration(seconds: number) {
 export default function VideosPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { people } = useLocalPeople();
-  const { tracks, videos, accesses, progress, addTrack, addVideo, releaseTrack } = useDiscipleship();
+  const { tracks, videos, accesses, progress, addTrack, addVideo, updateTrack, deleteTrack, updateVideo, deleteVideo, releaseTrack } = useDiscipleship();
   const { addEvent } = useActivityEvents();
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const churchTracks = tracks.filter((track) => track.churchId === currentUser.churchId || isDemoMode);
@@ -35,6 +35,8 @@ export default function VideosPage() {
   const [videoDescription, setVideoDescription] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [videoMinutes, setVideoMinutes] = useState(10);
+  const [editingTrack, setEditingTrack] = useState(false);
+  const [editingVideoId, setEditingVideoId] = useState("");
   const canCreateContent = currentUser.role === "admin" || currentUser.role === "pastor";
   const canRelease = canManagePeople(currentUser);
 
@@ -144,6 +146,90 @@ export default function VideosPage() {
     setFeedback("Video cadastrado na trilha.");
   }
 
+  async function handleUpdateTrack(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedTrack) {
+      return;
+    }
+
+    const formData = new FormData(event.currentTarget);
+    const title = String(formData.get("title") || "").trim();
+    const description = String(formData.get("description") || "").trim();
+
+    if (!title) {
+      setFeedback("Informe o nome da trilha.");
+      return;
+    }
+
+    const result = await updateTrack({
+      id: selectedTrack.id,
+      title,
+      description,
+      persistToSupabase: !isDemoMode,
+    });
+
+    setFeedback(result.ok ? "Trilha atualizada." : `Nao consegui atualizar a trilha: ${result.error}`);
+    if (result.ok) {
+      setEditingTrack(false);
+    }
+  }
+
+  async function handleDeleteTrack() {
+    if (!selectedTrack) {
+      return;
+    }
+
+    if (!window.confirm(`Apagar a trilha ${selectedTrack.title}? Os videos, liberacoes e progresso vinculados tambem serao removidos.`)) {
+      return;
+    }
+
+    const result = await deleteTrack(selectedTrack.id, !isDemoMode);
+    setFeedback(result.ok ? "Trilha apagada." : `Nao consegui apagar a trilha: ${result.error}`);
+
+    if (result.ok) {
+      const nextTrack = churchTracks.find((track) => track.id !== selectedTrack.id);
+      setSelectedTrackId(nextTrack?.id ?? "");
+    }
+  }
+
+  async function handleUpdateVideo(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const title = String(formData.get("title") || "").trim();
+    const description = String(formData.get("description") || "").trim();
+    const videoUrlValue = String(formData.get("videoUrl") || "").trim();
+    const durationSeconds = Math.max(1, Number(formData.get("minutes") || 1)) * 60;
+
+    if (!title || !videoUrlValue) {
+      setFeedback("Informe titulo e URL do video.");
+      return;
+    }
+
+    const result = await updateVideo({
+      id: editingVideoId,
+      title,
+      description,
+      videoUrl: videoUrlValue,
+      durationSeconds,
+      persistToSupabase: !isDemoMode,
+    });
+
+    setFeedback(result.ok ? "Video atualizado." : `Nao consegui atualizar o video: ${result.error}`);
+    if (result.ok) {
+      setEditingVideoId("");
+    }
+  }
+
+  async function handleDeleteVideo(videoId: string, videoTitleValue: string) {
+    if (!window.confirm(`Apagar o video ${videoTitleValue}? O progresso desse video tambem sera removido.`)) {
+      return;
+    }
+
+    const result = await deleteVideo(videoId, !isDemoMode);
+    setFeedback(result.ok ? "Video apagado." : `Nao consegui apagar o video: ${result.error}`);
+  }
+
   return (
     <AppShell>
       <section className="animate-enter space-y-5">
@@ -180,6 +266,34 @@ export default function VideosPage() {
           <div className="space-y-5">
             <div className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
               <SectionHeader eyebrow="Trilha selecionada" title={selectedTrack?.title ?? "Nenhuma trilha"} />
+              {canCreateContent && selectedTrack && (
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setEditingTrack((current) => !current)}
+                    className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-slate-100 px-3 text-sm font-bold text-slate-700"
+                  >
+                    {editingTrack ? <X size={16} /> : <Edit3 size={16} />}
+                    {editingTrack ? "Fechar edicao" : "Editar trilha"}
+                  </button>
+                  <button
+                    onClick={handleDeleteTrack}
+                    className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-rose-50 px-3 text-sm font-bold text-rose-700"
+                  >
+                    <Trash2 size={16} />
+                    Apagar trilha
+                  </button>
+                </div>
+              )}
+              {canCreateContent && selectedTrack && editingTrack && (
+                <form onSubmit={handleUpdateTrack} className="mb-4 space-y-3 rounded-2xl bg-slate-50 p-3">
+                  <input name="title" defaultValue={selectedTrack.title} className="field-control" placeholder="Nome da trilha" />
+                  <textarea name="description" defaultValue={selectedTrack.description} rows={3} className="field-control min-h-28 resize-none py-3" placeholder="Descricao curta" />
+                  <button className="primary-action">
+                    <Save size={18} />
+                    Salvar trilha
+                  </button>
+                </form>
+              )}
               <div className="aspect-video rounded-lg bg-[linear-gradient(135deg,#064e3b,#0f766e,#2563eb)] p-5 text-white shadow-lg shadow-emerald-900/15">
                 <div className="flex h-full flex-col justify-between">
                   <div>
@@ -259,6 +373,36 @@ export default function VideosPage() {
                         {formatDuration(video.durationSeconds)}
                       </span>
                     </div>
+                    {canCreateContent && (
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setEditingVideoId(editingVideoId === video.id ? "" : video.id)}
+                          className="flex min-h-10 items-center justify-center gap-2 rounded-xl bg-white text-sm font-bold text-slate-700"
+                        >
+                          {editingVideoId === video.id ? <X size={16} /> : <Edit3 size={16} />}
+                          {editingVideoId === video.id ? "Fechar" : "Editar"}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteVideo(video.id, video.title)}
+                          className="flex min-h-10 items-center justify-center gap-2 rounded-xl bg-rose-50 text-sm font-bold text-rose-700"
+                        >
+                          <Trash2 size={16} />
+                          Apagar
+                        </button>
+                      </div>
+                    )}
+                    {editingVideoId === video.id && (
+                      <form onSubmit={handleUpdateVideo} className="mt-3 space-y-3 rounded-2xl bg-white p-3">
+                        <input name="title" defaultValue={video.title} className="field-control" placeholder="Titulo do video" />
+                        <input name="videoUrl" defaultValue={video.videoUrl} className="field-control" placeholder="URL do video" />
+                        <textarea name="description" defaultValue={video.description} rows={3} className="field-control min-h-28 resize-none py-3" placeholder="Descricao" />
+                        <input name="minutes" type="number" min="1" defaultValue={Math.max(1, Math.round(video.durationSeconds / 60))} className="field-control" />
+                        <button className="primary-action">
+                          <Save size={18} />
+                          Salvar video
+                        </button>
+                      </form>
+                    )}
                   </article>
                 ))}
                 {trackVideos.length === 0 && (

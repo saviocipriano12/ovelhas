@@ -218,8 +218,8 @@ export default function CellsPage() {
                     >
                       <Trash2 size={15} />
                     </button>
-                    <Link href="/relatorios/novo" className="font-bold text-emerald-800">
-                      Novo relatorio
+                    <Link href="/presenca" className="font-bold text-emerald-800">
+                      Abrir chamada
                     </Link>
                   </div>
                 </div>

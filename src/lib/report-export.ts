@@ -11,6 +11,26 @@ function escapeHtml(value: string | number) {
     .replace(/'/g, "&#039;");
 }
 
+const ministryLabels: Record<string, string> = {
+  louvor: "Louvor",
+  palavra: "Palavra",
+  midia: "Midia",
+  diaconato: "Diaconato",
+  intercessao: "Intercessao",
+  kids: "Kids",
+  baby: "Baby",
+  vagalumes: "Vagalumes",
+};
+
+function renderMinistryCounts(report: ConsolidationReport) {
+  const counts = report.ministryCounts ?? {};
+  const rows = Object.entries(ministryLabels)
+    .map(([key, label]) => `<span><b>${escapeHtml(counts[key] ?? 0)}</b> ${escapeHtml(label)}</span>`)
+    .join("");
+
+  return `<div class="mini-grid ministry-grid">${rows}<span><b>${escapeHtml(report.kidsCount ?? 0)}</b> criancas kids</span></div>`;
+}
+
 function slug(value: string) {
   return value
     .normalize("NFD")
@@ -161,6 +181,7 @@ export function buildReportHtml({
                 <span><b>${escapeHtml(report.servingCount)}</b> servindo</span>
                 <span><b>${escapeHtml(report.acceptedJesusCount + report.baptismDecisionCount)}</b> decisoes</span>
               </div>
+              ${renderMinistryCounts(report)}
               <p>${escapeHtml(report.notes || "Sem observacoes registradas.")}</p>
             </article>
           `,
@@ -220,6 +241,7 @@ export function buildReportHtml({
     .report-head strong { white-space: nowrap; border-radius: 12px; padding: 8px 10px; background: white; color: #065f46; font-size: 12px; }
     .eyebrow { color: #047857 !important; font-size: 11px !important; font-weight: 900; text-transform: uppercase; }
     .mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0; }
+    .ministry-grid { grid-template-columns: repeat(3, 1fr); }
     .mini-grid span { border-radius: 12px; background: white; padding: 10px; color: #64748b; font-size: 12px; text-align: center; }
     .mini-grid b { display: block; color: #0f172a; font-size: 18px; }
     .report-card p { color: #475569; line-height: 1.55; font-size: 14px; }

@@ -51,6 +51,20 @@ with check (
   )
 );
 
+drop policy if exists "discipleship_tracks_delete_by_admin_or_pastor" on public.discipleship_tracks;
+create policy "discipleship_tracks_delete_by_admin_or_pastor"
+on public.discipleship_tracks
+for delete
+using (
+  exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = discipleship_tracks.church_id
+    and p.role in ('admin', 'pastor')
+  )
+);
+
 drop policy if exists "discipleship_videos_select_by_track_church" on public.discipleship_videos;
 create policy "discipleship_videos_select_by_track_church"
 on public.discipleship_videos
@@ -95,6 +109,21 @@ using (
   )
 )
 with check (
+  exists (
+    select 1
+    from public.discipleship_tracks t
+    join public.profiles p on p.id = auth.uid()
+    where t.id = discipleship_videos.track_id
+    and p.church_id = t.church_id
+    and p.role in ('admin', 'pastor')
+  )
+);
+
+drop policy if exists "discipleship_videos_delete_by_admin_or_pastor" on public.discipleship_videos;
+create policy "discipleship_videos_delete_by_admin_or_pastor"
+on public.discipleship_videos
+for delete
+using (
   exists (
     select 1
     from public.discipleship_tracks t

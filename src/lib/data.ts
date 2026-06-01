@@ -224,6 +224,7 @@ export type ConsolidationVisitor = {
   name: string;
   phone: string;
   email?: string;
+  age?: number;
   address?: string;
   neighborhood?: string;
   decision: "visitante" | "aceitou_jesus" | "batismo" | "reconciliacao";
@@ -240,6 +241,8 @@ export type ConsolidationReport = {
   serviceTitle: string;
   totalAttendance: number;
   servingCount: number;
+  ministryCounts?: Record<string, number>;
+  kidsCount?: number;
   visitorsCount: number;
   acceptedJesusCount: number;
   baptismDecisionCount: number;

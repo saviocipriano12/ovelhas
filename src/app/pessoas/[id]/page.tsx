@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -13,6 +13,7 @@ import {
   MapPin,
   Save,
   ShieldCheck,
+  Trash2,
   UserRound,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -43,8 +44,9 @@ function noteLabel(visibility: string) {
 
 export default function PersonProfilePage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const { currentUser, isDemoMode } = useAuth();
-  const { people, updatePerson } = useLocalPeople();
+  const { people, updatePerson, deletePerson } = useLocalPeople();
   const { notes, addNote } = usePastoralNotes();
   const { events, addEvent } = useActivityEvents();
   const [editing, setEditing] = useState(false);
@@ -132,6 +134,22 @@ export default function PersonProfilePage() {
     setEditing(false);
   }
 
+  async function handleDelete() {
+    if (!window.confirm(`Apagar ${activePerson.name}? Esta acao remove o cadastro e os registros vinculados a esta pessoa.`)) {
+      return;
+    }
+
+    const result = await deletePerson(activePerson.id, !isDemoMode);
+
+    if (!result.ok) {
+      setFeedback(`Nao consegui apagar: ${result.error}`);
+      return;
+    }
+
+    router.push("/pessoas");
+    router.refresh();
+  }
+
   async function handleAddNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -182,10 +200,15 @@ export default function PersonProfilePage() {
               <ArrowLeft size={18} />
             </Link>
             {canEdit && (
-              <button onClick={() => setEditing((value) => !value)} className="inline-flex h-10 items-center gap-2 rounded-lg bg-slate-100 px-3 text-sm font-bold text-slate-700">
-                <Edit3 size={16} />
-                Editar
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setEditing((value) => !value)} className="inline-flex h-10 items-center gap-2 rounded-lg bg-slate-100 px-3 text-sm font-bold text-slate-700">
+                  <Edit3 size={16} />
+                  Editar
+                </button>
+                <button onClick={handleDelete} className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-rose-50 text-rose-700" aria-label={`Apagar ${person.name}`}>
+                  <Trash2 size={16} />
+                </button>
+              </div>
             )}
           </div>
 
@@ -229,21 +252,21 @@ export default function PersonProfilePage() {
           {feedback && <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{feedback}</div>}
 
           {editing && (
-            <form onSubmit={handleUpdate} className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+            <form onSubmit={handleUpdate} className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm sm:p-5">
               <SectionHeader eyebrow="Dados" title="Editar perfil" />
               <div className="grid gap-3 md:grid-cols-2">
-                <input name="name" defaultValue={person.name} className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" placeholder="Nome" />
-                <input name="phone" defaultValue={person.phone} className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" placeholder="WhatsApp" />
-                <input name="email" defaultValue={person.email} className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" placeholder="Email" />
-                <input name="birthDate" type="date" defaultValue={person.birthDate} className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" />
-                <input name="neighborhood" defaultValue={person.neighborhood} className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" placeholder="Bairro" />
-                <input name="maritalStatus" defaultValue={person.maritalStatus} className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" placeholder="Estado civil" />
-                <input name="stage" defaultValue={person.stage} className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" placeholder="Etapa" />
-                <input name="status" defaultValue={person.status} className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" placeholder="Status" />
-                <input name="address" defaultValue={person.address} className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500 md:col-span-2" placeholder="Endereco completo" />
-                <textarea name="privateNotes" defaultValue={person.privateNotes} rows={3} className="resize-none rounded-lg border border-slate-200 px-3 py-3 text-sm outline-none focus:border-emerald-500 md:col-span-2" placeholder="Observacao privada do cadastro" />
+                <input name="name" defaultValue={person.name} className="field-control" placeholder="Nome" />
+                <input name="phone" defaultValue={person.phone} className="field-control" placeholder="WhatsApp" />
+                <input name="email" defaultValue={person.email} className="field-control" placeholder="Email" />
+                <input name="birthDate" type="date" defaultValue={person.birthDate} className="field-control" />
+                <input name="neighborhood" defaultValue={person.neighborhood} className="field-control" placeholder="Bairro" />
+                <input name="maritalStatus" defaultValue={person.maritalStatus} className="field-control" placeholder="Estado civil" />
+                <input name="stage" defaultValue={person.stage} className="field-control" placeholder="Etapa" />
+                <input name="status" defaultValue={person.status} className="field-control" placeholder="Status" />
+                <input name="address" defaultValue={person.address} className="field-control md:col-span-2" placeholder="Endereco completo" />
+                <textarea name="privateNotes" defaultValue={person.privateNotes} rows={3} className="field-control min-h-28 resize-none py-3 md:col-span-2" placeholder="Observacao privada do cadastro" />
               </div>
-              <button className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-900 px-4 text-sm font-bold text-white">
+              <button className="primary-action mt-4">
                 <Save size={18} />
                 Salvar alteracoes
               </button>

@@ -58,3 +58,17 @@ on public.people
 for update
 using (public.can_view_person(people))
 with check (public.can_view_person(people));
+
+drop policy if exists "people_delete_by_responsibility" on public.people;
+create policy "people_delete_by_responsibility"
+on public.people
+for delete
+using (
+  public.can_view_person(people)
+  and exists (
+    select 1
+    from public.profiles viewer
+    where viewer.id = auth.uid()
+    and viewer.role in ('admin', 'pastor', 'supervisor', 'leader')
+  )
+);

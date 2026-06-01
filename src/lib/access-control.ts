@@ -51,6 +51,7 @@ const roleRoutes: Record<UserRole, string[]> = {
     "/notificacoes",
     "/convites",
     "/supervisao",
+    "/gestao",
     "/atividades",
     "/relatorios",
     "/relatorios/novo",
@@ -78,16 +79,8 @@ const roleRoutes: Record<UserRole, string[]> = {
     "/mais",
   ],
   consolidation: [
-    "/dashboard",
     "/consolidacao",
-    "/pessoas",
-    "/agenda",
-    "/cuidados",
-    "/oracao",
-    "/biblioteca",
-    "/notificacoes",
     "/instalar",
-    "/mais",
   ],
   member: ["/meu-discipulado", "/oracao", "/biblioteca", "/notificacoes", "/instalar", "/mais"],
 };
@@ -142,8 +135,7 @@ export function canManagePeople(user: AppUser) {
     user.role === "admin" ||
     user.role === "pastor" ||
     user.role === "supervisor" ||
-    user.role === "leader" ||
-    user.role === "consolidation"
+    user.role === "leader"
   );
 }
 

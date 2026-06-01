@@ -17,7 +17,7 @@ import { MetricCard } from "@/components/metric-card";
 import { SectionHeader } from "@/components/section-header";
 import { getScopedCells } from "@/lib/access-control";
 import type { Cell, ConsolidationVisitor } from "@/lib/data";
-import { useActivityEvents, useCells, useConsolidationReports, useLocalPeople } from "@/lib/local-store";
+import { useActivityEvents, useCells, useConsolidationReports } from "@/lib/local-store";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -58,17 +58,34 @@ const decisionLabels: Record<ConsolidationVisitor["decision"], string> = {
   reconciliacao: "Reconciliacao",
 };
 
+const ministries = [
+  { key: "louvor", label: "Louvor" },
+  { key: "palavra", label: "Palavra" },
+  { key: "midia", label: "Midia" },
+  { key: "diaconato", label: "Diaconato" },
+  { key: "intercessao", label: "Intercessao" },
+  { key: "kids", label: "Kids" },
+  { key: "baby", label: "Baby" },
+  { key: "vagalumes", label: "Vagalumes" },
+];
+
+type MinistryCounts = Record<string, number>;
+
+function createEmptyMinistryCounts() {
+  return Object.fromEntries(ministries.map((ministry) => [ministry.key, 0])) as MinistryCounts;
+}
+
 export default function ConsolidationPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { cells } = useCells();
-  const { addPerson, refreshPeople } = useLocalPeople();
   const { reports, addReport, deleteReport, refreshReports, isLoadingReports, reportLoadError } = useConsolidationReports(currentUser.churchId);
   const { addEvent } = useActivityEvents();
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const [serviceDate, setServiceDate] = useState(todayIso());
   const [serviceTitle, setServiceTitle] = useState("Culto principal");
   const [totalAttendance, setTotalAttendance] = useState(0);
-  const [servingCount, setServingCount] = useState(0);
+  const [ministryCounts, setMinistryCounts] = useState<MinistryCounts>(() => createEmptyMinistryCounts());
+  const [kidsCount, setKidsCount] = useState(0);
   const [notes, setNotes] = useState("");
   const [visitors, setVisitors] = useState<ConsolidationVisitor[]>([]);
   const [feedback, setFeedback] = useState("");
@@ -76,6 +93,7 @@ export default function ConsolidationPage() {
 
   const acceptedJesusCount = visitors.filter((visitor) => visitor.decision === "aceitou_jesus").length;
   const baptismDecisionCount = visitors.filter((visitor) => visitor.decision === "batismo").length;
+  const servingCount = Object.values(ministryCounts).reduce((total, value) => total + Number(value || 0), 0);
   const latestReports = reports.slice(0, 4);
   const monthTotals = useMemo(
     () =>
@@ -96,6 +114,7 @@ export default function ConsolidationPage() {
     const name = String(formData.get("name") || "").trim();
     const phone = String(formData.get("phone") || "").trim();
     const email = String(formData.get("email") || "").trim();
+    const age = Number(formData.get("age") || 0);
     const address = String(formData.get("address") || "").trim();
     const neighborhood = String(formData.get("neighborhood") || "").trim();
     const decision = String(formData.get("decision") || "visitante") as ConsolidationVisitor["decision"];
@@ -113,6 +132,7 @@ export default function ConsolidationPage() {
         name,
         phone,
         email,
+        age: age > 0 ? age : undefined,
         address,
         neighborhood,
         decision,
@@ -134,46 +154,21 @@ export default function ConsolidationPage() {
     setSaving(true);
     setFeedback("");
 
-    const visitorsWithPeople: ConsolidationVisitor[] = [];
-
-    for (const visitor of visitors) {
-      const selectedCell = visibleCells.find((cell) => cell.id === visitor.suggestedCellId);
-      const personResult = await addPerson({
-        name: visitor.name,
-        phone: visitor.phone,
-        email: visitor.email,
-        neighborhood: visitor.neighborhood || "",
-        stage: visitor.decision === "aceitou_jesus" ? "Novo convertido" : visitor.decision === "batismo" ? "Batismo" : "Visitante",
-        createdByUserId: currentUser.id,
-        leaderUserId: selectedCell?.leaderUserId || currentUser.id,
-        churchId: currentUser.churchId,
-        cellId: selectedCell?.id,
-        cellName: selectedCell?.name,
-        persistToSupabase: !isDemoMode,
-      });
-
-      if (!personResult.ok) {
-        setSaving(false);
-        setFeedback(`Nao consegui cadastrar ${visitor.name}: ${personResult.error}`);
-        return;
-      }
-
-      visitorsWithPeople.push({ ...visitor, personId: personResult.person?.id });
-    }
-
     const reportResult = await addReport({
       churchId: currentUser.churchId,
       serviceDate,
       serviceTitle,
       totalAttendance,
       servingCount,
-      visitorsCount: visitorsWithPeople.length,
+      ministryCounts,
+      kidsCount,
+      visitorsCount: visitors.length,
       acceptedJesusCount,
       baptismDecisionCount,
       notes,
       createdBy: currentUser.id,
       createdByName: currentUser.name,
-      visitors: visitorsWithPeople,
+      visitors,
       persistToSupabase: !isDemoMode,
     });
 
@@ -189,17 +184,19 @@ export default function ConsolidationPage() {
       actorName: currentUser.name,
       actorRole: currentUser.role,
       action: "Registrou consolidacao",
-      description: `${serviceTitle}: ${totalAttendance} pessoas, ${visitorsWithPeople.length} visitantes, ${acceptedJesusCount} decisoes por Jesus e ${baptismDecisionCount} decisoes por batismo.`,
+      description: `${serviceTitle}: ${totalAttendance} pessoas, ${visitors.length} visitantes, ${acceptedJesusCount} decisoes por Jesus e ${baptismDecisionCount} decisoes por batismo.`,
       targetType: "person",
       targetName: "Consolidacao do culto",
       visibility: "leadership",
       persistToSupabase: !isDemoMode,
     });
 
-    await Promise.all([refreshPeople(), refreshReports()]);
+    await refreshReports();
     setVisitors([]);
+    setMinistryCounts(createEmptyMinistryCounts());
+    setKidsCount(0);
     setSaving(false);
-    setFeedback("Consolidacao salva. Visitantes foram cadastrados e encaminhados para cuidado.");
+    setFeedback("Consolidacao salva. Visitantes ficaram registrados para acompanhamento da lideranca.");
   }
 
   async function handleDeleteReport(reportId: string, title: string) {
@@ -234,7 +231,7 @@ export default function ConsolidationPage() {
           <p className="text-xs font-black uppercase text-emerald-200">Porta de entrada</p>
           <h2 className="mt-1 text-2xl font-black leading-tight">Culto, visitantes e decisoes em um fluxo so</h2>
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            Registre o culto, cadastre visitantes e veja a sugestao de celula mais proxima pelo bairro ou endereco.
+            Registre o culto, visitantes, decisoes e ministerios servindo. A sugestao de celula aparece pelo bairro ou endereco informado.
           </p>
           <div className="mt-4 grid grid-cols-3 gap-2">
             <div className="rounded-2xl bg-white/10 p-3">
@@ -242,12 +239,12 @@ export default function ConsolidationPage() {
               <p className="text-[11px] font-bold text-slate-300">visitantes</p>
             </div>
             <div className="rounded-2xl bg-white/10 p-3">
-              <p className="text-2xl font-black">{acceptedJesusCount}</p>
-              <p className="text-[11px] font-bold text-slate-300">Jesus</p>
+              <p className="text-2xl font-black">{servingCount}</p>
+              <p className="text-[11px] font-bold text-slate-300">servindo</p>
             </div>
             <div className="rounded-2xl bg-white/10 p-3">
-              <p className="text-2xl font-black">{baptismDecisionCount}</p>
-              <p className="text-[11px] font-bold text-slate-300">batismo</p>
+              <p className="text-2xl font-black">{acceptedJesusCount + baptismDecisionCount}</p>
+              <p className="text-[11px] font-bold text-slate-300">decisoes</p>
             </div>
           </div>
         </div>
@@ -300,16 +297,43 @@ export default function ConsolidationPage() {
                 className="field-control mt-2"
               />
             </label>
+            <div className="rounded-3xl bg-emerald-50 p-4">
+              <p className="text-xs font-black uppercase text-emerald-700">Servindo</p>
+              <p className="mt-1 text-3xl font-black text-emerald-950">{servingCount}</p>
+              <p className="mt-1 text-xs font-semibold text-emerald-800">Soma dos ministerios abaixo</p>
+            </div>
             <label>
-              <span className="text-xs font-black uppercase text-slate-400">Servindo</span>
+              <span className="text-xs font-black uppercase text-slate-400">Criancas no Kids</span>
               <input
                 type="number"
                 min="0"
-                value={servingCount}
-                onChange={(event) => setServingCount(Number(event.target.value))}
+                value={kidsCount}
+                onChange={(event) => setKidsCount(Number(event.target.value))}
                 className="field-control mt-2"
               />
             </label>
+          </div>
+          <div className="mt-4">
+            <p className="text-xs font-black uppercase text-slate-400">Ministerios servindo</p>
+            <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {ministries.map((ministry) => (
+                <label key={ministry.key} className="rounded-2xl bg-slate-50 p-3">
+                  <span className="text-xs font-black text-slate-500">{ministry.label}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={ministryCounts[ministry.key] ?? 0}
+                    onChange={(event) =>
+                      setMinistryCounts((current) => ({
+                        ...current,
+                        [ministry.key]: Number(event.target.value),
+                      }))
+                    }
+                    className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-lg font-black outline-none focus:border-emerald-500"
+                  />
+                </label>
+              ))}
+            </div>
           </div>
           <textarea
             value={notes}
@@ -325,6 +349,7 @@ export default function ConsolidationPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <input name="name" required placeholder="Nome completo" className="field-control sm:col-span-2" />
             <input name="phone" required inputMode="tel" placeholder="WhatsApp com DDD" className="field-control" />
+            <input name="age" type="number" min="0" placeholder="Idade" className="field-control" />
             <input name="email" type="email" placeholder="Email opcional" className="field-control" />
             <input name="neighborhood" placeholder="Bairro" className="field-control" />
             <input name="address" placeholder="Endereco" className="field-control" />
@@ -350,6 +375,7 @@ export default function ConsolidationPage() {
                 <div className="min-w-0">
                   <p className="truncate text-lg font-black text-slate-950">{visitor.name}</p>
                   <p className="mt-1 text-sm font-semibold text-slate-500">{decisionLabels[visitor.decision]}</p>
+                  {visitor.age ? <p className="mt-1 text-xs font-bold text-slate-400">{visitor.age} anos</p> : null}
                 </div>
                 <button
                   onClick={() => setVisitors((current) => current.filter((item) => item.id !== visitor.id))}
@@ -417,6 +443,20 @@ export default function ConsolidationPage() {
                   <p className="text-[11px] font-bold text-slate-500">decisoes</p>
                 </div>
               </div>
+              {report.ministryCounts && Object.keys(report.ministryCounts).length > 0 && (
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {ministries.map((ministry) => (
+                    <div key={ministry.key} className="rounded-2xl bg-slate-50 p-3">
+                      <p className="text-[11px] font-black uppercase text-slate-400">{ministry.label}</p>
+                      <p className="mt-1 text-base font-black text-slate-950">{report.ministryCounts?.[ministry.key] ?? 0}</p>
+                    </div>
+                  ))}
+                  <div className="rounded-2xl bg-emerald-50 p-3">
+                    <p className="text-[11px] font-black uppercase text-emerald-700">Criancas kids</p>
+                    <p className="mt-1 text-base font-black text-emerald-950">{report.kidsCount ?? 0}</p>
+                  </div>
+                </div>
+              )}
             </article>
           ))}
         </section>

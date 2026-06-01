@@ -25,6 +25,8 @@ create table if not exists public.consolidation_reports (
   service_title text not null default 'Culto principal',
   total_attendance integer not null default 0,
   serving_count integer not null default 0,
+  ministry_counts jsonb not null default '{}'::jsonb,
+  kids_count integer not null default 0,
   visitors_count integer not null default 0,
   accepted_jesus_count integer not null default 0,
   baptism_decision_count integer not null default 0,
@@ -42,6 +44,7 @@ create table if not exists public.consolidation_visitors (
   name text not null,
   phone text not null,
   email text,
+  age integer,
   address text,
   neighborhood text,
   decision text not null default 'visitante'
@@ -51,6 +54,13 @@ create table if not exists public.consolidation_visitors (
   suggested_cell_name text,
   created_at timestamptz not null default now()
 );
+
+alter table public.consolidation_reports
+  add column if not exists ministry_counts jsonb not null default '{}'::jsonb,
+  add column if not exists kids_count integer not null default 0;
+
+alter table public.consolidation_visitors
+  add column if not exists age integer;
 
 alter table public.consolidation_reports enable row level security;
 alter table public.consolidation_visitors enable row level security;
