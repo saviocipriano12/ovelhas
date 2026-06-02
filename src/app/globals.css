@@ -44,6 +44,8 @@ input,
 select,
 textarea {
   font-size: 16px;
+  appearance: none;
+  border-radius: 0;
 }
 
 @media (min-width: 768px) {
@@ -144,7 +146,7 @@ a:active {
 }
 
 .mobile-sheet {
-  max-height: calc(100dvh - 0.5rem);
+  max-height: min(92dvh, calc(100dvh - 0.5rem));
   width: 100%;
   overflow-y: auto;
   border-radius: 32px 32px 0 0;
@@ -154,21 +156,47 @@ a:active {
   padding-bottom: calc(1rem + env(safe-area-inset-bottom));
   box-shadow: 0 28px 80px rgb(15 23 42 / 0.22);
   overscroll-behavior: contain;
-  scroll-padding-top: 5rem;
+  scroll-padding-top: 6rem;
+  scroll-padding-bottom: calc(7rem + env(safe-area-inset-bottom));
 }
 
 .field-control {
-  min-height: 3.35rem;
+  min-height: 3.5rem;
   width: 100%;
-  border-radius: 1rem;
+  border-radius: 1.1rem;
   border: 1px solid rgb(226 232 240);
   background: white;
+  background-clip: padding-box;
   padding-inline: 0.875rem;
   font-size: 1rem;
   font-weight: 600;
   color: rgb(15 23 42);
   outline: none;
   touch-action: manipulation;
+  box-shadow: 0 1px 0 rgb(15 23 42 / 0.02);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+
+select.field-control {
+  background-image:
+    linear-gradient(45deg, transparent 50%, #0f766e 50%),
+    linear-gradient(135deg, #0f766e 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 3px),
+    calc(100% - 13px) calc(50% - 3px);
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 2.5rem;
+}
+
+textarea.field-control {
+  padding-block: 0.9rem;
+  line-height: 1.5;
 }
 
 .field-control::placeholder {
@@ -178,7 +206,10 @@ a:active {
 
 .field-control:focus {
   border-color: rgb(16 185 129);
-  box-shadow: 0 0 0 3px rgb(16 185 129 / 0.12);
+  background: rgb(255 255 255);
+  box-shadow:
+    0 0 0 4px rgb(16 185 129 / 0.12),
+    0 12px 28px rgb(15 23 42 / 0.08);
 }
 
 .primary-action {
@@ -201,5 +232,19 @@ a:active {
     max-width: 36rem;
     border-radius: 1.5rem;
     padding: 1.25rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .mobile-sheet {
+    position: relative;
+    margin-top: auto;
+  }
+
+  .mobile-sheet .primary-action {
+    position: sticky;
+    bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    z-index: 2;
+    box-shadow: 0 16px 36px rgb(6 78 59 / 0.28);
   }
 }

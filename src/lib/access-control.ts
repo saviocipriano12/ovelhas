@@ -16,6 +16,7 @@ const roleRoutes: Record<UserRole, string[]> = {
   pastor: [
     "/dashboard",
     "/consolidacao",
+    "/consolidacao/contatos",
     "/celulas",
     "/celulas/hoje",
     "/pessoas",
@@ -80,6 +81,7 @@ const roleRoutes: Record<UserRole, string[]> = {
   ],
   consolidation: [
     "/consolidacao",
+    "/consolidacao/contatos",
     "/instalar",
   ],
   member: ["/meu-discipulado", "/oracao", "/biblioteca", "/notificacoes", "/instalar", "/mais"],

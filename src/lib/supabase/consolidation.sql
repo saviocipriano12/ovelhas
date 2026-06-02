@@ -24,9 +24,12 @@ create table if not exists public.consolidation_reports (
   service_date date not null,
   service_title text not null default 'Culto principal',
   total_attendance integer not null default 0,
+  temple_count integer not null default 0,
   serving_count integer not null default 0,
   ministry_counts jsonb not null default '{}'::jsonb,
   kids_count integer not null default 0,
+  baby_count integer not null default 0,
+  vagalumes_count integer not null default 0,
   visitors_count integer not null default 0,
   accepted_jesus_count integer not null default 0,
   baptism_decision_count integer not null default 0,
@@ -57,7 +60,10 @@ create table if not exists public.consolidation_visitors (
 
 alter table public.consolidation_reports
   add column if not exists ministry_counts jsonb not null default '{}'::jsonb,
-  add column if not exists kids_count integer not null default 0;
+  add column if not exists temple_count integer not null default 0,
+  add column if not exists kids_count integer not null default 0,
+  add column if not exists baby_count integer not null default 0,
+  add column if not exists vagalumes_count integer not null default 0;
 
 alter table public.consolidation_visitors
   add column if not exists age integer;
@@ -263,6 +269,7 @@ drop policy if exists "consolidation_reports_insert_by_role" on public.consolida
 drop policy if exists "consolidation_reports_delete_by_role" on public.consolidation_reports;
 drop policy if exists "consolidation_visitors_select_by_role" on public.consolidation_visitors;
 drop policy if exists "consolidation_visitors_insert_by_role" on public.consolidation_visitors;
+drop policy if exists "consolidation_visitors_update_by_role" on public.consolidation_visitors;
 drop policy if exists "consolidation_visitors_delete_by_role" on public.consolidation_visitors;
 
 create policy "consolidation_reports_select_by_role"
@@ -308,6 +315,19 @@ create policy "consolidation_visitors_insert_by_role"
 on public.consolidation_visitors
 for insert
 to authenticated
+with check (
+  church_id = public.current_app_church_id()
+  and public.current_app_role()::text in ('admin', 'pastor', 'consolidation')
+);
+
+create policy "consolidation_visitors_update_by_role"
+on public.consolidation_visitors
+for update
+to authenticated
+using (
+  church_id = public.current_app_church_id()
+  and public.current_app_role()::text in ('admin', 'pastor', 'consolidation')
+)
 with check (
   church_id = public.current_app_church_id()
   and public.current_app_role()::text in ('admin', 'pastor', 'consolidation')
@@ -403,7 +423,7 @@ as $$
 $$;
 
 grant select, insert, delete on public.consolidation_reports to authenticated;
-grant select, insert, delete on public.consolidation_visitors to authenticated;
+grant select, insert, update, delete on public.consolidation_visitors to authenticated;
 grant execute on function public.can_view_cell(public.cells) to authenticated;
 grant execute on function public.can_view_person(public.people) to authenticated;
 grant execute on function public.get_my_cells() to authenticated;

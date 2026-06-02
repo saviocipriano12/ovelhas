@@ -69,6 +69,7 @@ const ministries = [
   { key: "kids", label: "Kids" },
   { key: "baby", label: "Baby" },
   { key: "vagalumes", label: "Vagalumes" },
+  { key: "consolidacao", label: "Consolidacao" },
 ];
 
 type MinistryCounts = Record<string, number>;
@@ -127,9 +128,11 @@ export default function ConsolidationPage() {
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const [serviceDate, setServiceDate] = useState(todayIso());
   const [serviceTitle, setServiceTitle] = useState("Culto principal");
-  const [totalAttendance, setTotalAttendance] = useState(0);
+  const [templeCount, setTempleCount] = useState(0);
   const [ministryCounts, setMinistryCounts] = useState<MinistryCounts>(() => createEmptyMinistryCounts());
   const [kidsCount, setKidsCount] = useState(0);
+  const [babyCount, setBabyCount] = useState(0);
+  const [vagalumesCount, setVagalumesCount] = useState(0);
   const [notes, setNotes] = useState("");
   const [visitors, setVisitors] = useState<ConsolidationVisitor[]>([]);
   const [feedback, setFeedback] = useState("");
@@ -137,6 +140,7 @@ export default function ConsolidationPage() {
 
   const acceptedJesusCount = visitors.filter((visitor) => visitor.decision === "aceitou_jesus").length;
   const baptismDecisionCount = visitors.filter((visitor) => visitor.decision === "batismo").length;
+  const totalAttendance = templeCount + kidsCount + babyCount + vagalumesCount;
   const servingCount = Object.values(ministryCounts).reduce((total, value) => total + Number(value || 0), 0);
   const latestReports = reports.slice(0, 4);
   const consolidationStats = useMemo(() => {
@@ -215,6 +219,9 @@ export default function ConsolidationPage() {
       serviceDate,
       serviceTitle,
       totalAttendance,
+      templeCount,
+      babyCount,
+      vagalumesCount,
       servingCount,
       ministryCounts,
       kidsCount,
@@ -250,7 +257,10 @@ export default function ConsolidationPage() {
     await refreshReports();
     setVisitors([]);
     setMinistryCounts(createEmptyMinistryCounts());
+    setTempleCount(0);
     setKidsCount(0);
+    setBabyCount(0);
+    setVagalumesCount(0);
     setSaving(false);
     setFeedback("Consolidacao salva. Visitantes ficaram registrados para acompanhamento da lideranca.");
   }
@@ -364,31 +374,61 @@ export default function ConsolidationPage() {
                 className="field-control mt-2"
               />
             </label>
-            <label>
-              <span className="text-xs font-black uppercase text-slate-400">Total no culto</span>
-              <input
-                type="number"
-                min="0"
-                value={totalAttendance}
-                onChange={(event) => setTotalAttendance(Number(event.target.value))}
-                className="field-control mt-2"
-              />
-            </label>
+            <div className="rounded-3xl bg-slate-950 p-4 text-white">
+              <p className="text-xs font-black uppercase text-emerald-200">Total geral</p>
+              <p className="mt-1 text-4xl font-black">{totalAttendance}</p>
+              <p className="mt-1 text-xs font-semibold text-slate-300">Templo + Kids + Baby + Vagalumes</p>
+            </div>
             <div className="rounded-3xl bg-emerald-50 p-4">
               <p className="text-xs font-black uppercase text-emerald-700">Servindo</p>
               <p className="mt-1 text-3xl font-black text-emerald-950">{servingCount}</p>
               <p className="mt-1 text-xs font-semibold text-emerald-800">Soma dos ministerios abaixo</p>
             </div>
-            <label>
-              <span className="text-xs font-black uppercase text-slate-400">Criancas no Kids</span>
+          </div>
+          <div className="mt-4">
+            <p className="text-xs font-black uppercase text-slate-400">Publico por ambiente</p>
+            <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <label className="rounded-2xl bg-slate-50 p-3">
+                <span className="text-xs font-black text-slate-500">Templo</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={templeCount}
+                  onChange={(event) => setTempleCount(Number(event.target.value))}
+                  className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-lg font-black outline-none focus:border-emerald-500"
+                />
+              </label>
+              <label className="rounded-2xl bg-slate-50 p-3">
+                <span className="text-xs font-black text-slate-500">Kids</span>
               <input
                 type="number"
                 min="0"
                 value={kidsCount}
                 onChange={(event) => setKidsCount(Number(event.target.value))}
-                className="field-control mt-2"
+                  className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-lg font-black outline-none focus:border-emerald-500"
               />
-            </label>
+              </label>
+              <label className="rounded-2xl bg-slate-50 p-3">
+                <span className="text-xs font-black text-slate-500">Baby</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={babyCount}
+                  onChange={(event) => setBabyCount(Number(event.target.value))}
+                  className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-lg font-black outline-none focus:border-emerald-500"
+                />
+              </label>
+              <label className="rounded-2xl bg-slate-50 p-3">
+                <span className="text-xs font-black text-slate-500">Vagalumes</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={vagalumesCount}
+                  onChange={(event) => setVagalumesCount(Number(event.target.value))}
+                  className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-lg font-black outline-none focus:border-emerald-500"
+                />
+              </label>
+            </div>
           </div>
           <div className="mt-4">
             <p className="text-xs font-black uppercase text-slate-400">Ministerios servindo</p>
@@ -506,18 +546,36 @@ export default function ConsolidationPage() {
                   </button>
                 </div>
               </div>
-              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-5">
                 <div className="rounded-2xl bg-slate-50 p-3">
                   <p className="text-lg font-black">{report.totalAttendance}</p>
-                  <p className="text-[11px] font-bold text-slate-500">culto</p>
+                  <p className="text-[11px] font-bold text-slate-500">total</p>
                 </div>
                 <div className="rounded-2xl bg-slate-50 p-3">
-                  <p className="text-lg font-black">{report.servingCount}</p>
-                  <p className="text-[11px] font-bold text-slate-500">servindo</p>
+                  <p className="text-lg font-black">{report.templeCount ?? report.totalAttendance}</p>
+                  <p className="text-[11px] font-bold text-slate-500">templo</p>
                 </div>
                 <div className="rounded-2xl bg-slate-50 p-3">
-                  <p className="text-lg font-black">{report.acceptedJesusCount + report.baptismDecisionCount}</p>
-                  <p className="text-[11px] font-bold text-slate-500">decisoes</p>
+                  <p className="text-lg font-black">{report.kidsCount ?? 0}</p>
+                  <p className="text-[11px] font-bold text-slate-500">kids</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <p className="text-lg font-black">{report.babyCount ?? 0}</p>
+                  <p className="text-[11px] font-bold text-slate-500">baby</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <p className="text-lg font-black">{report.vagalumesCount ?? 0}</p>
+                  <p className="text-[11px] font-bold text-slate-500">vagalumes</p>
+                </div>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-center">
+                <div className="rounded-2xl bg-emerald-50 p-3">
+                  <p className="text-lg font-black text-emerald-950">{report.servingCount}</p>
+                  <p className="text-[11px] font-bold text-emerald-700">servindo</p>
+                </div>
+                <div className="rounded-2xl bg-orange-50 p-3">
+                  <p className="text-lg font-black text-orange-950">{report.acceptedJesusCount + report.baptismDecisionCount}</p>
+                  <p className="text-[11px] font-bold text-orange-700">decisoes</p>
                 </div>
               </div>
               {report.ministryCounts && Object.keys(report.ministryCounts).length > 0 && (
@@ -528,10 +586,6 @@ export default function ConsolidationPage() {
                       <p className="mt-1 text-base font-black text-slate-950">{report.ministryCounts?.[ministry.key] ?? 0}</p>
                     </div>
                   ))}
-                  <div className="rounded-2xl bg-emerald-50 p-3">
-                    <p className="text-[11px] font-black uppercase text-emerald-700">Criancas kids</p>
-                    <p className="mt-1 text-base font-black text-emerald-950">{report.kidsCount ?? 0}</p>
-                  </div>
                 </div>
               )}
             </article>

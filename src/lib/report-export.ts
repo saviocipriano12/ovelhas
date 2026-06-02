@@ -20,6 +20,7 @@ const ministryLabels: Record<string, string> = {
   kids: "Kids",
   baby: "Baby",
   vagalumes: "Vagalumes",
+  consolidacao: "Consolidacao",
 };
 
 function renderMinistryCounts(report: ConsolidationReport) {
@@ -28,7 +29,19 @@ function renderMinistryCounts(report: ConsolidationReport) {
     .map(([key, label]) => `<span><b>${escapeHtml(counts[key] ?? 0)}</b> ${escapeHtml(label)}</span>`)
     .join("");
 
-  return `<div class="mini-grid ministry-grid">${rows}<span><b>${escapeHtml(report.kidsCount ?? 0)}</b> criancas kids</span></div>`;
+  return `<div class="mini-grid ministry-grid">${rows}</div>`;
+}
+
+function renderPublicBreakdown(report: ConsolidationReport) {
+  return `
+    <div class="mini-grid">
+      <span><b>${escapeHtml(report.totalAttendance)}</b> total</span>
+      <span><b>${escapeHtml(report.templeCount ?? report.totalAttendance)}</b> templo</span>
+      <span><b>${escapeHtml(report.kidsCount ?? 0)}</b> kids</span>
+      <span><b>${escapeHtml(report.babyCount ?? 0)}</b> baby</span>
+      <span><b>${escapeHtml(report.vagalumesCount ?? 0)}</b> vagalumes</span>
+    </div>
+  `;
 }
 
 function slug(value: string) {
@@ -176,8 +189,8 @@ export function buildReportHtml({
                 </div>
                 <strong>${escapeHtml(report.visitorsCount)} visitantes</strong>
               </div>
+              ${renderPublicBreakdown(report)}
               <div class="mini-grid">
-                <span><b>${escapeHtml(report.totalAttendance)}</b> culto</span>
                 <span><b>${escapeHtml(report.servingCount)}</b> servindo</span>
                 <span><b>${escapeHtml(report.acceptedJesusCount + report.baptismDecisionCount)}</b> decisoes</span>
               </div>

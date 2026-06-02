@@ -242,6 +242,9 @@ export type ConsolidationReport = {
   serviceDate: string;
   serviceTitle: string;
   totalAttendance: number;
+  templeCount?: number;
+  babyCount?: number;
+  vagalumesCount?: number;
   servingCount: number;
   ministryCounts?: Record<string, number>;
   kidsCount?: number;

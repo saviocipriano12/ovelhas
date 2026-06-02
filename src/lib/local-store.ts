@@ -2662,6 +2662,9 @@ export function useConsolidationReports(churchId: string) {
       service_date: string;
       service_title: string;
       total_attendance: number;
+      temple_count?: number | null;
+      baby_count?: number | null;
+      vagalumes_count?: number | null;
       serving_count: number;
       ministry_counts?: Record<string, number> | null;
       kids_count?: number | null;
@@ -2692,6 +2695,9 @@ export function useConsolidationReports(churchId: string) {
       serviceDate: report.service_date,
       serviceTitle: report.service_title,
       totalAttendance: report.total_attendance,
+      templeCount: report.temple_count ?? report.total_attendance,
+      babyCount: report.baby_count ?? 0,
+      vagalumesCount: report.vagalumes_count ?? 0,
       servingCount: report.serving_count,
       ministryCounts: report.ministry_counts ?? {},
       kidsCount: report.kids_count ?? 0,
@@ -2745,6 +2751,9 @@ export function useConsolidationReports(churchId: string) {
         service_date: input.serviceDate,
         service_title: input.serviceTitle,
         total_attendance: input.totalAttendance,
+        temple_count: input.templeCount ?? input.totalAttendance,
+        baby_count: input.babyCount ?? 0,
+        vagalumes_count: input.vagalumesCount ?? 0,
         serving_count: input.servingCount,
         ministry_counts: input.ministryCounts ?? {},
         kids_count: input.kidsCount ?? 0,
@@ -2762,10 +2771,13 @@ export function useConsolidationReports(churchId: string) {
         .select("id, created_at")
         .single();
 
-      if (error && (error.message.includes("ministry_counts") || error.message.includes("kids_count"))) {
+      if (error && (error.message.includes("ministry_counts") || error.message.includes("kids_count") || error.message.includes("temple_count") || error.message.includes("baby_count") || error.message.includes("vagalumes_count"))) {
         const fallbackPayload = { ...reportPayload };
         delete (fallbackPayload as Partial<typeof reportPayload>).ministry_counts;
         delete (fallbackPayload as Partial<typeof reportPayload>).kids_count;
+        delete (fallbackPayload as Partial<typeof reportPayload>).temple_count;
+        delete (fallbackPayload as Partial<typeof reportPayload>).baby_count;
+        delete (fallbackPayload as Partial<typeof reportPayload>).vagalumes_count;
 
         const fallback = await supabase
           .from("consolidation_reports")
@@ -2850,7 +2862,71 @@ export function useConsolidationReports(churchId: string) {
     return { ok: true };
   }
 
-  return { reports, addReport, deleteReport, refreshReports, isLoadingReports, reportLoadError };
+  async function updateVisitor(
+    visitorId: string,
+    input: Partial<ConsolidationVisitor> & { persistToSupabase?: boolean },
+  ) {
+    if (input.persistToSupabase) {
+      const visitorPayload = {
+        name: input.name,
+        phone: input.phone?.replace(/\D/g, ""),
+        email: input.email || null,
+        age: input.age ?? null,
+        address: input.address || null,
+        neighborhood: input.neighborhood || null,
+        decision: input.decision,
+        notes: input.notes || null,
+        suggested_cell_id: input.suggestedCellId || null,
+        suggested_cell_name: input.suggestedCellName || null,
+        person_id: input.personId || null,
+      };
+      const legacyPayload = {
+        name: input.name,
+        phone: input.phone?.replace(/\D/g, ""),
+        email: input.email || null,
+        address: input.address || null,
+        neighborhood: input.neighborhood || null,
+        decision: input.decision,
+        notes: input.notes || null,
+        suggested_cell_id: input.suggestedCellId || null,
+        suggested_cell_name: input.suggestedCellName || null,
+        person_id: input.personId || null,
+      };
+
+      const firstUpdate = await supabase
+        .from("consolidation_visitors")
+        .update(visitorPayload)
+        .eq("id", visitorId);
+      const retryUpdate =
+        firstUpdate.error && isMissingColumn(firstUpdate.error.message, ["age"])
+          ? await supabase.from("consolidation_visitors").update(legacyPayload).eq("id", visitorId)
+          : null;
+      const { error } = retryUpdate ?? firstUpdate;
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setReports((current) =>
+      current.map((report) => ({
+        ...report,
+        visitors: report.visitors.map((visitor) =>
+          visitor.id === visitorId
+            ? {
+                ...visitor,
+                ...input,
+                phone: input.phone ? input.phone.replace(/\D/g, "") : visitor.phone,
+              }
+            : visitor,
+        ),
+      })),
+    );
+
+    return { ok: true };
+  }
+
+  return { reports, addReport, deleteReport, updateVisitor, refreshReports, isLoadingReports, reportLoadError };
 }
 
 export function useNotificationReads(userId: string) {

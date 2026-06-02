@@ -249,68 +249,75 @@ export default function PeoplePage() {
                 </button>
               </div>
 
-              <div className="space-y-3">
-                <input
-                  name="name"
-                  required
-                  className="field-control"
-                  placeholder="Nome completo"
-                />
-                <input
-                  name="phone"
-                  required
-                  inputMode="tel"
-                  className="field-control"
-                  placeholder="WhatsApp com DDD"
-                />
-                <input
-                  name="email"
-                  type="email"
-                  className="field-control"
-                  placeholder="Email opcional"
-                />
-                <input
-                  name="birthDate"
-                  type="date"
-                  className="field-control"
-                  aria-label="Data de nascimento"
-                />
-                <input
-                  name="neighborhood"
-                  className="field-control"
-                  placeholder="Bairro"
-                />
-                <input
-                  name="address"
-                  className="field-control"
-                  placeholder="Endereco completo"
-                />
-                <input
-                  name="familyPhone"
-                  inputMode="tel"
-                  className="field-control"
-                  placeholder="Telefone de familiar"
-                />
-                <select
-                  name="cellId"
-                  className="field-control"
-                >
-                  {visibleCells.map((cell) => (
-                    <option key={cell.id} value={cell.id}>
-                      {cell.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  name="stage"
-                  className="field-control"
-                >
-                  <option>Visitante</option>
-                  <option>Novo membro</option>
-                  <option>Em discipulado</option>
-                  <option>Batismo</option>
-                  <option>Servindo</option>
-                </select>
+              <div className="space-y-4">
+                <div className="rounded-[24px] bg-slate-50 p-3">
+                  <p className="mb-3 text-xs font-black uppercase text-slate-400">Identificacao</p>
+                  <div className="space-y-3">
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Nome completo</span>
+                      <input name="name" required className="field-control" placeholder="Ex: Maria Silva" />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">WhatsApp</span>
+                      <input name="phone" required inputMode="tel" className="field-control" placeholder="(00) 00000-0000" />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Email</span>
+                      <input name="email" type="email" className="field-control" placeholder="Opcional" />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Nascimento</span>
+                      <input name="birthDate" type="date" className="field-control" aria-label="Data de nascimento" />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] bg-slate-50 p-3">
+                  <p className="mb-3 text-xs font-black uppercase text-slate-400">Localizacao e familia</p>
+                  <div className="space-y-3">
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Bairro</span>
+                      <input name="neighborhood" className="field-control" placeholder="Ex: Centro" />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Endereco completo</span>
+                      <input name="address" className="field-control" placeholder="Rua, numero e complemento" />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Telefone familiar</span>
+                      <input name="familyPhone" inputMode="tel" className="field-control" placeholder="Opcional" />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] bg-emerald-50 p-3">
+                  <p className="mb-3 text-xs font-black uppercase text-emerald-700">Cuidado e acesso</p>
+                  <div className="space-y-3">
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-black uppercase text-emerald-800">Celula</span>
+                      <select name="cellId" className="field-control">
+                        {visibleCells.map((cell) => (
+                          <option key={cell.id} value={cell.id}>
+                            {cell.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-black uppercase text-emerald-800">Etapa atual</span>
+                      <select name="stage" className="field-control">
+                        <option>Visitante</option>
+                        <option>Novo membro</option>
+                        <option>Em discipulado</option>
+                        <option>Batismo</option>
+                        <option>Servindo</option>
+                      </select>
+                    </label>
+                    <p className="rounded-2xl bg-white/80 p-3 text-xs font-bold leading-5 text-emerald-900">
+                      Ao salvar, o Ovelhas tambem gera um convite para essa pessoa entrar no app vinculada a esta celula.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <button className="primary-action mt-4">

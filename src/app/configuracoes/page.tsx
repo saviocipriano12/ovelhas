@@ -140,14 +140,32 @@ export default function SettingsPage() {
 
         {feedback && <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{feedback}</div>}
 
-        <form onSubmit={handleSubmit} className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+        <section className="rounded-[24px] border border-emerald-100 bg-emerald-50 p-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-800">
+              <ShieldCheck size={18} />
+            </span>
+            <div>
+              <p className="text-sm font-black uppercase text-emerald-800">Igreja atual isolada</p>
+              <h3 className="mt-1 text-lg font-black text-emerald-950">{settings.churchName}</h3>
+              <p className="mt-1 text-sm font-semibold leading-6 text-emerald-900">
+                Tudo que for criado neste acesso usa o identificador desta igreja. Convites, celulas, pessoas, relatorios, videos e consolidacao ficam separados das outras igrejas.
+              </p>
+              <p className="mt-2 break-all rounded-2xl bg-white/75 p-3 text-xs font-bold text-emerald-900">
+                ID da igreja: {currentUser.churchId}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <form onSubmit={handleSubmit} className="rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-sm sm:p-5">
           <SectionHeader eyebrow="Identidade" title="Marca e dados da igreja" />
           <div className="grid gap-3 md:grid-cols-2">
-            <input name="churchName" defaultValue={settings.churchName} disabled={!canManage} className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500 disabled:bg-slate-50" placeholder="Nome da igreja" />
-            <input name="logoUrl" defaultValue={settings.logoUrl} disabled={!canManage} className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500 disabled:bg-slate-50" placeholder="URL do logo" />
-            <input name="city" defaultValue={settings.city} disabled={!canManage} className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500 disabled:bg-slate-50" placeholder="Cidade" />
-            <input name="state" defaultValue={settings.state} disabled={!canManage} className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500 disabled:bg-slate-50" placeholder="Estado" />
-            <label className="flex min-h-12 items-center gap-3 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700">
+            <input name="churchName" defaultValue={settings.churchName} disabled={!canManage} className="field-control disabled:bg-slate-50" placeholder="Nome da igreja" />
+            <input name="logoUrl" defaultValue={settings.logoUrl} disabled={!canManage} className="field-control disabled:bg-slate-50" placeholder="URL do logo" />
+            <input name="city" defaultValue={settings.city} disabled={!canManage} className="field-control disabled:bg-slate-50" placeholder="Cidade" />
+            <input name="state" defaultValue={settings.state} disabled={!canManage} className="field-control disabled:bg-slate-50" placeholder="Estado" />
+            <label className="flex min-h-14 items-center gap-3 rounded-[18px] border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700">
               <Palette size={18} className="text-emerald-700" />
               <input name="primaryColor" type="color" defaultValue={settings.primaryColor} disabled={!canManage} className="h-8 w-12 bg-transparent" />
               Cor principal
@@ -157,22 +175,22 @@ export default function SettingsPage() {
           <div className="mt-6">
             <SectionHeader eyebrow="Mensagens" title="Modelos para WhatsApp" />
             <div className="grid gap-3">
-              <textarea name="welcomeMessage" defaultValue={settings.welcomeMessage} disabled={!canManage} rows={3} className="resize-none rounded-lg border border-slate-200 px-3 py-3 text-sm outline-none focus:border-emerald-500 disabled:bg-slate-50" />
-              <textarea name="absenceMessage" defaultValue={settings.absenceMessage} disabled={!canManage} rows={3} className="resize-none rounded-lg border border-slate-200 px-3 py-3 text-sm outline-none focus:border-emerald-500 disabled:bg-slate-50" />
-              <textarea name="discipleshipMessage" defaultValue={settings.discipleshipMessage} disabled={!canManage} rows={3} className="resize-none rounded-lg border border-slate-200 px-3 py-3 text-sm outline-none focus:border-emerald-500 disabled:bg-slate-50" />
+              <textarea name="welcomeMessage" defaultValue={settings.welcomeMessage} disabled={!canManage} rows={3} className="field-control min-h-28 resize-none disabled:bg-slate-50" />
+              <textarea name="absenceMessage" defaultValue={settings.absenceMessage} disabled={!canManage} rows={3} className="field-control min-h-28 resize-none disabled:bg-slate-50" />
+              <textarea name="discipleshipMessage" defaultValue={settings.discipleshipMessage} disabled={!canManage} rows={3} className="field-control min-h-28 resize-none disabled:bg-slate-50" />
             </div>
           </div>
 
           <div className="mt-6">
             <SectionHeader eyebrow="LGPD" title="Privacidade e termos" />
             <div className="grid gap-3">
-              <input name="privacyContact" defaultValue={settings.privacyContact} disabled={!canManage} className="min-h-12 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500 disabled:bg-slate-50" placeholder="Responsavel pelo contato de privacidade" />
-              <textarea name="termsText" defaultValue={settings.termsText} disabled={!canManage} rows={4} className="resize-none rounded-lg border border-slate-200 px-3 py-3 text-sm outline-none focus:border-emerald-500 disabled:bg-slate-50" />
+              <input name="privacyContact" defaultValue={settings.privacyContact} disabled={!canManage} className="field-control disabled:bg-slate-50" placeholder="Responsavel pelo contato de privacidade" />
+              <textarea name="termsText" defaultValue={settings.termsText} disabled={!canManage} rows={4} className="field-control min-h-32 resize-none disabled:bg-slate-50" />
             </div>
           </div>
 
           {canManage && (
-            <button className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-900 px-4 text-sm font-bold text-white">
+            <button className="primary-action mt-4">
               <MessageSquareText size={18} />
               Salvar configuracoes
             </button>

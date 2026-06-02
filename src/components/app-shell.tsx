@@ -13,6 +13,7 @@ import {
   ChartNoAxesCombined,
   Activity,
   UserPlus,
+  ContactRound,
   Network,
   LogIn,
   LogOut,
@@ -46,6 +47,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/celulas", label: "Celulas", icon: LayoutGrid },
   { href: "/pessoas", label: "Pessoas", icon: Users },
   { href: "/consolidacao", label: "Consolidacao", icon: ClipboardList },
+  { href: "/consolidacao/contatos", label: "Contatos", icon: ContactRound },
   { href: "/presenca", label: "Presenca", icon: CalendarCheck },
   { href: "/checkin", label: "Check-in", icon: QrCode },
   { href: "/agenda", label: "Agenda", icon: CalendarDays },
@@ -66,7 +68,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
 const navGroups = [
   {
     label: "Cuidado",
-    hrefs: ["/dashboard", "/celulas", "/pessoas", "/consolidacao", "/presenca", "/checkin", "/agenda", "/cuidados"],
+    hrefs: ["/dashboard", "/celulas", "/pessoas", "/consolidacao", "/consolidacao/contatos", "/presenca", "/checkin", "/agenda", "/cuidados"],
   },
   {
     label: "Discipulado",
@@ -100,6 +102,7 @@ const memberMobileNavItems: { href: string; label: string; icon: LucideIcon }[] 
 
 const consolidationMobileNavItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/consolidacao", label: "Culto", icon: ClipboardList },
+  { href: "/consolidacao/contatos", label: "Contatos", icon: ContactRound },
   { href: "/instalar", label: "Instalar", icon: Smartphone },
 ];
 

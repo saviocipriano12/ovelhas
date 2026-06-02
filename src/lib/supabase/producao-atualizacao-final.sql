@@ -4,7 +4,10 @@
 
 alter table public.consolidation_reports
   add column if not exists ministry_counts jsonb not null default '{}'::jsonb,
-  add column if not exists kids_count integer not null default 0;
+  add column if not exists temple_count integer not null default 0,
+  add column if not exists kids_count integer not null default 0,
+  add column if not exists baby_count integer not null default 0,
+  add column if not exists vagalumes_count integer not null default 0;
 
 alter table public.consolidation_visitors
   add column if not exists age integer;
@@ -339,3 +342,27 @@ $$;
 
 grant execute on function public.create_invite_for_person(text, text, text, app_role, uuid, uuid, timestamptz) to authenticated;
 grant execute on function public.accept_invite_for_user(uuid, text, text) to authenticated;
+
+drop policy if exists "consolidation_visitors_update_by_role" on public.consolidation_visitors;
+create policy "consolidation_visitors_update_by_role"
+on public.consolidation_visitors
+for update
+using (
+  church_id = public.current_app_church_id()
+  and public.current_app_role()::text in ('admin', 'pastor', 'consolidation')
+)
+with check (
+  church_id = public.current_app_church_id()
+  and public.current_app_role()::text in ('admin', 'pastor', 'consolidation')
+);
+
+grant update on public.consolidation_visitors to authenticated;
+
+create index if not exists idx_profiles_church_role on public.profiles(church_id, role);
+create index if not exists idx_cells_church_active on public.cells(church_id, active);
+create index if not exists idx_people_church_cell on public.people(church_id, cell_id);
+create index if not exists idx_people_church_leader on public.people(church_id, leader_user_id);
+create index if not exists idx_invites_church_status on public.invites(church_id, status);
+create index if not exists idx_consolidation_reports_church_date on public.consolidation_reports(church_id, service_date desc);
+create index if not exists idx_consolidation_visitors_church_created on public.consolidation_visitors(church_id, created_at desc);
+create index if not exists idx_activity_events_church_created on public.activity_events(church_id, created_at desc);

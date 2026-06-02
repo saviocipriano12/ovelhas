@@ -203,18 +203,36 @@ export default function ReportsPage() {
                         {report.visitorsCount} visitantes
                       </span>
                     </div>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-5">
                       <div className="rounded-lg bg-white p-2">
                         <p className="text-base font-semibold">{report.totalAttendance}</p>
-                        <p className="text-[11px] font-medium text-slate-400">culto</p>
+                        <p className="text-[11px] font-medium text-slate-400">total</p>
                       </div>
                       <div className="rounded-lg bg-white p-2">
-                        <p className="text-base font-semibold">{report.servingCount}</p>
-                        <p className="text-[11px] font-medium text-slate-400">servindo</p>
+                        <p className="text-base font-semibold">{report.templeCount ?? report.totalAttendance}</p>
+                        <p className="text-[11px] font-medium text-slate-400">templo</p>
                       </div>
                       <div className="rounded-lg bg-white p-2">
-                        <p className="text-base font-semibold">{report.acceptedJesusCount + report.baptismDecisionCount}</p>
-                        <p className="text-[11px] font-medium text-slate-400">decisoes</p>
+                        <p className="text-base font-semibold">{report.kidsCount ?? 0}</p>
+                        <p className="text-[11px] font-medium text-slate-400">kids</p>
+                      </div>
+                      <div className="rounded-lg bg-white p-2">
+                        <p className="text-base font-semibold">{report.babyCount ?? 0}</p>
+                        <p className="text-[11px] font-medium text-slate-400">baby</p>
+                      </div>
+                      <div className="rounded-lg bg-white p-2">
+                        <p className="text-base font-semibold">{report.vagalumesCount ?? 0}</p>
+                        <p className="text-[11px] font-medium text-slate-400">vagalumes</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-center">
+                      <div className="rounded-lg bg-emerald-50 p-2">
+                        <p className="text-base font-semibold text-emerald-950">{report.servingCount}</p>
+                        <p className="text-[11px] font-medium text-emerald-700">servindo</p>
+                      </div>
+                      <div className="rounded-lg bg-orange-50 p-2">
+                        <p className="text-base font-semibold text-orange-950">{report.acceptedJesusCount + report.baptismDecisionCount}</p>
+                        <p className="text-[11px] font-medium text-orange-700">decisoes</p>
                       </div>
                     </div>
                     {report.ministryCounts && Object.keys(report.ministryCounts).length > 0 && (
@@ -228,16 +246,13 @@ export default function ReportsPage() {
                           ["kids", "Kids"],
                           ["baby", "Baby"],
                           ["vagalumes", "Vagalumes"],
+                          ["consolidacao", "Consolidacao"],
                         ].map(([key, label]) => (
                           <div key={key} className="rounded-lg bg-white p-2 text-center">
                             <p className="text-sm font-bold">{report.ministryCounts?.[key] ?? 0}</p>
                             <p className="text-[10px] font-bold uppercase text-slate-400">{label}</p>
                           </div>
                         ))}
-                        <div className="rounded-lg bg-emerald-50 p-2 text-center">
-                          <p className="text-sm font-bold text-emerald-950">{report.kidsCount ?? 0}</p>
-                          <p className="text-[10px] font-bold uppercase text-emerald-700">Criancas kids</p>
-                        </div>
                       </div>
                     )}
                     {report.notes && <p className="mt-3 text-sm leading-5 text-slate-600">{report.notes}</p>}
