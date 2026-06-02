@@ -6,6 +6,7 @@ export type AppUser = {
   name: string;
   role: UserRole;
   churchId: string;
+  platformAdmin?: boolean;
   cellIds?: string[];
   personId?: string;
 };

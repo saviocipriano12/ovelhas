@@ -366,3 +366,216 @@ create index if not exists idx_invites_church_status on public.invites(church_id
 create index if not exists idx_consolidation_reports_church_date on public.consolidation_reports(church_id, service_date desc);
 create index if not exists idx_consolidation_visitors_church_created on public.consolidation_visitors(church_id, created_at desc);
 create index if not exists idx_activity_events_church_created on public.activity_events(church_id, created_at desc);
+
+create table if not exists public.platform_admins (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.platform_admins enable row level security;
+
+create or replace function public.is_platform_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+set row_security = off
+as $$
+  select exists (
+    select 1
+    from public.platform_admins admin_scope
+    where admin_scope.user_id = auth.uid()
+  )
+$$;
+
+grant execute on function public.is_platform_admin() to authenticated;
+
+drop policy if exists "platform_admins_select_self_or_platform" on public.platform_admins;
+create policy "platform_admins_select_self_or_platform"
+on public.platform_admins
+for select
+to authenticated
+using (
+  user_id = auth.uid()
+  or public.is_platform_admin()
+);
+
+grant select on public.platform_admins to authenticated;
+
+create or replace function public.bootstrap_platform_admin()
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  platform_count integer;
+begin
+  if auth.uid() is null then
+    raise exception 'Voce precisa estar logado para ativar o admin geral.';
+  end if;
+
+  select count(*) into platform_count from public.platform_admins;
+
+  if platform_count > 0 then
+    if public.is_platform_admin() then
+      return true;
+    end if;
+
+    raise exception 'O admin geral da plataforma ja foi configurado.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.role = 'admin'
+      and p.church_id is not null
+  ) then
+    raise exception 'Somente o admin principal da primeira igreja pode ativar o admin geral.';
+  end if;
+
+  insert into public.platform_admins (user_id, created_by)
+  values (auth.uid(), auth.uid())
+  on conflict (user_id) do nothing;
+
+  return true;
+end;
+$$;
+
+grant execute on function public.bootstrap_platform_admin() to authenticated;
+
+create or replace function public.platform_list_churches()
+returns table (
+  church_id uuid,
+  church_name text,
+  city text,
+  state text,
+  created_at timestamptz,
+  admins_count bigint,
+  profiles_count bigint,
+  cells_count bigint,
+  people_count bigint,
+  invites_count bigint
+)
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Acesso restrito ao admin geral da plataforma.';
+  end if;
+
+  return query
+  select
+    church.id as church_id,
+    church.name as church_name,
+    church.city,
+    church.state,
+    church.created_at,
+    (select count(*) from public.profiles p where p.church_id = church.id and p.role = 'admin') as admins_count,
+    (select count(*) from public.profiles p where p.church_id = church.id) as profiles_count,
+    (select count(*) from public.cells c where c.church_id = church.id) as cells_count,
+    (select count(*) from public.people pe where pe.church_id = church.id) as people_count,
+    (select count(*) from public.invites inv where inv.church_id = church.id and inv.status = 'pending') as invites_count
+  from public.churches church
+  order by church.created_at desc;
+end;
+$$;
+
+grant execute on function public.platform_list_churches() to authenticated;
+
+create or replace function public.platform_create_church_with_admin_invite(
+  church_name text,
+  church_city text default null,
+  church_state text default null,
+  admin_name text default null,
+  admin_email text default null
+)
+returns table (
+  church_id uuid,
+  invite_id uuid,
+  invite_token text
+)
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  created_church_id uuid;
+  created_invite_id uuid;
+  generated_token text;
+  creator_profile_id uuid;
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Acesso restrito ao admin geral da plataforma.';
+  end if;
+
+  if nullif(trim(coalesce(church_name, '')), '') is null then
+    raise exception 'Informe o nome da igreja.';
+  end if;
+
+  if nullif(trim(coalesce(admin_email, '')), '') is null then
+    raise exception 'Informe o email do admin da igreja.';
+  end if;
+
+  select p.id
+  into creator_profile_id
+  from public.profiles p
+  where p.id = auth.uid()
+  limit 1;
+
+  insert into public.churches (name, city, state)
+  values (
+    trim(church_name),
+    nullif(trim(coalesce(church_city, '')), ''),
+    nullif(trim(coalesce(church_state, '')), '')
+  )
+  returning id into created_church_id;
+
+  if to_regclass('public.church_settings') is not null then
+    insert into public.church_settings (church_id)
+    values (created_church_id)
+    on conflict (church_id) do nothing;
+  end if;
+
+  generated_token := replace(gen_random_uuid()::text, '-', '') || substring(replace(gen_random_uuid()::text, '-', '') from 1 for 8);
+
+  insert into public.invites (
+    church_id,
+    token,
+    email,
+    name,
+    role,
+    cell_id,
+    person_id,
+    created_by,
+    status,
+    expires_at
+  )
+  values (
+    created_church_id,
+    generated_token,
+    lower(trim(admin_email)),
+    nullif(trim(coalesce(admin_name, '')), ''),
+    'admin',
+    null,
+    null,
+    creator_profile_id,
+    'pending',
+    now() + interval '14 days'
+  )
+  returning id into created_invite_id;
+
+  return query
+  select created_church_id, created_invite_id, generated_token;
+end;
+$$;
+
+grant execute on function public.platform_create_church_with_admin_invite(text, text, text, text, text) to authenticated;

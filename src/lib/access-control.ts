@@ -88,6 +88,10 @@ const roleRoutes: Record<UserRole, string[]> = {
 };
 
 export function isPendingAccount(user: AppUser) {
+  if (user.platformAdmin) {
+    return false;
+  }
+
   return user.churchId === "sem-igreja" || (user.role === "member" && !user.personId);
 }
 
@@ -98,6 +102,10 @@ export function getDefaultRoute(user: AppUser) {
 
   if (user.role === "consolidation") {
     return "/consolidacao";
+  }
+
+  if (user.platformAdmin && user.churchId === "sem-igreja") {
+    return "/plataforma";
   }
 
   if (user.role === "member") {
@@ -114,6 +122,10 @@ export function canAccessRoute(user: AppUser, pathname: string) {
 
   if (pathname === "/configuracao") {
     return user.role === "admin" || isPendingAccount(user);
+  }
+
+  if (pathname === "/plataforma" || pathname.startsWith("/plataforma/")) {
+    return Boolean(user.platformAdmin) || (user.role === "admin" && user.churchId !== "sem-igreja");
   }
 
   if (isPendingAccount(user)) {

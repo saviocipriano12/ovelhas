@@ -56,6 +56,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
 
+    async function loadPlatformAdminFlag(userId: string) {
+      const { data, error } = await supabase
+        .from("platform_admins")
+        .select("user_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error) {
+        return false;
+      }
+
+      return Boolean(data);
+    }
+
     async function loadProfile(user: { id: string; email?: string | null; user_metadata?: { name?: string } }) {
       const pendingInviteToken =
         typeof window !== "undefined" ? window.localStorage.getItem(PENDING_INVITE_KEY) : null;
@@ -76,11 +90,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (rpcProfile?.id) {
+        const platformAdmin = await loadPlatformAdminFlag(rpcProfile.id);
+
         setSupabaseUser({
           id: rpcProfile.id,
           name: rpcProfile.name ?? user.user_metadata?.name ?? user.email?.split("@")[0] ?? "Usuario",
           role: (rpcProfile.role ?? "member") as UserRole,
           churchId: rpcProfile.church_id ?? "sem-igreja",
+          platformAdmin,
           cellIds: rpcProfile.cell_ids ?? [],
           personId: rpcProfile.person_id ?? undefined,
         });
@@ -127,12 +144,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           personResult.data?.cell_id ?? "",
         ].filter(Boolean)),
       );
+      const platformAdmin = await loadPlatformAdminFlag(user.id);
 
       setSupabaseUser({
         id: user.id,
         name: data?.name ?? user.user_metadata?.name ?? user.email?.split("@")[0] ?? "Usuario",
         role: profileRole,
         churchId,
+        platformAdmin,
         cellIds,
         personId: personResult.data?.id,
       });

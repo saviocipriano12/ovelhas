@@ -61,6 +61,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/convites", label: "Convites", icon: UserPlus },
   { href: "/atividades", label: "Atividades", icon: Activity },
   { href: "/relatorios", label: "Relatorios", icon: ChartNoAxesCombined },
+  { href: "/plataforma", label: "Plataforma", icon: ShieldCheck },
   { href: "/configuracoes", label: "Ajustes", icon: Settings },
   { href: "/instalar", label: "Instalar", icon: Smartphone },
 ];
@@ -80,7 +81,7 @@ const navGroups = [
   },
   {
     label: "Sistema",
-    hrefs: ["/configuracoes", "/instalar"],
+    hrefs: ["/plataforma", "/configuracoes", "/instalar"],
   },
 ];
 
