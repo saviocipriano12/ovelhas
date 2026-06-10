@@ -63,6 +63,7 @@ const decisionLabels: Record<ConsolidationVisitor["decision"], string> = {
 const ministries = [
   { key: "louvor", label: "Louvor" },
   { key: "palavra", label: "Palavra" },
+  { key: "danca", label: "Danca" },
   { key: "midia", label: "Midia" },
   { key: "diaconato", label: "Diaconato" },
   { key: "intercessao", label: "Intercessao" },
@@ -128,11 +129,16 @@ export default function ConsolidationPage() {
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const [serviceDate, setServiceDate] = useState(todayIso());
   const [serviceTitle, setServiceTitle] = useState("Culto principal");
+  const [preacherName, setPreacherName] = useState("");
   const [templeCount, setTempleCount] = useState(0);
   const [ministryCounts, setMinistryCounts] = useState<MinistryCounts>(() => createEmptyMinistryCounts());
   const [kidsCount, setKidsCount] = useState(0);
   const [babyCount, setBabyCount] = useState(0);
   const [vagalumesCount, setVagalumesCount] = useState(0);
+  const [titheCount, setTitheCount] = useState(0);
+  const [offeringCount, setOfferingCount] = useState(0);
+  const [titheNames, setTitheNames] = useState("");
+  const [offeringNames, setOfferingNames] = useState("");
   const [notes, setNotes] = useState("");
   const [visitors, setVisitors] = useState<ConsolidationVisitor[]>([]);
   const [feedback, setFeedback] = useState("");
@@ -218,6 +224,7 @@ export default function ConsolidationPage() {
       churchId: currentUser.churchId,
       serviceDate,
       serviceTitle,
+      preacherName,
       totalAttendance,
       templeCount,
       babyCount,
@@ -225,6 +232,10 @@ export default function ConsolidationPage() {
       servingCount,
       ministryCounts,
       kidsCount,
+      titheCount,
+      offeringCount,
+      titheNames,
+      offeringNames,
       visitorsCount: visitors.length,
       acceptedJesusCount,
       baptismDecisionCount,
@@ -261,6 +272,11 @@ export default function ConsolidationPage() {
     setKidsCount(0);
     setBabyCount(0);
     setVagalumesCount(0);
+    setTitheCount(0);
+    setOfferingCount(0);
+    setTitheNames("");
+    setOfferingNames("");
+    setPreacherName("");
     setSaving(false);
     setFeedback("Consolidacao salva. Visitantes ficaram registrados para acompanhamento da lideranca.");
   }
@@ -374,6 +390,15 @@ export default function ConsolidationPage() {
                 className="field-control mt-2"
               />
             </label>
+            <label className="sm:col-span-2">
+              <span className="text-xs font-black uppercase text-slate-400">Pregador da noite</span>
+              <input
+                value={preacherName}
+                onChange={(event) => setPreacherName(event.target.value)}
+                className="field-control mt-2"
+                placeholder="Nome de quem ministrou a Palavra"
+              />
+            </label>
             <div className="rounded-3xl bg-slate-950 p-4 text-white">
               <p className="text-xs font-black uppercase text-emerald-200">Total geral</p>
               <p className="mt-1 text-4xl font-black">{totalAttendance}</p>
@@ -452,6 +477,47 @@ export default function ConsolidationPage() {
               ))}
             </div>
           </div>
+          <div className="mt-4">
+            <p className="text-xs font-black uppercase text-slate-400">Dizimos e ofertas</p>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <label className="rounded-2xl bg-slate-50 p-3">
+                <span className="text-xs font-black text-slate-500">Qtd. dizimistas</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={titheCount}
+                  onChange={(event) => setTitheCount(Number(event.target.value))}
+                  className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-lg font-black outline-none focus:border-emerald-500"
+                />
+              </label>
+              <label className="rounded-2xl bg-slate-50 p-3">
+                <span className="text-xs font-black text-slate-500">Qtd. ofertantes</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={offeringCount}
+                  onChange={(event) => setOfferingCount(Number(event.target.value))}
+                  className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-lg font-black outline-none focus:border-emerald-500"
+                />
+              </label>
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <textarea
+                value={titheNames}
+                onChange={(event) => setTitheNames(event.target.value)}
+                rows={2}
+                className="field-control min-h-20 resize-none py-3"
+                placeholder="Nomes/observacoes de dizimos"
+              />
+              <textarea
+                value={offeringNames}
+                onChange={(event) => setOfferingNames(event.target.value)}
+                rows={2}
+                className="field-control min-h-20 resize-none py-3"
+                placeholder="Nomes/observacoes de ofertas"
+              />
+            </div>
+          </div>
           <textarea
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
@@ -461,7 +527,7 @@ export default function ConsolidationPage() {
           />
         </section>
 
-        <form onSubmit={addVisitor} className="rounded-[28px] border border-white/80 bg-white/90 p-4 shadow-sm">
+        <form onSubmit={addVisitor} className="native-form rounded-[28px] border border-white/80 bg-white/90 p-4 shadow-sm">
           <SectionHeader eyebrow="Novo contato" title="Cadastrar visitante ou decisao" />
           <div className="grid gap-3 sm:grid-cols-2">
             <input name="name" required placeholder="Nome completo" className="field-control sm:col-span-2" />
@@ -532,6 +598,9 @@ export default function ConsolidationPage() {
                 <div>
                   <p className="font-black text-slate-950">{report.serviceTitle}</p>
                   <p className="mt-1 text-sm font-semibold text-slate-500">{report.serviceDate} · {report.createdByName}</p>
+                  {report.preacherName ? (
+                    <p className="mt-1 text-xs font-bold text-emerald-700">Pregador: {report.preacherName}</p>
+                  ) : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className="rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-900">
@@ -577,7 +646,31 @@ export default function ConsolidationPage() {
                   <p className="text-lg font-black text-orange-950">{report.acceptedJesusCount + report.baptismDecisionCount}</p>
                   <p className="text-[11px] font-bold text-orange-700">decisoes</p>
                 </div>
+                <div className="rounded-2xl bg-sky-50 p-3">
+                  <p className="text-lg font-black text-sky-950">{report.titheCount ?? 0}</p>
+                  <p className="text-[11px] font-bold text-sky-700">dizimos</p>
+                </div>
+                <div className="rounded-2xl bg-violet-50 p-3">
+                  <p className="text-lg font-black text-violet-950">{report.offeringCount ?? 0}</p>
+                  <p className="text-[11px] font-bold text-violet-700">ofertas</p>
+                </div>
               </div>
+              {(report.titheNames || report.offeringNames) && (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {report.titheNames ? (
+                    <div className="rounded-2xl bg-sky-50 p-3">
+                      <p className="text-[11px] font-black uppercase text-sky-700">Dizimos</p>
+                      <p className="mt-1 whitespace-pre-wrap text-xs font-bold leading-5 text-sky-950">{report.titheNames}</p>
+                    </div>
+                  ) : null}
+                  {report.offeringNames ? (
+                    <div className="rounded-2xl bg-violet-50 p-3">
+                      <p className="text-[11px] font-black uppercase text-violet-700">Ofertas</p>
+                      <p className="mt-1 whitespace-pre-wrap text-xs font-bold leading-5 text-violet-950">{report.offeringNames}</p>
+                    </div>
+                  ) : null}
+                </div>
+              )}
               {report.ministryCounts && Object.keys(report.ministryCounts).length > 0 && (
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {ministries.map((ministry) => (

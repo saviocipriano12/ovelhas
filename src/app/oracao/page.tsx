@@ -173,7 +173,7 @@ export default function PrayerPage() {
         {feedback && <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{feedback}</div>}
 
         {open && (
-          <form onSubmit={handleSubmit} className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+          <form onSubmit={handleSubmit} className="native-form rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
             <SectionHeader eyebrow="Novo pedido" title="Como podemos orar?" />
             <div className="space-y-3">
               {currentUser.role !== "member" && (
@@ -194,7 +194,7 @@ export default function PrayerPage() {
                 <option value="cell_public">Pode aparecer para a celula</option>
               </select>
             </div>
-            <button className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-900 px-4 text-sm font-bold text-white">
+            <button className="primary-action mt-4">
               <MessageCircle size={18} />
               Registrar pedido
             </button>

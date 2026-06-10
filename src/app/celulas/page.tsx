@@ -238,7 +238,7 @@ export default function CellsPage() {
           <div className="fixed inset-0 z-50 flex items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-3">
             <form
               onSubmit={handleCreateCell}
-              className="mobile-sheet native-scroll app-scrollbar animate-enter"
+              className="mobile-sheet native-scroll app-scrollbar native-form animate-enter"
             >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>

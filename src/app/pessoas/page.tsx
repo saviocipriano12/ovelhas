@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { Copy, Filter, MessageCircle, Plus, Share2, X } from "lucide-react";
+import { Copy, Filter, MessageCircle, Plus, Share2, UserPlus, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { PersonCard } from "@/components/person-card";
@@ -129,6 +129,35 @@ export default function PeoplePage() {
     setCreated("Mensagem do convite copiada.");
   }
 
+  async function generateInviteForPerson(personId: string) {
+    const person = filteredPeople.find((item) => item.id === personId) ?? people.find((item) => item.id === personId);
+
+    if (!person) {
+      setCreated("Pessoa nao encontrada para gerar convite.");
+      return;
+    }
+
+    const result = await createInvite({
+      churchId: currentUser.churchId,
+      name: person.name,
+      email: person.email,
+      role: "member",
+      cellId: person.cellId,
+      personId: person.id,
+      createdBy: currentUser.id,
+      persistToSupabase: !isDemoMode,
+    });
+
+    if (!result.ok || !result.invite) {
+      setCreated(`Nao consegui gerar convite para ${person.name}: ${result.error}`);
+      return;
+    }
+
+    setLastInviteLink(inviteUrl(result.invite.token));
+    setLastInviteName(person.name);
+    setCreated(`Convite de ${person.name} pronto para enviar, sem duplicar cadastro.`);
+  }
+
   return (
     <AppShell>
       <section className="animate-enter space-y-4">
@@ -218,7 +247,21 @@ export default function PeoplePage() {
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filteredPeople.map((person) => (
-            <PersonCard key={person.id} person={person} />
+            <PersonCard
+              key={person.id}
+              person={person}
+              action={
+                canManagePeople(currentUser) ? (
+                  <button
+                    onClick={() => generateInviteForPerson(person.id)}
+                    className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-50 px-3 text-xs font-black text-emerald-900"
+                  >
+                    <UserPlus size={15} />
+                    Gerar convite deste cadastro
+                  </button>
+                ) : null
+              }
+            />
           ))}
         </div>
 
@@ -229,12 +272,12 @@ export default function PeoplePage() {
         )}
 
         {open && (
-          <div className="fixed inset-0 z-[999] flex items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-3">
+          <div className="fixed inset-0 z-[999] flex bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4">
             <form
               onSubmit={handleSubmit}
-              className="mobile-sheet native-scroll app-scrollbar animate-enter"
+              className="animate-enter flex h-[100dvh] w-full flex-col overflow-hidden bg-[#f7f8f3] shadow-2xl sm:h-auto sm:max-h-[90dvh] sm:max-w-5xl sm:rounded-[32px]"
             >
-              <div className="sticky top-0 z-10 -mx-1 mb-4 flex items-center justify-between gap-3 rounded-b-2xl bg-white/95 px-1 pb-3 pt-2 backdrop-blur">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 bg-white/95 px-4 py-4 backdrop-blur sm:px-5">
                 <div>
                   <p className="text-xs font-bold uppercase text-emerald-700">Novo cuidado</p>
                   <h2 className="text-xl font-semibold text-slate-950">Adicionar pessoa</h2>
@@ -249,80 +292,84 @@ export default function PeoplePage() {
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <div className="rounded-[24px] bg-slate-50 p-3">
-                  <p className="mb-3 text-xs font-black uppercase text-slate-400">Identificacao</p>
-                  <div className="space-y-3">
-                    <label className="block">
-                      <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Nome completo</span>
-                      <input name="name" required className="field-control" placeholder="Ex: Maria Silva" />
-                    </label>
-                    <label className="block">
-                      <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">WhatsApp</span>
-                      <input name="phone" required inputMode="tel" className="field-control" placeholder="(00) 00000-0000" />
-                    </label>
-                    <label className="block">
-                      <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Email</span>
-                      <input name="email" type="email" className="field-control" placeholder="Opcional" />
-                    </label>
-                    <label className="block">
-                      <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Nascimento</span>
-                      <input name="birthDate" type="date" className="field-control" aria-label="Data de nascimento" />
-                    </label>
+              <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                    <p className="mb-3 text-xs font-black uppercase text-slate-400">Identificacao</p>
+                    <div className="space-y-3">
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Nome completo</span>
+                        <input name="name" required className="field-control" placeholder="Ex: Maria Silva" />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">WhatsApp</span>
+                        <input name="phone" required inputMode="tel" className="field-control" placeholder="(00) 00000-0000" />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Email</span>
+                        <input name="email" type="email" className="field-control" placeholder="Opcional" />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Nascimento</span>
+                        <input name="birthDate" type="date" className="field-control" aria-label="Data de nascimento" />
+                      </label>
+                    </div>
                   </div>
-                </div>
 
-                <div className="rounded-[24px] bg-slate-50 p-3">
-                  <p className="mb-3 text-xs font-black uppercase text-slate-400">Localizacao e familia</p>
-                  <div className="space-y-3">
-                    <label className="block">
-                      <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Bairro</span>
-                      <input name="neighborhood" className="field-control" placeholder="Ex: Centro" />
-                    </label>
-                    <label className="block">
-                      <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Endereco completo</span>
-                      <input name="address" className="field-control" placeholder="Rua, numero e complemento" />
-                    </label>
-                    <label className="block">
-                      <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Telefone familiar</span>
-                      <input name="familyPhone" inputMode="tel" className="field-control" placeholder="Opcional" />
-                    </label>
+                  <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                    <p className="mb-3 text-xs font-black uppercase text-slate-400">Localizacao e familia</p>
+                    <div className="space-y-3">
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Bairro</span>
+                        <input name="neighborhood" className="field-control" placeholder="Ex: Centro" />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Endereco completo</span>
+                        <input name="address" className="field-control" placeholder="Rua, numero e complemento" />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Telefone familiar</span>
+                        <input name="familyPhone" inputMode="tel" className="field-control" placeholder="Opcional" />
+                      </label>
+                    </div>
                   </div>
-                </div>
 
-                <div className="rounded-[24px] bg-emerald-50 p-3">
-                  <p className="mb-3 text-xs font-black uppercase text-emerald-700">Cuidado e acesso</p>
-                  <div className="space-y-3">
-                    <label className="block">
-                      <span className="mb-1.5 block text-xs font-black uppercase text-emerald-800">Celula</span>
-                      <select name="cellId" className="field-control">
-                        {visibleCells.map((cell) => (
-                          <option key={cell.id} value={cell.id}>
-                            {cell.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="block">
-                      <span className="mb-1.5 block text-xs font-black uppercase text-emerald-800">Etapa atual</span>
-                      <select name="stage" className="field-control">
-                        <option>Visitante</option>
-                        <option>Novo membro</option>
-                        <option>Em discipulado</option>
-                        <option>Batismo</option>
-                        <option>Servindo</option>
-                      </select>
-                    </label>
-                    <p className="rounded-2xl bg-white/80 p-3 text-xs font-bold leading-5 text-emerald-900">
-                      Ao salvar, o Ovelhas tambem gera um convite para essa pessoa entrar no app vinculada a esta celula.
-                    </p>
+                  <div className="rounded-[24px] bg-emerald-50 p-4 ring-1 ring-emerald-100 lg:col-span-2">
+                    <p className="mb-3 text-xs font-black uppercase text-emerald-700">Cuidado e acesso</p>
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase text-emerald-800">Celula</span>
+                        <select name="cellId" className="field-control">
+                          {visibleCells.map((cell) => (
+                            <option key={cell.id} value={cell.id}>
+                              {cell.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase text-emerald-800">Etapa atual</span>
+                        <select name="stage" className="field-control">
+                          <option>Visitante</option>
+                          <option>Novo membro</option>
+                          <option>Em discipulado</option>
+                          <option>Batismo</option>
+                          <option>Servindo</option>
+                        </select>
+                      </label>
+                      <p className="rounded-2xl bg-white/80 p-3 text-xs font-bold leading-5 text-emerald-900 lg:col-span-2">
+                        Ao salvar, o Ovelhas tambem gera um convite para essa pessoa entrar no app vinculada a esta celula.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <button className="primary-action mt-4">
-                Salvar pessoa
-              </button>
+              <div className="shrink-0 border-t border-slate-200/80 bg-white/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur">
+                <button className="primary-action min-h-14 w-full">
+                  Salvar pessoa e gerar convite
+                </button>
+              </div>
             </form>
           </div>
         )}

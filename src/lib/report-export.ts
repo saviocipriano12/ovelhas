@@ -14,6 +14,7 @@ function escapeHtml(value: string | number) {
 const ministryLabels: Record<string, string> = {
   louvor: "Louvor",
   palavra: "Palavra",
+  danca: "Danca",
   midia: "Midia",
   diaconato: "Diaconato",
   intercessao: "Intercessao",
@@ -193,8 +194,13 @@ export function buildReportHtml({
               <div class="mini-grid">
                 <span><b>${escapeHtml(report.servingCount)}</b> servindo</span>
                 <span><b>${escapeHtml(report.acceptedJesusCount + report.baptismDecisionCount)}</b> decisoes</span>
+                <span><b>${escapeHtml(report.titheCount ?? 0)}</b> dizimos</span>
+                <span><b>${escapeHtml(report.offeringCount ?? 0)}</b> ofertas</span>
               </div>
               ${renderMinistryCounts(report)}
+              ${report.preacherName ? `<p><b>Pregador:</b> ${escapeHtml(report.preacherName)}</p>` : ""}
+              ${report.titheNames ? `<p><b>Nomes/obs. dizimos:</b> ${escapeHtml(report.titheNames)}</p>` : ""}
+              ${report.offeringNames ? `<p><b>Nomes/obs. ofertas:</b> ${escapeHtml(report.offeringNames)}</p>` : ""}
               <p>${escapeHtml(report.notes || "Sem observacoes registradas.")}</p>
             </article>
           `,

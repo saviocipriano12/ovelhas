@@ -44,6 +44,7 @@ import { usePastoralNotifications } from "@/lib/use-pastoral-notifications";
 
 const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard", label: "Inicio", icon: Home },
+  { href: "/perfil", label: "Perfil", icon: UserRound },
   { href: "/celulas", label: "Celulas", icon: LayoutGrid },
   { href: "/pessoas", label: "Pessoas", icon: Users },
   { href: "/consolidacao", label: "Consolidacao", icon: ClipboardList },
@@ -69,7 +70,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
 const navGroups = [
   {
     label: "Cuidado",
-    hrefs: ["/dashboard", "/celulas", "/pessoas", "/consolidacao", "/consolidacao/contatos", "/presenca", "/checkin", "/agenda", "/cuidados"],
+    hrefs: ["/dashboard", "/perfil", "/celulas", "/pessoas", "/consolidacao", "/consolidacao/contatos", "/presenca", "/checkin", "/agenda", "/cuidados"],
   },
   {
     label: "Discipulado",
@@ -95,16 +96,24 @@ const mobileNavItems: { href: string; label: string; icon: LucideIcon }[] = [
 
 const memberMobileNavItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/meu-discipulado", label: "Meu", icon: UserRound },
+  { href: "/perfil", label: "Perfil", icon: UserRound },
   { href: "/oracao", label: "Oracao", icon: Heart },
-  { href: "/biblioteca", label: "Biblia", icon: BookOpen },
-  { href: "/notificacoes", label: "Alertas", icon: Bell },
+  { href: "/notificacoes", label: "Avisos", icon: Bell },
   { href: "/mais", label: "Mais", icon: MoreHorizontal },
 ];
 
 const consolidationMobileNavItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/consolidacao", label: "Culto", icon: ClipboardList },
   { href: "/consolidacao/contatos", label: "Contatos", icon: ContactRound },
+  { href: "/perfil", label: "Perfil", icon: UserRound },
   { href: "/instalar", label: "Instalar", icon: Smartphone },
+];
+
+const communicationMobileNavItems: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/dashboard", label: "Inicio", icon: Home },
+  { href: "/notificacoes", label: "Alertas", icon: Bell },
+  { href: "/perfil", label: "Perfil", icon: UserRound },
+  { href: "/mais", label: "Mais", icon: MoreHorizontal },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -137,7 +146,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       ? memberMobileNavItems
       : currentUser.role === "consolidation"
         ? consolidationMobileNavItems
-        : mobileNavItems;
+        : currentUser.role === "communication"
+          ? communicationMobileNavItems
+          : mobileNavItems;
   const visibleMobileNavItems = mobileNavSource.filter((item) => canAccessRoute(currentUser, item.href));
   const homeHref = getDefaultRoute(currentUser);
   const currentPageLabel = pageLabel(pathname);

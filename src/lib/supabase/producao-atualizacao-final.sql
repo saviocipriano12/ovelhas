@@ -579,3 +579,198 @@ end;
 $$;
 
 grant execute on function public.platform_create_church_with_admin_invite(text, text, text, text, text) to authenticated;
+
+-- Complemento 2026-06-10: perfil, comunicacao, presenca de supervisor e consolidacao ampliada.
+
+alter table public.cell_reports
+  add column if not exists supervisor_visited boolean not null default false,
+  add column if not exists supervisor_visit_notes text;
+
+alter table public.consolidation_reports
+  add column if not exists preacher_name text,
+  add column if not exists tithe_count integer not null default 0,
+  add column if not exists offering_count integer not null default 0,
+  add column if not exists tithe_names text,
+  add column if not exists offering_names text;
+
+create or replace function public.update_my_profile(profile_name text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+begin
+  update public.profiles
+  set name = nullif(trim(coalesce(profile_name, '')), '')
+  where id = auth.uid();
+
+  return found;
+end;
+$$;
+
+grant execute on function public.update_my_profile(text) to authenticated;
+
+create or replace function public.can_create_invite(
+  target_church_id uuid,
+  target_role app_role,
+  target_cell_id uuid default null
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+set row_security = off
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.church_id = target_church_id
+      and (
+        (
+          p.role::text = 'admin'
+          and (
+            target_role::text in ('admin', 'pastor', 'supervisor', 'consolidation', 'communication')
+            or (
+              target_role::text in ('leader', 'member')
+              and exists (
+                select 1
+                from public.cells c
+                where c.id = target_cell_id
+                  and c.church_id = target_church_id
+              )
+            )
+          )
+        )
+        or (
+          p.role::text = 'pastor'
+          and (
+            target_role::text in ('supervisor', 'consolidation', 'communication')
+            or (
+              target_role::text in ('leader', 'member')
+              and exists (
+                select 1
+                from public.cells c
+                where c.id = target_cell_id
+                  and c.church_id = target_church_id
+              )
+            )
+          )
+        )
+        or (
+          p.role::text = 'supervisor'
+          and (
+            (
+              target_role::text = 'supervisor'
+              and exists (
+                select 1
+                from public.cells c
+                where c.id = target_cell_id
+                  and c.church_id = target_church_id
+                  and c.supervisor_id = p.id
+              )
+            )
+            or (
+              target_role::text in ('leader', 'member')
+              and exists (
+                select 1
+                from public.cells c
+                where c.id = target_cell_id
+                  and c.church_id = target_church_id
+                  and c.supervisor_id = p.id
+              )
+            )
+          )
+        )
+        or (
+          p.role::text = 'leader'
+          and target_role::text = 'member'
+          and exists (
+            select 1
+            from public.cells c
+            where c.id = target_cell_id
+              and c.church_id = target_church_id
+              and c.leader_id = p.id
+          )
+        )
+      )
+  )
+$$;
+
+grant execute on function public.can_create_invite(uuid, app_role, uuid) to authenticated;
+
+drop policy if exists "activity_events_select_by_role" on public.activity_events;
+create policy "activity_events_select_by_role"
+on public.activity_events
+for select
+using (
+  exists (
+    select 1
+    from public.profiles p
+    left join public.cells c on c.id = activity_events.cell_id
+    left join public.people pe on pe.id = activity_events.person_id
+    left join public.people member_person on member_person.person_user_id = p.id
+    where p.id = auth.uid()
+    and p.church_id = activity_events.church_id
+    and (
+      (
+        p.role::text in ('admin', 'pastor')
+        and (
+          activity_events.visibility <> 'member'
+          or (activity_events.visibility = 'member' and activity_events.cell_id is null and activity_events.person_id is null)
+        )
+      )
+      or (
+        p.role::text = 'communication'
+        and activity_events.visibility = 'member'
+      )
+      or (p.role::text = 'consolidation' and (p.id = activity_events.actor_user_id or activity_events.target_type = 'person'))
+      or (p.role::text = 'supervisor' and (p.id = c.supervisor_id or p.id = activity_events.actor_user_id))
+      or (p.role::text = 'leader' and (p.id = c.leader_id or p.id = pe.leader_user_id or p.id = activity_events.actor_user_id))
+      or (
+        p.role::text = 'member'
+        and activity_events.visibility = 'member'
+        and (
+          p.id = activity_events.actor_user_id
+          or p.id = pe.person_user_id
+          or (activity_events.cell_id is null and activity_events.person_id is null)
+          or member_person.cell_id = activity_events.cell_id
+        )
+      )
+    )
+  )
+);
+
+drop policy if exists "activity_events_insert_authenticated" on public.activity_events;
+create policy "activity_events_insert_authenticated"
+on public.activity_events
+for insert
+with check (
+  exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.church_id = activity_events.church_id
+      and (
+        p.role::text in ('admin', 'pastor', 'supervisor', 'leader', 'consolidation', 'communication')
+        or p.id = activity_events.actor_user_id
+      )
+  )
+);
+
+grant select, insert on public.activity_events to authenticated;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_enum e
+    join pg_type t on t.oid = e.enumtypid
+    where t.typname = 'app_role'
+      and e.enumlabel = 'communication'
+  ) then
+    alter type app_role add value 'communication';
+  end if;
+end $$;

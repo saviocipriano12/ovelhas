@@ -1,24 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, CalendarCheck, CalendarDays, CheckCircle2, FileText, HeartHandshake, LayoutGrid, PlayCircle, Users } from "lucide-react";
+import { Bell, BellRing, CalendarCheck, CalendarDays, CheckCircle2, FileText, HeartHandshake, LayoutGrid, PlayCircle, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { CareTaskCard } from "@/components/care-task-card";
+import { ChurchNoticeCard } from "@/components/church-notice-card";
 import { MetricCard } from "@/components/metric-card";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
-import { getScopedCareTasks, getScopedCells, getScopedPeople } from "@/lib/access-control";
-import { useCareTasks, useCells, useLocalPeople } from "@/lib/local-store";
+import { getScopedActivityEvents, getScopedCareTasks, getScopedCells, getScopedPeople } from "@/lib/access-control";
+import { isChurchNotice } from "@/lib/church-notices";
+import { useActivityEvents, useCareTasks, useCells, useLocalPeople } from "@/lib/local-store";
 
 export default function DashboardPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { people } = useLocalPeople();
   const { cells } = useCells();
   const { tasks } = useCareTasks();
+  const { events } = useActivityEvents();
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visibleCareTasks = getScopedCareTasks(currentUser, tasks, people, isDemoMode);
+  const visibleNotices = getScopedActivityEvents(currentUser, events, cells, people, isDemoMode)
+    .filter(isChurchNotice)
+    .slice(0, 3);
   const present = visiblePeople.filter((person) => person.cellAbsences === 0).length;
   const servicePresent = visiblePeople.filter((person) => person.servicePresent).length;
   const averageProgress = visiblePeople.length
@@ -88,6 +94,23 @@ export default function DashboardPage() {
             </Link>
           ))}
         </section>
+
+        {visibleNotices.length > 0 && (
+          <section className="rounded-[28px] border border-white/80 bg-white/60 p-3 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-3 px-1">
+              <div>
+                <p className="text-xs font-black uppercase text-emerald-700">News da igreja</p>
+                <h2 className="text-lg font-black text-slate-950">Comunicados recentes</h2>
+              </div>
+              <BellRing className="text-emerald-800" size={22} />
+            </div>
+            <div className="grid gap-3 lg:grid-cols-3">
+              {visibleNotices.map((event) => (
+                <ChurchNoticeCard key={event.id} event={event} compact />
+              ))}
+            </div>
+          </section>
+        )}
 
         <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
           <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">

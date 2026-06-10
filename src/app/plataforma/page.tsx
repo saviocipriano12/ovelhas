@@ -253,7 +253,7 @@ export default function PlatformPage() {
         {error && <div className="rounded-3xl border border-rose-100 bg-rose-50 p-4 text-sm font-bold text-rose-800">{error}</div>}
         {feedback && <div className="rounded-3xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-bold text-emerald-900">{feedback}</div>}
 
-        <form onSubmit={createChurch} className="rounded-[28px] border border-white/80 bg-white/90 p-4 shadow-sm sm:p-5">
+        <form onSubmit={createChurch} className="native-form rounded-[28px] border border-white/80 bg-white/90 p-4 shadow-sm sm:p-5">
           <SectionHeader eyebrow="Nova igreja" title="Criar cliente e admin" />
           <div className="grid gap-3 md:grid-cols-2">
             <input name="churchName" required className="field-control md:col-span-2" placeholder="Nome da igreja" />

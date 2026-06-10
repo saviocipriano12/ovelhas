@@ -968,24 +968,42 @@ export function useCellReports() {
       return localReport;
     }
 
-    const { data, error } = await supabase
+    const reportPayload = {
+      church_id: report.churchId,
+      cell_id: report.cellId,
+      leader_id: report.leaderUserId || null,
+      supervisor_id: report.supervisorUserId || null,
+      meeting_date: toIsoDate(report.meetingDate),
+      present_count: report.presentCount,
+      visitors_count: report.visitorsCount,
+      service_count: report.serviceCount,
+      decisions_count: report.decisionsCount,
+      highlights: report.highlights || null,
+      needs: report.needs || null,
+      prayer_requests: report.prayerRequests || null,
+      supervisor_visited: report.supervisorVisited ?? false,
+      supervisor_visit_notes: report.supervisorVisitNotes || null,
+    };
+    const legacyReportPayload = { ...reportPayload };
+    delete (legacyReportPayload as Partial<typeof reportPayload>).supervisor_visited;
+    delete (legacyReportPayload as Partial<typeof reportPayload>).supervisor_visit_notes;
+
+    let { data, error } = await supabase
       .from("cell_reports")
-      .insert({
-        church_id: report.churchId,
-        cell_id: report.cellId,
-        leader_id: report.leaderUserId || null,
-        supervisor_id: report.supervisorUserId || null,
-        meeting_date: toIsoDate(report.meetingDate),
-        present_count: report.presentCount,
-        visitors_count: report.visitorsCount,
-        service_count: report.serviceCount,
-        decisions_count: report.decisionsCount,
-        highlights: report.highlights || null,
-        needs: report.needs || null,
-        prayer_requests: report.prayerRequests || null,
-      })
+      .insert(reportPayload)
       .select("id, created_at")
       .single();
+
+    if (error && isMissingColumn(error.message, ["supervisor_visited", "supervisor_visit_notes"])) {
+      const fallback = await supabase
+        .from("cell_reports")
+        .insert(legacyReportPayload)
+        .select("id, created_at")
+        .single();
+
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     const newReport = !error && data ? { ...localReport, id: data.id, createdAt: data.created_at } : localReport;
     setReports((current) => [newReport, ...current]);
@@ -2661,6 +2679,7 @@ export function useConsolidationReports(churchId: string) {
       church_id: string;
       service_date: string;
       service_title: string;
+      preacher_name?: string | null;
       total_attendance: number;
       temple_count?: number | null;
       baby_count?: number | null;
@@ -2668,6 +2687,10 @@ export function useConsolidationReports(churchId: string) {
       serving_count: number;
       ministry_counts?: Record<string, number> | null;
       kids_count?: number | null;
+      tithe_count?: number | null;
+      offering_count?: number | null;
+      tithe_names?: string | null;
+      offering_names?: string | null;
       visitors_count: number;
       accepted_jesus_count: number;
       baptism_decision_count: number;
@@ -2694,6 +2717,7 @@ export function useConsolidationReports(churchId: string) {
       churchId: report.church_id,
       serviceDate: report.service_date,
       serviceTitle: report.service_title,
+      preacherName: report.preacher_name ?? "",
       totalAttendance: report.total_attendance,
       templeCount: report.temple_count ?? report.total_attendance,
       babyCount: report.baby_count ?? 0,
@@ -2701,6 +2725,10 @@ export function useConsolidationReports(churchId: string) {
       servingCount: report.serving_count,
       ministryCounts: report.ministry_counts ?? {},
       kidsCount: report.kids_count ?? 0,
+      titheCount: report.tithe_count ?? 0,
+      offeringCount: report.offering_count ?? 0,
+      titheNames: report.tithe_names ?? "",
+      offeringNames: report.offering_names ?? "",
       visitorsCount: report.visitors_count,
       acceptedJesusCount: report.accepted_jesus_count,
       baptismDecisionCount: report.baptism_decision_count,
@@ -2750,6 +2778,7 @@ export function useConsolidationReports(churchId: string) {
         church_id: input.churchId,
         service_date: input.serviceDate,
         service_title: input.serviceTitle,
+        preacher_name: input.preacherName || null,
         total_attendance: input.totalAttendance,
         temple_count: input.templeCount ?? input.totalAttendance,
         baby_count: input.babyCount ?? 0,
@@ -2757,6 +2786,10 @@ export function useConsolidationReports(churchId: string) {
         serving_count: input.servingCount,
         ministry_counts: input.ministryCounts ?? {},
         kids_count: input.kidsCount ?? 0,
+        tithe_count: input.titheCount ?? 0,
+        offering_count: input.offeringCount ?? 0,
+        tithe_names: input.titheNames || null,
+        offering_names: input.offeringNames || null,
         visitors_count: input.visitorsCount,
         accepted_jesus_count: input.acceptedJesusCount,
         baptism_decision_count: input.baptismDecisionCount,
@@ -2771,13 +2804,18 @@ export function useConsolidationReports(churchId: string) {
         .select("id, created_at")
         .single();
 
-      if (error && (error.message.includes("ministry_counts") || error.message.includes("kids_count") || error.message.includes("temple_count") || error.message.includes("baby_count") || error.message.includes("vagalumes_count"))) {
+      if (error && (error.message.includes("ministry_counts") || error.message.includes("kids_count") || error.message.includes("temple_count") || error.message.includes("baby_count") || error.message.includes("vagalumes_count") || error.message.includes("preacher_name") || error.message.includes("tithe_count") || error.message.includes("offering_count") || error.message.includes("tithe_names") || error.message.includes("offering_names"))) {
         const fallbackPayload = { ...reportPayload };
         delete (fallbackPayload as Partial<typeof reportPayload>).ministry_counts;
         delete (fallbackPayload as Partial<typeof reportPayload>).kids_count;
         delete (fallbackPayload as Partial<typeof reportPayload>).temple_count;
         delete (fallbackPayload as Partial<typeof reportPayload>).baby_count;
         delete (fallbackPayload as Partial<typeof reportPayload>).vagalumes_count;
+        delete (fallbackPayload as Partial<typeof reportPayload>).preacher_name;
+        delete (fallbackPayload as Partial<typeof reportPayload>).tithe_count;
+        delete (fallbackPayload as Partial<typeof reportPayload>).offering_count;
+        delete (fallbackPayload as Partial<typeof reportPayload>).tithe_names;
+        delete (fallbackPayload as Partial<typeof reportPayload>).offering_names;
 
         const fallback = await supabase
           .from("consolidation_reports")

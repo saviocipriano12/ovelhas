@@ -10,6 +10,7 @@ import {
   ClipboardCheck,
   MessageCircle,
   Send,
+  UserRoundPlus,
   UsersRound,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -26,6 +27,7 @@ import {
   useCellReports,
   useCellRsvps,
   useCells,
+  useInvites,
   useLocalPeople,
 } from "@/lib/local-store";
 
@@ -53,17 +55,18 @@ const steps: { id: CycleStep; label: string; description: string }[] = [
 export default function TodayCellPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { cells } = useCells();
-  const { people, updatePeople } = useLocalPeople();
+  const { people, addPerson, refreshPeople, updatePeople } = useLocalPeople();
   const { rsvps } = useCellRsvps(currentUser.churchId);
   const { addCareTask } = useCareTasks();
   const { addReport } = useCellReports();
   const { addEvent } = useActivityEvents();
+  const { createInvite } = useInvites();
   const visibleCells = getVisibleCells(currentUser, cells).filter((cell) => cell.active);
   const visiblePeople = getVisiblePeople(currentUser, people);
   const [selectedCellId, setSelectedCellId] = useState("");
   const [meetingDate, setMeetingDate] = useState("");
   const [serviceDate, setServiceDate] = useState(todayIso());
-  const [step, setStep] = useState<CycleStep>("prepare");
+  const [step, setStep] = useState<CycleStep>("meeting");
   const [cellPresence, setCellPresence] = useState<Record<string, boolean>>({});
   const [servicePresence, setServicePresence] = useState<Record<string, boolean>>({});
   const [visitorsCount, setVisitorsCount] = useState(0);
@@ -71,6 +74,12 @@ export default function TodayCellPage() {
   const [highlights, setHighlights] = useState("");
   const [needs, setNeeds] = useState("");
   const [prayerRequests, setPrayerRequests] = useState("");
+  const [visitorName, setVisitorName] = useState("");
+  const [visitorPhone, setVisitorPhone] = useState("");
+  const [visitorInviteLink, setVisitorInviteLink] = useState("");
+  const [visitorInvitePhone, setVisitorInvitePhone] = useState("");
+  const [supervisorVisited, setSupervisorVisited] = useState(false);
+  const [supervisorVisitNotes, setSupervisorVisitNotes] = useState("");
   const [feedback, setFeedback] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -115,6 +124,67 @@ export default function TodayCellPage() {
     } else {
       setServicePresence(next);
     }
+  }
+
+  function setPersonPresence(personId: string, value: boolean, type: "cell" | "service") {
+    if (type === "cell") {
+      setCellPresence((current) => ({ ...current, [personId]: value }));
+      return;
+    }
+
+    setServicePresence((current) => ({ ...current, [personId]: value }));
+  }
+
+  async function addVisitorToCell() {
+    if (!selectedCell || !visitorName.trim() || !visitorPhone.trim()) {
+      setFeedback("Informe nome e WhatsApp do visitante.");
+      return;
+    }
+
+    const result = await addPerson({
+      name: visitorName.trim(),
+      phone: visitorPhone.trim(),
+      stage: "Visitante",
+      neighborhood: selectedCell.neighborhood,
+      createdByUserId: currentUser.id,
+      leaderUserId: selectedCell.leaderUserId || currentUser.id,
+      churchId: currentUser.churchId,
+      cellId: selectedCell.id,
+      cellName: selectedCell.name,
+      persistToSupabase: !isDemoMode,
+    });
+
+    if (!result.ok || !result.person) {
+      setFeedback(`Nao consegui cadastrar visitante: ${result.error}`);
+      return;
+    }
+
+    const inviteResult = await createInvite({
+      churchId: currentUser.churchId,
+      name: result.person.name,
+      email: result.person.email,
+      role: "member",
+      cellId: result.person.cellId,
+      personId: result.person.id,
+      createdBy: currentUser.id,
+      persistToSupabase: !isDemoMode,
+    });
+
+    setVisitorsCount((current) => current + 1);
+    const savedVisitorPhone = visitorPhone;
+    setVisitorName("");
+    setVisitorPhone("");
+    await refreshPeople();
+
+    if (inviteResult.ok && inviteResult.invite && typeof window !== "undefined") {
+      const link = `${window.location.origin}/convite/${inviteResult.invite.token}`;
+      setVisitorInviteLink(link);
+      setVisitorInvitePhone(savedVisitorPhone);
+      setFeedback(`${result.person.name} foi cadastrado como visitante. Convite pronto para a proxima celula.`);
+      return;
+    }
+
+    setFeedback(`${result.person.name} foi cadastrado, mas o convite nao foi gerado: ${inviteResult.error}`);
   }
 
   async function finishCycle() {
@@ -183,6 +253,8 @@ export default function TodayCellPage() {
       highlights,
       needs,
       prayerRequests,
+      supervisorVisited,
+      supervisorVisitNotes,
       persistToSupabase: !isDemoMode,
     });
 
@@ -228,7 +300,7 @@ export default function TodayCellPage() {
       actorName: currentUser.name,
       actorRole: currentUser.role,
       action: "Fechou ciclo da celula",
-      description: `${selectedCell.name}: ${presentCount}/${cellPeople.length} presentes, ${visitorsCount} visitantes e ${decisionsCount} decisoes.`,
+      description: `${selectedCell.name}: ${presentCount}/${cellPeople.length} presentes, ${visitorsCount} visitantes, ${decisionsCount} decisoes e supervisao ${supervisorVisited ? "presente" : "nao registrada"}.`,
       targetType: "report",
       targetName: `Ciclo ${selectedCell.name}`,
       cellId: selectedCell.id,
@@ -402,20 +474,32 @@ export default function TodayCellPage() {
 
         {step === "meeting" && (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
               <button
                 onClick={() => markAll(true, "cell")}
-                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-50 text-sm font-black text-emerald-900"
+                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-900 text-sm font-black text-white"
               >
                 <Check size={17} />
-                Todos celula
+                Todos presentes
+              </button>
+              <button
+                onClick={() => markAll(false, "cell")}
+                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white text-sm font-black text-slate-600 shadow-sm"
+              >
+                Limpar celula
               </button>
               <button
                 onClick={() => markAll(true, "service")}
-                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-sky-50 text-sm font-black text-sky-900"
+                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-sky-700 text-sm font-black text-white"
               >
                 <UsersRound size={17} />
-                Todos culto
+                Todos no culto
+              </button>
+              <button
+                onClick={() => markAll(false, "service")}
+                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white text-sm font-black text-slate-600 shadow-sm"
+              >
+                Limpar culto
               </button>
             </div>
 
@@ -428,8 +512,11 @@ export default function TodayCellPage() {
               <div className="space-y-3">
                 {cellPeople.map((person) => {
                   const rsvp = rsvpsByPerson.get(person.id);
+                  const isCellPresent = cellPresence[person.id] ?? defaultCellPresence(person.id, false);
+                  const isServicePresent = servicePresence[person.id] ?? person.servicePresent;
+
                   return (
-                    <article key={person.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                    <article key={person.id} className="rounded-[24px] border border-slate-100 bg-slate-50 p-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
                           <PersonAvatar person={person} size="sm" />
@@ -440,37 +527,117 @@ export default function TodayCellPage() {
                             </span>
                           </div>
                         </div>
+                        <div className="hidden shrink-0 gap-2 sm:flex">
+                          <span className={`rounded-full px-3 py-1 text-[11px] font-black ${isCellPresent ? "bg-emerald-100 text-emerald-900" : "bg-slate-200 text-slate-500"}`}>
+                            {isCellPresent ? "Na celula" : "Ausente"}
+                          </span>
+                          <span className={`rounded-full px-3 py-1 text-[11px] font-black ${isServicePresent ? "bg-sky-100 text-sky-900" : "bg-slate-200 text-slate-500"}`}>
+                            {isServicePresent ? "Foi ao culto" : "Nao foi"}
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="mt-3 grid grid-cols-2 gap-2">
-                        <label className="flex min-h-12 items-center justify-between rounded-2xl bg-white px-3 text-sm font-black text-slate-700">
-                          Celula
-                          <input
-                            type="checkbox"
-                            checked={cellPresence[person.id] ?? defaultCellPresence(person.id, false)}
-                            onChange={(event) => setCellPresence((current) => ({ ...current, [person.id]: event.target.checked }))}
-                            className="h-6 w-6 accent-emerald-700"
-                          />
-                        </label>
-                        <label className="flex min-h-12 items-center justify-between rounded-2xl bg-white px-3 text-sm font-black text-slate-700">
-                          Culto
-                          <input
-                            type="checkbox"
-                            checked={servicePresence[person.id] ?? person.servicePresent}
-                            onChange={(event) => setServicePresence((current) => ({ ...current, [person.id]: event.target.checked }))}
-                            className="h-6 w-6 accent-sky-700"
-                          />
-                        </label>
+                      <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                        <div className="rounded-2xl bg-white p-2">
+                          <p className="px-2 pb-2 text-[11px] font-black uppercase text-slate-400">Presenca na celula</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setPersonPresence(person.id, true, "cell")}
+                              className={`min-h-12 rounded-xl px-3 text-sm font-black transition ${
+                                isCellPresent ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/15" : "bg-slate-100 text-slate-500"
+                              }`}
+                            >
+                              Presente
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPersonPresence(person.id, false, "cell")}
+                              className={`min-h-12 rounded-xl px-3 text-sm font-black transition ${
+                                !isCellPresent ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-500"
+                              }`}
+                            >
+                              Ausente
+                            </button>
+                          </div>
+                        </div>
+                        <div className="rounded-2xl bg-white p-2">
+                          <p className="px-2 pb-2 text-[11px] font-black uppercase text-slate-400">Presenca no culto</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setPersonPresence(person.id, true, "service")}
+                              className={`min-h-12 rounded-xl px-3 text-sm font-black transition ${
+                                isServicePresent ? "bg-sky-700 text-white shadow-lg shadow-sky-700/15" : "bg-slate-100 text-slate-500"
+                              }`}
+                            >
+                              Foi
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPersonPresence(person.id, false, "service")}
+                              className={`min-h-12 rounded-xl px-3 text-sm font-black transition ${
+                                !isServicePresent ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-500"
+                              }`}
+                            >
+                              Nao foi
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </article>
                   );
                 })}
                 {cellPeople.length === 0 && (
-                  <p className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">
-                    Esta celula ainda nao tem pessoas vinculadas.
-                  </p>
+                  <div className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">
+                    <p>Esta celula ainda nao tem pessoas vinculadas.</p>
+                    <Link href="/pessoas" className="mt-3 inline-flex min-h-11 items-center justify-center rounded-2xl bg-emerald-900 px-4 text-sm font-black text-white">
+                      Cadastrar pessoas
+                    </Link>
+                  </div>
                 )}
               </div>
+            </section>
+
+            <section className="rounded-[28px] border border-emerald-100 bg-emerald-50 p-4 shadow-sm">
+              <SectionHeader eyebrow="Visitante" title="Cadastrar e convidar" />
+              <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+                <input
+                  value={visitorName}
+                  onChange={(event) => setVisitorName(event.target.value)}
+                  className="field-control"
+                  placeholder="Nome do visitante"
+                />
+                <input
+                  value={visitorPhone}
+                  onChange={(event) => setVisitorPhone(event.target.value)}
+                  inputMode="tel"
+                  className="field-control"
+                  placeholder="WhatsApp"
+                />
+                <button
+                  type="button"
+                  onClick={addVisitorToCell}
+                  className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-emerald-900 px-4 text-sm font-black text-white"
+                >
+                  <UserRoundPlus size={18} />
+                  Adicionar
+                </button>
+              </div>
+              {visitorInviteLink ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <p className="break-all rounded-2xl bg-white/85 p-3 text-xs font-bold text-emerald-900">{visitorInviteLink}</p>
+                  <a
+                    href={whatsappUrl(visitorInvitePhone, `Ola! Aqui esta o convite para entrar no Ovelhas e acompanhar a proxima celula: ${visitorInviteLink}`)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[#25d366] px-4 text-sm font-black text-white"
+                  >
+                    <Send size={16} />
+                    Enviar
+                  </a>
+                </div>
+              ) : null}
             </section>
 
             <button
@@ -510,6 +677,27 @@ export default function TodayCellPage() {
                 </label>
               </div>
               <div className="mt-4 space-y-3">
+                <label className="flex items-start gap-3 rounded-2xl bg-emerald-50 p-3 text-sm font-black text-emerald-950">
+                  <input
+                    type="checkbox"
+                    checked={supervisorVisited}
+                    onChange={(event) => setSupervisorVisited(event.target.checked)}
+                    className="mt-1 h-5 w-5 accent-emerald-700"
+                  />
+                  <span>
+                    Supervisor esteve nesta celula
+                    <span className="mt-1 block text-xs font-semibold text-emerald-700">
+                      Essa informacao aparece no relatorio enviado para a lideranca.
+                    </span>
+                  </span>
+                </label>
+                <textarea
+                  value={supervisorVisitNotes}
+                  onChange={(event) => setSupervisorVisitNotes(event.target.value)}
+                  rows={2}
+                  className="w-full resize-none rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-emerald-500"
+                  placeholder="Observacao sobre a visita do supervisor"
+                />
                 <textarea
                   value={highlights}
                   onChange={(event) => setHighlights(event.target.value)}

@@ -254,7 +254,7 @@ export default function PersonProfilePage() {
           {feedback && <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{feedback}</div>}
 
           {editing && (
-            <form onSubmit={handleUpdate} className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm sm:p-5">
+            <form onSubmit={handleUpdate} className="native-form rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm sm:p-5">
               <SectionHeader eyebrow="Dados" title="Editar perfil" />
               <div className="grid gap-3 md:grid-cols-2">
                 <input name="name" defaultValue={person.name} className="field-control" placeholder="Nome" />

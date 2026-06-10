@@ -5,11 +5,14 @@ import { Bell, CalendarCheck, CheckCircle2, ExternalLink, Heart, Lock, MessageCi
 import { FormEvent, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
+import { ChurchNoticeCard } from "@/components/church-notice-card";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { getNextMeetingDate, rsvpLabel, rsvpTone, shouldAskForRsvp } from "@/lib/cell-schedule";
+import { getScopedActivityEvents } from "@/lib/access-control";
+import { isChurchNotice } from "@/lib/church-notices";
 import { saveVideoReflection, useActivityEvents, useCellRsvps, useCells, useDiscipleship, useLocalPeople } from "@/lib/local-store";
 import { getVideoEmbedUrl, isEmbeddableVideo } from "@/lib/video";
 
@@ -23,7 +26,7 @@ export default function MemberDiscipleshipPage() {
   const { people, updatePerson } = useLocalPeople();
   const { cells } = useCells();
   const { tracks, videos, accesses, progress, updateVideoProgress } = useDiscipleship();
-  const { addEvent } = useActivityEvents();
+  const { events, addEvent } = useActivityEvents();
   const { rsvps, saveRsvp } = useCellRsvps(currentUser.churchId);
   const [feedback, setFeedback] = useState("");
   const [selectedVideoId, setSelectedVideoId] = useState("");
@@ -74,6 +77,9 @@ export default function MemberDiscipleshipPage() {
     trackVideos.find((video) => (progressByVideo.get(video.id)?.progressPercent ?? 0) < 100) ?? trackVideos[0];
   const selectedVideo = trackVideos.find((video) => video.id === selectedVideoId) ?? nextVideo;
   const selectedProgress = selectedVideo ? progressByVideo.get(selectedVideo.id)?.progressPercent ?? 0 : 0;
+  const memberNotices = getScopedActivityEvents(currentUser, events, cells, people, isDemoMode)
+    .filter(isChurchNotice)
+    .slice(0, 2);
 
   async function saveVideoProgress(videoId: string, progressPercent: number) {
     if (!member) {
@@ -254,6 +260,17 @@ export default function MemberDiscipleshipPage() {
             <p className="mt-2 text-xs font-bold text-slate-500">{activeTrack?.title ?? "Aguardando liberacao"}</p>
           </div>
         </section>
+
+        {memberNotices.length > 0 && (
+          <section className="rounded-[28px] border border-white/80 bg-white/60 p-3 shadow-sm">
+            <SectionHeader eyebrow="Avisos" title="Comunicados para voce" />
+            <div className="grid gap-3">
+              {memberNotices.map((event) => (
+                <ChurchNoticeCard key={event.id} event={event} compact />
+              ))}
+            </div>
+          </section>
+        )}
 
         {showRsvpPopup && (
           <div className="fixed inset-0 z-50 flex items-end bg-slate-950/45 p-3 backdrop-blur-sm sm:items-center">
@@ -474,7 +491,7 @@ export default function MemberDiscipleshipPage() {
 
         <section id="perfil" className="rounded-[26px] border border-white/80 bg-white/90 p-5 shadow-sm">
           <SectionHeader eyebrow="Meu perfil" title="Atualizar meus dados" />
-          <form onSubmit={saveMemberProfile} className="space-y-3">
+          <form onSubmit={saveMemberProfile} className="native-form space-y-3">
             <input name="photoUrl" defaultValue={member.photoUrl} className="field-control" placeholder="URL da foto de perfil" />
             <input name="name" defaultValue={member.name} className="field-control" placeholder="Nome completo" />
             <input name="phone" defaultValue={member.phone} inputMode="tel" className="field-control" placeholder="WhatsApp" />

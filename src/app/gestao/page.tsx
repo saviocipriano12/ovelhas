@@ -198,7 +198,7 @@ export default function ManagementPage() {
 
         {canAssignCells && (
           <section className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
-            <form onSubmit={handleAssignmentSubmit} className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+            <form onSubmit={handleAssignmentSubmit} className="native-form rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
               <SectionHeader eyebrow={currentUser.role === "supervisor" ? "Supervisor" : "Lideranca"} title="Atribuir celulas" />
               <div className="grid gap-3 md:grid-cols-3">
                 <label className="space-y-2 text-sm font-semibold text-slate-700">
@@ -257,14 +257,14 @@ export default function ManagementPage() {
                   </select>
                 </label>
               </div>
-              <button className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700">
+              <button className="primary-action mt-4">
                 <Save size={18} />
                 Salvar cobertura pastoral
               </button>
             </form>
 
             {canManageRoles && (
-              <form onSubmit={handleRoleSubmit} className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+              <form onSubmit={handleRoleSubmit} className="native-form rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
                 <SectionHeader eyebrow="Acesso" title="Promover usuario" />
                 <div className="space-y-3">
                   <label className="space-y-2 text-sm font-semibold text-slate-700">
@@ -292,13 +292,14 @@ export default function ManagementPage() {
                       <option value="member">Membro</option>
                       <option value="leader">Lider</option>
                       <option value="consolidation">Consolidacao</option>
+                      <option value="communication">Alertas</option>
                       <option value="supervisor">Supervisor</option>
                       <option value="pastor">Pastor</option>
                       <option value="admin">Administrador</option>
                     </select>
                   </label>
                 </div>
-                <button className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800">
+                <button className="primary-action mt-4">
                   <UserCog size={18} />
                   Alterar acesso
                 </button>
@@ -316,7 +317,7 @@ export default function ManagementPage() {
         <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
           <SectionHeader eyebrow="Papeis" title="Quem pode fazer o que" />
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {(["pastor", "supervisor", "leader", "consolidation", "member"] as UserRole[]).map((role) => {
+            {(["pastor", "supervisor", "leader", "consolidation", "communication", "member"] as UserRole[]).map((role) => {
               const roleUsers = visibleProfiles.filter((profile) => profile.role === role);
 
               return (
@@ -327,6 +328,7 @@ export default function ManagementPage() {
                     {role === "supervisor" && "Cria e monitora celulas, chama lideres e membros, e presta relatorio ao pastor."}
                     {role === "leader" && "Cuida da propria celula, membros, presencas e discipulado."}
                     {role === "consolidation" && "Registra cultos, visitantes, decisoes, batismos e encaminhamentos."}
+                    {role === "communication" && "Envia alertas, noticias, videos e comunicados segmentados da igreja."}
                     {role === "member" && "Acessa apenas o proprio discipulado e informacoes pessoais."}
                   </p>
                   <div className="mt-4 space-y-2">

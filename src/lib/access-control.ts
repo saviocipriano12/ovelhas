@@ -17,6 +17,7 @@ const roleRoutes: Record<UserRole, string[]> = {
     "/dashboard",
     "/consolidacao",
     "/consolidacao/contatos",
+    "/perfil",
     "/celulas",
     "/celulas/hoje",
     "/pessoas",
@@ -40,6 +41,7 @@ const roleRoutes: Record<UserRole, string[]> = {
   ],
   supervisor: [
     "/dashboard",
+    "/perfil",
     "/celulas",
     "/celulas/hoje",
     "/pessoas",
@@ -62,6 +64,7 @@ const roleRoutes: Record<UserRole, string[]> = {
   ],
   leader: [
     "/dashboard",
+    "/perfil",
     "/celulas",
     "/celulas/hoje",
     "/pessoas",
@@ -82,9 +85,11 @@ const roleRoutes: Record<UserRole, string[]> = {
   consolidation: [
     "/consolidacao",
     "/consolidacao/contatos",
+    "/perfil",
     "/instalar",
   ],
-  member: ["/meu-discipulado", "/oracao", "/biblioteca", "/notificacoes", "/instalar", "/mais"],
+  communication: ["/dashboard", "/perfil", "/notificacoes", "/instalar", "/mais"],
+  member: ["/meu-discipulado", "/perfil", "/oracao", "/biblioteca", "/notificacoes", "/instalar", "/mais"],
 };
 
 export function isPendingAccount(user: AppUser) {
@@ -102,6 +107,10 @@ export function getDefaultRoute(user: AppUser) {
 
   if (user.role === "consolidation") {
     return "/consolidacao";
+  }
+
+  if (user.role === "communication") {
+    return "/notificacoes";
   }
 
   if (user.platformAdmin && user.churchId === "sem-igreja") {
@@ -163,15 +172,15 @@ export function canAssignCellResponsibility(user: AppUser) {
 
 export function getInviteableRoles(user: AppUser): UserRole[] {
   if (user.role === "admin") {
-    return ["admin", "pastor", "supervisor", "leader", "consolidation", "member"];
+    return ["admin", "pastor", "supervisor", "leader", "consolidation", "communication", "member"];
   }
 
   if (user.role === "pastor") {
-    return ["supervisor", "leader", "consolidation", "member"];
+    return ["supervisor", "leader", "consolidation", "communication", "member"];
   }
 
   if (user.role === "supervisor") {
-    return ["leader", "member"];
+    return ["supervisor", "leader", "member"];
   }
 
   if (user.role === "leader") {
@@ -198,7 +207,7 @@ export function canViewPerson(user: AppUser, person: Person) {
     return person.leaderUserId === user.id || person.createdByUserId === user.id || user.cellIds?.includes(person.cellId);
   }
 
-  if (user.role === "consolidation") {
+  if (user.role === "consolidation" || user.role === "communication") {
     return user.churchId === person.churchId && person.createdByUserId === user.id;
   }
 
@@ -227,7 +236,7 @@ export function canViewCell(user: AppUser, cell: Cell) {
     return cell.leaderUserId === user.id || Boolean(user.cellIds?.includes(cell.id));
   }
 
-  if (user.role === "consolidation") {
+  if (user.role === "consolidation" || user.role === "communication") {
     return user.churchId === cell.churchId;
   }
 
@@ -260,7 +269,7 @@ export function getVisibleSupervisorVisits(user: AppUser, visits: SupervisorVisi
     return [];
   }
 
-  if (user.role === "consolidation") {
+  if (user.role === "consolidation" || user.role === "communication") {
     return [];
   }
 
@@ -294,7 +303,10 @@ export function getVisibleActivityEvents(user: AppUser, events: ActivityEvent[],
 
   return events.filter((event) => {
     if (user.role === "admin" || user.role === "pastor") {
-      return event.churchId === user.churchId && event.visibility !== "member";
+      return (
+        event.churchId === user.churchId &&
+        (event.visibility !== "member" || (!event.cellId && !event.personId))
+      );
     }
 
     if (user.role === "supervisor") {
@@ -317,10 +329,15 @@ export function getVisibleActivityEvents(user: AppUser, events: ActivityEvent[],
       return event.actorUserId === user.id || (event.churchId === user.churchId && event.targetType === "person");
     }
 
+    if (user.role === "communication") {
+      return event.actorUserId === user.id || (event.churchId === user.churchId && event.visibility === "member");
+    }
+
     return (
       event.visibility === "member" &&
       (
         event.actorUserId === user.id ||
+        (event.churchId === user.churchId && !event.cellId && !event.personId) ||
         Boolean(event.personId && visiblePersonIds.has(event.personId)) ||
         Boolean(event.cellId && visiblePeople.some((person) => person.cellId === event.cellId))
       )
@@ -357,7 +374,8 @@ export function canViewPastoralNote(user: AppUser, note: PastoralNote, person: P
     user.role === "pastor" ||
     user.role === "supervisor" ||
     user.role === "leader" ||
-    user.role === "consolidation"
+    user.role === "consolidation" ||
+    user.role === "communication"
   );
 }
 
@@ -368,7 +386,8 @@ export function canWritePastoralNote(user: AppUser, person: Person) {
       user.role === "pastor" ||
       user.role === "supervisor" ||
       user.role === "leader" ||
-      user.role === "consolidation")
+      user.role === "consolidation" ||
+      user.role === "communication")
   );
 }
 
@@ -484,6 +503,10 @@ export function describeAccess(user: AppUser) {
 
   if (user.role === "consolidation") {
     return "Registra cultos, visitantes, decisoes e encaminhamentos para celulas.";
+  }
+
+  if (user.role === "communication") {
+    return "Cria alertas, noticias, eventos e comunicados segmentados para a igreja.";
   }
 
   return "Ve apenas seu proprio discipulado e informacoes pessoais.";

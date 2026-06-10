@@ -12,9 +12,11 @@ import {
   ClipboardList,
   HeartHandshake,
   Heart,
+  Image as ImageIcon,
   PlayCircle,
   Send,
   ShieldAlert,
+  Upload,
   UserRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -39,6 +41,15 @@ const typeIcons: Record<PastoralNotification["type"], LucideIcon> = {
   prayer: Heart,
   notice: BellRing,
 };
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Nao consegui ler a midia."));
+    reader.readAsDataURL(file);
+  });
+}
 
 function priorityTone(priority: PastoralNotification["priority"]) {
   if (priority === "Urgente") {
@@ -80,8 +91,13 @@ export default function NotificationsPage() {
   const [filter, setFilter] = useState<"all" | "unread" | PastoralNotification["priority"]>("unread");
   const [deviceEnabled, setDeviceEnabled] = useState(() => notificationsEnabled());
   const [feedback, setFeedback] = useState("");
+  const [targetMode, setTargetMode] = useState<"church" | "cell">("church");
+  const [mediaUrl, setMediaUrl] = useState("");
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
-  const canSendCellNotice = ["admin", "pastor", "supervisor", "leader"].includes(currentUser.role) && visibleCells.length > 0;
+  const canSendToChurch = ["admin", "pastor", "communication"].includes(currentUser.role);
+  const canSendNotice =
+    ["admin", "pastor", "supervisor", "leader", "communication"].includes(currentUser.role) &&
+    (visibleCells.length > 0 || canSendToChurch);
 
   async function enableDeviceNotifications() {
     const result = await requestDeviceNotificationPermission();
@@ -89,16 +105,49 @@ export default function NotificationsPage() {
     setFeedback(result.ok ? "Avisos do aparelho ativados." : "Nao consegui ativar os avisos neste aparelho.");
   }
 
+  async function handleMediaUpload(file?: File | null) {
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+      setFeedback("Envie uma imagem ou video curto.");
+      return;
+    }
+
+    if (file.size > 1400 * 1024) {
+      setFeedback("Use uma midia menor que 1.4 MB para abrir bem no celular.");
+      return;
+    }
+
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setMediaUrl(dataUrl);
+      setFeedback("Midia carregada. Agora envie o comunicado.");
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Nao consegui carregar a midia.");
+    }
+  }
+
   async function sendCellNotice(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const cellId = String(formData.get("cellId") || visibleCells[0]?.id || "");
-    const title = String(formData.get("title") || "Aviso da celula").trim();
+    const title = String(formData.get("title") || "Aviso da igreja").trim();
+    const noticeType = String(formData.get("noticeType") || "Aviso").trim();
     const message = String(formData.get("message") || "").trim();
+    const typedMediaUrl = String(formData.get("mediaUrl") || "").trim();
     const cell = visibleCells.find((item) => item.id === cellId);
+    const finalMediaUrl = mediaUrl || typedMediaUrl;
+    const isChurchNotice = targetMode === "church" && canSendToChurch;
 
-    if (!cell || !message) {
-      setFeedback("Escolha a celula e escreva o aviso.");
+    if (!isChurchNotice && !cell) {
+      setFeedback("Escolha a celula para enviar este aviso.");
+      return;
+    }
+
+    if (!message) {
+      setFeedback("Escreva a mensagem do aviso.");
       return;
     }
 
@@ -107,18 +156,19 @@ export default function NotificationsPage() {
       actorUserId: currentUser.id,
       actorName: currentUser.name,
       actorRole: currentUser.role,
-      action: title,
-      description: message,
+      action: `${noticeType}: ${title}`,
+      description: finalMediaUrl ? `${message}\n\nMidia: ${finalMediaUrl}` : message,
       targetType: "cell",
-      targetId: cell.id,
-      targetName: cell.name,
-      cellId: cell.id,
+      targetId: isChurchNotice ? undefined : cell?.id,
+      targetName: isChurchNotice ? "Toda a igreja" : cell?.name,
+      cellId: isChurchNotice ? undefined : cell?.id,
       visibility: "member",
       persistToSupabase: !isDemoMode,
     });
 
     event.currentTarget.reset();
-    setFeedback(`Aviso enviado para ${cell.name}.`);
+    setMediaUrl("");
+    setFeedback(isChurchNotice ? "Comunicado enviado para toda a igreja." : `Aviso enviado para ${cell?.name}.`);
   }
 
   const filteredNotifications = notifications.filter((notification) => {
@@ -165,26 +215,63 @@ export default function NotificationsPage() {
 
         {feedback && <p className="rounded-lg bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{feedback}</p>}
 
-        {canSendCellNotice && (
-          <form onSubmit={sendCellNotice} className="rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-sm">
+        {canSendNotice && (
+          <form onSubmit={sendCellNotice} className="native-form rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-sm">
             <div className="flex items-start gap-3">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800">
                 <Send size={19} />
               </span>
               <div>
                 <p className="text-xs font-black uppercase text-emerald-700">Aviso para membros</p>
-                <h2 className="text-lg font-black text-slate-950">Enviar comunicado para uma celula</h2>
+                <h2 className="text-lg font-black text-slate-950">Enviar comunicado</h2>
               </div>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <select name="cellId" className="field-control">
-                {visibleCells.map((cell) => (
-                  <option key={cell.id} value={cell.id}>
-                    {cell.name}
-                  </option>
-                ))}
+              {canSendToChurch && (
+                <select
+                  value={targetMode}
+                  onChange={(event) => setTargetMode(event.target.value as "church" | "cell")}
+                  className="field-control"
+                >
+                  <option value="church">Toda a igreja</option>
+                  <option value="cell">Celula especifica</option>
+                </select>
+              )}
+              {(!canSendToChurch || targetMode === "cell") && (
+                <select name="cellId" className="field-control">
+                  {visibleCells.map((cell) => (
+                    <option key={cell.id} value={cell.id}>
+                      {cell.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <select name="noticeType" className="field-control">
+                <option>Aviso</option>
+                <option>Noticia do mes</option>
+                <option>Evento</option>
+                <option>Convite de culto</option>
+                <option>Flyer</option>
+                <option>Video</option>
               </select>
-              <input name="title" className="field-control" placeholder="Titulo do aviso" defaultValue="Aviso da celula" />
+              <input name="title" className="field-control" placeholder="Titulo do aviso" defaultValue="Aviso da igreja" />
+              <input name="mediaUrl" className="field-control sm:col-span-2" placeholder="Link de imagem ou video opcional" />
+              <label className="flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-emerald-200 bg-emerald-50 px-4 text-sm font-black text-emerald-900 sm:col-span-2">
+                <Upload size={18} />
+                Upload rapido de imagem/video curto
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  className="hidden"
+                  onChange={(event) => handleMediaUpload(event.target.files?.[0])}
+                />
+              </label>
+              {mediaUrl ? (
+                <div className="rounded-2xl bg-slate-50 p-3 text-xs font-bold text-slate-600 sm:col-span-2">
+                  <ImageIcon className="mr-2 inline text-emerald-700" size={15} />
+                  Midia carregada para este comunicado.
+                </div>
+              ) : null}
               <textarea
                 name="message"
                 required

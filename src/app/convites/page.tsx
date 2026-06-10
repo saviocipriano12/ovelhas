@@ -86,8 +86,8 @@ export default function InvitesPage() {
       return;
     }
 
-    if ((role === "member" || role === "leader") && !selectedCell?.id) {
-      setFeedback("Escolha uma celula antes de gerar convite para lider ou membro.");
+    if ((role === "member" || role === "leader" || role === "supervisor") && !selectedCell?.id) {
+      setFeedback("Escolha uma celula antes de gerar convite para supervisor, lider ou membro.");
       return;
     }
 
@@ -96,7 +96,7 @@ export default function InvitesPage() {
       name,
       email,
       role,
-      cellId: role === "member" || role === "leader" ? selectedCell?.id ?? "" : "",
+      cellId: role === "member" || role === "leader" || role === "supervisor" ? selectedCell?.id ?? "" : "",
       createdBy: currentUser.id,
       persistToSupabase: !isDemoMode,
     });
@@ -161,7 +161,7 @@ export default function InvitesPage() {
 
         {canInvite && (
           <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-            <form onSubmit={handleSubmit} className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm sm:p-5">
+            <form onSubmit={handleSubmit} className="native-form rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm sm:p-5">
               <SectionHeader eyebrow="Novo acesso" title="Criar convite" />
               <div className="space-y-3">
                 <input
@@ -188,7 +188,7 @@ export default function InvitesPage() {
                     </option>
                   ))}
                 </select>
-                {(role === "member" || role === "leader") && (
+                {(role === "member" || role === "leader" || role === "supervisor") && (
                   <select
                     value={selectedCell?.id ?? ""}
                     onChange={(event) => setCellId(event.target.value)}

@@ -33,6 +33,7 @@ import { roleLabels } from "@/lib/data";
 
 const menuItems: { href: string; title: string; description: string; icon: LucideIcon }[] = [
   { href: "/celulas", title: "Celulas", description: "Acompanhar lideres, bairros e frequencia.", icon: LayoutGrid },
+  { href: "/perfil", title: "Perfil", description: "Atualizar seus dados pessoais e foto no app.", icon: UserRound },
   { href: "/pessoas", title: "Pessoas", description: "Membros, visitantes e novos cuidados.", icon: Users },
   { href: "/consolidacao", title: "Consolidacao", description: "Cultos, visitantes, decisoes e encaminhamento para celulas.", icon: ClipboardList },
   { href: "/presenca", title: "Presenca", description: "Preparar, marcar presenca e fechar o relatorio da celula.", icon: CalendarCheck },
