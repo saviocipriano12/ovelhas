@@ -272,28 +272,31 @@ export default function PeoplePage() {
         )}
 
         {open && (
-          <div className="fixed inset-0 z-[999] flex bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4">
+          <div className="fixed inset-0 z-[999] bg-[#f7f8f3]">
             <form
               onSubmit={handleSubmit}
-              className="animate-enter flex h-[100dvh] w-full flex-col overflow-hidden bg-[#f7f8f3] shadow-2xl sm:h-auto sm:max-h-[90dvh] sm:max-w-5xl sm:rounded-[32px]"
+              className="animate-enter flex h-[100dvh] w-full flex-col overflow-hidden bg-[#f7f8f3]"
             >
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 bg-white/95 px-4 py-4 backdrop-blur sm:px-5">
-                <div>
-                  <p className="text-xs font-bold uppercase text-emerald-700">Novo cuidado</p>
-                  <h2 className="text-xl font-semibold text-slate-950">Adicionar pessoa</h2>
+              <div className="shrink-0 border-b border-slate-200/80 bg-white/95 px-4 py-4 backdrop-blur">
+                <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase text-emerald-700">Novo cuidado</p>
+                    <h2 className="text-xl font-semibold text-slate-950">Adicionar pessoa</h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 text-sm font-black text-slate-700"
+                    aria-label="Voltar para pessoas"
+                  >
+                    <X size={18} />
+                    <span className="hidden sm:inline">Cancelar</span>
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600"
-                  aria-label="Fechar"
-                >
-                  <X size={18} />
-                </button>
               </div>
 
-              <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
-                <div className="grid gap-4 lg:grid-cols-2">
+              <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+                <div className="mx-auto grid w-full max-w-6xl gap-4 lg:grid-cols-2">
                   <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-100">
                     <p className="mb-3 text-xs font-black uppercase text-slate-400">Identificacao</p>
                     <div className="space-y-3">
@@ -366,9 +369,18 @@ export default function PeoplePage() {
               </div>
 
               <div className="shrink-0 border-t border-slate-200/80 bg-white/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur">
-                <button className="primary-action min-h-14 w-full">
-                  Salvar pessoa e gerar convite
-                </button>
+                <div className="mx-auto flex w-full max-w-6xl gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="hidden min-h-14 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-600 sm:block"
+                  >
+                    Cancelar
+                  </button>
+                  <button className="primary-action min-h-14 flex-1">
+                    Salvar pessoa e gerar convite
+                  </button>
+                </div>
               </div>
             </form>
           </div>
