@@ -326,7 +326,7 @@ export function getVisibleActivityEvents(user: AppUser, events: ActivityEvent[],
     }
 
     if (user.role === "consolidation") {
-      return event.actorUserId === user.id || (event.churchId === user.churchId && event.targetType === "person");
+      return event.actorUserId === user.id;
     }
 
     if (user.role === "communication") {

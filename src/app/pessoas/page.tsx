@@ -24,6 +24,7 @@ export default function PeoplePage() {
   const { cells, refreshCells } = useCells();
   const { createInvite } = useInvites();
   const [query, setQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<"all" | "visitor" | "discipleship" | "attention" | "baptism">("all");
   const [open, setOpen] = useState(false);
   const [created, setCreated] = useState("");
   const [lastInviteLink, setLastInviteLink] = useState("");
@@ -34,17 +35,24 @@ export default function PeoplePage() {
     const normalizedQuery = query.trim().toLowerCase();
     const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
 
-    if (!normalizedQuery) {
-      return visiblePeople;
-    }
+    return visiblePeople.filter((person) => {
+      const matchesQuery =
+        !normalizedQuery ||
+        [person.name, person.stage, person.status, person.neighborhood]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery);
+      const status = `${person.stage} ${person.status}`.toLowerCase();
+      const matchesFilter =
+        activeFilter === "all" ||
+        (activeFilter === "visitor" && status.includes("visitante")) ||
+        (activeFilter === "discipleship" && (status.includes("discipulado") || status.includes("fundamentos"))) ||
+        (activeFilter === "attention" && (person.cellAbsences >= 2 || status.includes("precisa contato") || status.includes("atencao"))) ||
+        (activeFilter === "baptism" && status.includes("batismo"));
 
-    return visiblePeople.filter((person) =>
-      [person.name, person.stage, person.status, person.neighborhood]
-        .join(" ")
-        .toLowerCase()
-        .includes(normalizedQuery),
-    );
-  }, [currentUser, isDemoMode, people, query]);
+      return matchesQuery && matchesFilter;
+    });
+  }, [activeFilter, currentUser, isDemoMode, people, query]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,6 +69,12 @@ export default function PeoplePage() {
     const selectedCell = visibleCells.find((cell) => cell.id === cellId);
 
     if (!name || !phone) {
+      setCreated("Informe nome e WhatsApp para continuar.");
+      return;
+    }
+
+    if (!selectedCell) {
+      setCreated("Escolha uma celula valida antes de cadastrar a pessoa.");
       return;
     }
 
@@ -74,10 +88,10 @@ export default function PeoplePage() {
       address,
       familyPhone,
       createdByUserId: currentUser.id,
-      leaderUserId: selectedCell?.leaderUserId || (currentUser.role === "leader" ? currentUser.id : undefined),
+      leaderUserId: selectedCell.leaderUserId || (currentUser.role === "leader" ? currentUser.id : undefined),
       churchId: currentUser.churchId,
-      cellId: selectedCell?.id || currentUser.cellIds?.[0] || "cell-casa-da-paz",
-      cellName: selectedCell?.name,
+      cellId: selectedCell.id,
+      cellName: selectedCell.name,
       persistToSupabase: !isDemoMode,
     });
 
@@ -159,15 +173,24 @@ export default function PeoplePage() {
   }
 
   return (
-    <AppShell>
+    <AppShell hideMobileNav={open} hidePwaStatus={open}>
       <section className="animate-enter space-y-4">
+        {!open && (
+          <>
         <SectionHeader
           eyebrow="Celula"
           title="Pessoas acompanhadas"
           action={
             canManagePeople(currentUser) ? (
               <button
-                onClick={() => setOpen(true)}
+                onClick={() => {
+                  if (visibleCells.length === 0) {
+                    setCreated("Crie ou atribua uma celula antes de cadastrar pessoas.");
+                    return;
+                  }
+
+                  setOpen(true);
+                }}
                 className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-900 text-white shadow-sm"
                 aria-label="Adicionar pessoa"
               >
@@ -178,12 +201,21 @@ export default function PeoplePage() {
         />
 
         <div className="flex gap-2 overflow-x-auto pb-1 app-scrollbar">
-          {["Todos", "Visitantes", "Em discipulado", "Sem contato", "Batismo"].map((filter) => (
+          {[
+            { id: "all", label: "Todos" },
+            { id: "visitor", label: "Visitantes" },
+            { id: "discipleship", label: "Em discipulado" },
+            { id: "attention", label: "Sem contato" },
+            { id: "baptism", label: "Batismo" },
+          ].map((filter) => (
             <button
-              key={filter}
-              className="shrink-0 rounded-lg border border-white/80 bg-white/90 px-3 py-2 text-sm font-bold text-slate-600 shadow-sm"
+              key={filter.id}
+              onClick={() => setActiveFilter(filter.id as typeof activeFilter)}
+              className={`shrink-0 rounded-lg border px-3 py-2 text-sm font-bold shadow-sm ${
+                activeFilter === filter.id ? "border-emerald-900 bg-emerald-900 text-white" : "border-white/80 bg-white/90 text-slate-600"
+              }`}
             >
-              {filter}
+              {filter.label}
             </button>
           ))}
         </div>
@@ -271,14 +303,16 @@ export default function PeoplePage() {
           </div>
         )}
 
+          </>
+        )}
+
         {open && (
-          <div className="fixed inset-0 z-[999] bg-[#f7f8f3]">
-            <form
-              onSubmit={handleSubmit}
-              className="animate-enter flex h-[100dvh] w-full flex-col overflow-hidden bg-[#f7f8f3]"
-            >
-              <div className="shrink-0 border-b border-slate-200/80 bg-white/95 px-4 py-4 backdrop-blur">
-                <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
+          <form
+            onSubmit={handleSubmit}
+            className="form-screen animate-enter mx-auto w-full max-w-6xl"
+          >
+              <div className="shrink-0 border-b border-slate-200/80 bg-white/95 px-1 py-3 backdrop-blur sm:px-0">
+                <div className="flex w-full items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-bold uppercase text-emerald-700">Novo cuidado</p>
                     <h2 className="text-xl font-semibold text-slate-950">Adicionar pessoa</h2>
@@ -295,10 +329,11 @@ export default function PeoplePage() {
                 </div>
               </div>
 
-              <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
-                <div className="mx-auto grid w-full max-w-6xl gap-4 lg:grid-cols-2">
+              <div className="form-screen-body min-h-0 flex-1 py-4">
+                <div className="grid gap-4 lg:grid-cols-2">
                   <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-100">
-                    <p className="mb-3 text-xs font-black uppercase text-slate-400">Identificacao</p>
+                    <p className="mb-1 text-xs font-black uppercase text-emerald-700">Passo 1 de 2</p>
+                    <h3 className="mb-4 text-lg font-black text-slate-950">Quem chegou para caminhar?</h3>
                     <div className="space-y-3">
                       <label className="block">
                         <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Nome completo</span>
@@ -308,41 +343,16 @@ export default function PeoplePage() {
                         <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">WhatsApp</span>
                         <input name="phone" required inputMode="tel" className="field-control" placeholder="(00) 00000-0000" />
                       </label>
-                      <label className="block">
-                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Email</span>
-                        <input name="email" type="email" className="field-control" placeholder="Opcional" />
-                      </label>
-                      <label className="block">
-                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Nascimento</span>
-                        <input name="birthDate" type="date" className="field-control" aria-label="Data de nascimento" />
-                      </label>
                     </div>
                   </div>
 
-                  <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-100">
-                    <p className="mb-3 text-xs font-black uppercase text-slate-400">Localizacao e familia</p>
+                  <div className="rounded-[24px] bg-emerald-50 p-4 ring-1 ring-emerald-100">
+                    <p className="mb-1 text-xs font-black uppercase text-emerald-700">Passo 2 de 2</p>
+                    <h3 className="mb-4 text-lg font-black text-slate-950">Onde ela vai ser cuidada?</h3>
                     <div className="space-y-3">
                       <label className="block">
-                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Bairro</span>
-                        <input name="neighborhood" className="field-control" placeholder="Ex: Centro" />
-                      </label>
-                      <label className="block">
-                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Endereco completo</span>
-                        <input name="address" className="field-control" placeholder="Rua, numero e complemento" />
-                      </label>
-                      <label className="block">
-                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Telefone familiar</span>
-                        <input name="familyPhone" inputMode="tel" className="field-control" placeholder="Opcional" />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="rounded-[24px] bg-emerald-50 p-4 ring-1 ring-emerald-100 lg:col-span-2">
-                    <p className="mb-3 text-xs font-black uppercase text-emerald-700">Cuidado e acesso</p>
-                    <div className="grid gap-3 lg:grid-cols-2">
-                      <label className="block">
                         <span className="mb-1.5 block text-xs font-black uppercase text-emerald-800">Celula</span>
-                        <select name="cellId" className="field-control">
+                        <select name="cellId" required className="field-control">
                           {visibleCells.map((cell) => (
                             <option key={cell.id} value={cell.id}>
                               {cell.name}
@@ -360,16 +370,44 @@ export default function PeoplePage() {
                           <option>Servindo</option>
                         </select>
                       </label>
-                      <p className="rounded-2xl bg-white/80 p-3 text-xs font-bold leading-5 text-emerald-900 lg:col-span-2">
+                      <p className="rounded-2xl bg-white/80 p-3 text-xs font-bold leading-5 text-emerald-900">
                         Ao salvar, o Ovelhas tambem gera um convite para essa pessoa entrar no app vinculada a esta celula.
                       </p>
                     </div>
                   </div>
+
+                  <details className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-100 lg:col-span-2">
+                    <summary className="cursor-pointer list-none text-sm font-black text-slate-800 marker:hidden">
+                      Mais informacoes sobre a pessoa <span className="ml-1 text-xs font-semibold text-slate-400">opcional</span>
+                    </summary>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Email</span>
+                        <input name="email" type="email" className="field-control" placeholder="Opcional" />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Nascimento</span>
+                        <input name="birthDate" type="date" className="field-control" aria-label="Data de nascimento" />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Bairro</span>
+                        <input name="neighborhood" className="field-control" placeholder="Ex: Centro" />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Telefone familiar</span>
+                        <input name="familyPhone" inputMode="tel" className="field-control" placeholder="Opcional" />
+                      </label>
+                      <label className="block sm:col-span-2">
+                        <span className="mb-1.5 block text-xs font-black uppercase text-slate-500">Endereco completo</span>
+                        <input name="address" className="field-control" placeholder="Rua, numero e complemento" />
+                      </label>
+                    </div>
+                  </details>
                 </div>
               </div>
 
-              <div className="shrink-0 border-t border-slate-200/80 bg-white/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur">
-                <div className="mx-auto flex w-full max-w-6xl gap-2">
+              <div className="form-screen-footer shrink-0 border-t border-slate-200/80 bg-white/95 py-3 backdrop-blur">
+                <div className="flex w-full gap-2">
                   <button
                     type="button"
                     onClick={() => setOpen(false)}
@@ -382,8 +420,7 @@ export default function PeoplePage() {
                   </button>
                 </div>
               </div>
-            </form>
-          </div>
+          </form>
         )}
       </section>
     </AppShell>

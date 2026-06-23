@@ -1,4 +1,4 @@
-const CACHE_NAME = "ovelhas-v4";
+const CACHE_NAME = "ovelhas-v5";
 const APP_SHELL = [
   "/",
   "/dashboard",
@@ -94,17 +94,13 @@ self.addEventListener("fetch", (event) => {
 
   if (requestUrl.pathname.startsWith("/_next/")) {
     event.respondWith(
-      caches.match(event.request).then((cached) => {
-        if (cached) {
-          return cached;
-        }
-
-        return fetch(event.request).then((response) => {
+      fetch(event.request)
+        .then((response) => {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
           return response;
-        });
-      }),
+        })
+        .catch(async () => (await caches.match(event.request)) || new Response("Offline", { status: 503 })),
     );
     return;
   }

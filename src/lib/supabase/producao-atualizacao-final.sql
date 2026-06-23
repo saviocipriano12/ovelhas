@@ -726,7 +726,7 @@ using (
         p.role::text = 'communication'
         and activity_events.visibility = 'member'
       )
-      or (p.role::text = 'consolidation' and (p.id = activity_events.actor_user_id or activity_events.target_type = 'person'))
+      or (p.role::text = 'consolidation' and p.id = activity_events.actor_user_id)
       or (p.role::text = 'supervisor' and (p.id = c.supervisor_id or p.id = activity_events.actor_user_id))
       or (p.role::text = 'leader' and (p.id = c.leader_id or p.id = pe.leader_user_id or p.id = activity_events.actor_user_id))
       or (

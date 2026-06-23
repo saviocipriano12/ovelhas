@@ -3,6 +3,8 @@
 :root {
   --background: #f7f8f3;
   --foreground: #17211d;
+  --font-geist-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-geist-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
 
 @theme inline {
@@ -168,6 +170,26 @@ a:active {
   padding-bottom: calc(8rem + env(safe-area-inset-bottom));
 }
 
+.form-screen {
+  display: flex;
+  min-height: calc(100dvh - 7.5rem);
+  flex-direction: column;
+}
+
+.form-screen-body {
+  scroll-margin-bottom: 7rem;
+  scroll-padding-bottom: 7rem;
+}
+
+.form-screen-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  margin-top: auto;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  box-shadow: 0 -14px 30px rgb(15 23 42 / 0.06);
+}
+
 .field-control {
   min-height: 3.5rem;
   width: 100%;
@@ -244,6 +266,15 @@ textarea.field-control {
 }
 
 @media (max-width: 639px) {
+  .form-screen {
+    min-height: calc(100dvh - 7.25rem - env(safe-area-inset-top));
+  }
+
+  .form-screen-footer {
+    margin-inline: -0.75rem;
+    padding-inline: 0.75rem;
+  }
+
   .mobile-sheet {
     position: relative;
     margin-top: auto;
@@ -256,14 +287,4 @@ textarea.field-control {
     box-shadow: 0 16px 36px rgb(6 78 59 / 0.28);
   }
 
-  .native-form .primary-action {
-    position: sticky;
-    bottom: calc(5.85rem + env(safe-area-inset-bottom));
-    z-index: 5;
-    box-shadow: 0 16px 36px rgb(6 78 59 / 0.22);
-  }
-
-  .mobile-sheet.native-form .primary-action {
-    bottom: calc(0.75rem + env(safe-area-inset-bottom));
-  }
 }

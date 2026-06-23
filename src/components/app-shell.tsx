@@ -129,7 +129,15 @@ function pageLabel(pathname: string) {
   return item?.label ?? "Ovelhas";
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  hideMobileNav = false,
+  hidePwaStatus = false,
+}: {
+  children: ReactNode;
+  hideMobileNav?: boolean;
+  hidePwaStatus?: boolean;
+}) {
   const pathname = usePathname();
   const { currentUser, isDemoMode, signOut } = useAuth();
   const { unread } = usePastoralNotifications();
@@ -226,7 +234,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="native-scroll min-h-screen w-full px-3 pb-[calc(7.8rem+env(safe-area-inset-bottom))] pt-[calc(0.75rem+env(safe-area-inset-top))] lg:ml-72 lg:w-[calc(100%-18rem)] lg:px-8 lg:pb-10 lg:pt-4 xl:px-10">
+      <main
+        className={`native-scroll min-h-screen w-full px-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:ml-72 lg:w-[calc(100%-18rem)] lg:px-8 lg:pb-10 lg:pt-4 xl:px-10 ${
+          hideMobileNav ? "pb-[calc(1rem+env(safe-area-inset-bottom))]" : "pb-[calc(7.8rem+env(safe-area-inset-bottom))]"
+        }`}
+      >
         <header className="sticky top-[calc(0.6rem+env(safe-area-inset-top))] z-30 mb-4 lg:hidden">
           <div className="relative overflow-hidden rounded-[26px] border border-white/70 bg-slate-950/90 p-2.5 text-white shadow-2xl shadow-slate-900/15 backdrop-blur-2xl">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,#34d39955_0,transparent_38%),linear-gradient(135deg,#02061700,#064e3b55)]" />
@@ -336,7 +348,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {children}
       </main>
 
-      <PwaStatus />
+      {!hidePwaStatus && <PwaStatus />}
       <NotificationBridge />
 
       {mobileMenuOpen && (
@@ -424,7 +436,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <nav className="fixed inset-x-3 bottom-[calc(0.65rem+env(safe-area-inset-bottom))] z-40 rounded-[26px] border border-white/75 bg-white/90 p-1.5 shadow-2xl shadow-slate-900/10 backdrop-blur-2xl lg:hidden">
+      {!hideMobileNav && <nav className="fixed inset-x-3 bottom-[calc(0.65rem+env(safe-area-inset-bottom))] z-40 rounded-[26px] border border-white/75 bg-white/90 p-1.5 shadow-2xl shadow-slate-900/10 backdrop-blur-2xl lg:hidden">
         <div
           className="grid gap-1"
           style={{ gridTemplateColumns: `repeat(${Math.max(visibleMobileNavItems.length, 1)}, minmax(0, 1fr))` }}
@@ -445,7 +457,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             );
           })}
         </div>
-      </nav>
+      </nav>}
     </div>
   );
 }
