@@ -313,6 +313,7 @@ with check (
     and (
       (p.role in ('admin', 'pastor') and p.church_id = c.church_id)
       or (p.role = 'leader' and p.id = c.leader_id)
+      or (p.role = 'supervisor' and p.id = c.supervisor_id)
     )
   )
 );

@@ -27,7 +27,7 @@ export default function SupervisionPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { cells } = useCells();
   const { people } = useLocalPeople();
-  const { visits, addVisit } = useSupervisorVisits();
+  const { visits, addVisit, visitLoadError } = useSupervisorVisits();
   const { addEvent } = useActivityEvents();
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visibleVisits = getScopedSupervisorVisits(currentUser, visits, cells, isDemoMode);
@@ -35,7 +35,7 @@ export default function SupervisionPage() {
     currentUser.role === "supervisor" ? cell.supervisorUserId === currentUser.id || currentUser.cellIds?.includes(cell.id) : true,
   );
   const [selectedCellId, setSelectedCellId] = useState(supervisorCells[0]?.id ?? visibleCells[0]?.id ?? "");
-  const [saved, setSaved] = useState("");
+  const [saveFeedback, setSaveFeedback] = useState<{ tone: "success" | "warning"; message: string } | null>(null);
 
   const selectedCell = cells.find((cell) => cell.id === selectedCellId) ?? supervisorCells[0] ?? visibleCells[0];
 
@@ -55,7 +55,7 @@ export default function SupervisionPage() {
     }
 
     const formData = new FormData(event.currentTarget);
-    const visit = await addVisit({
+    const result = await addVisit({
       churchId: selectedCell.churchId,
       cellId: selectedCell.id,
       cellName: selectedCell.name,
@@ -78,16 +78,30 @@ export default function SupervisionPage() {
       actorName: currentUser.name,
       actorRole: currentUser.role,
       action: "Registrou supervisao",
-      description: `${currentUser.name} acompanhou a celula ${selectedCell.name}. Saude percebida: ${visit.healthScore}%.`,
+      description: `${currentUser.name} acompanhou a celula ${selectedCell.name}. Saude percebida: ${result.visit.healthScore}%.`,
       targetType: "visit",
-      targetId: visit.id,
+      targetId: result.visit.id,
       targetName: selectedCell.name,
       cellId: selectedCell.id,
       visibility: "leadership",
       persistToSupabase: !isDemoMode,
     });
 
-    setSaved(`Supervisao de ${selectedCell.name} registrada para o pastor acompanhar.`);
+    if (!result.ok) {
+      setSaveFeedback({
+        tone: "warning",
+        message: `Supervisao de ${selectedCell.name} salva apenas neste dispositivo. A sincronizacao falhou: ${result.error}`,
+      });
+      event.currentTarget.reset();
+      return;
+    }
+
+    setSaveFeedback({
+      tone: "success",
+      message: isDemoMode
+        ? `Supervisao de ${selectedCell.name} salva neste dispositivo em modo demonstracao.`
+        : `Supervisao de ${selectedCell.name} registrada para o pastor acompanhar.`,
+    });
     event.currentTarget.reset();
   }
 
@@ -102,6 +116,12 @@ export default function SupervisionPage() {
           <MetricCard icon={ClipboardCheck} label="Pendentes" value={String(pendingCells.length)} accent="bg-amber-500" />
           <MetricCard icon={Users} label="Saude media" value={`${averageHealth}%`} accent="bg-violet-500" />
         </div>
+
+        {visitLoadError && (
+          <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+            As supervisoes exibidas podem estar incompletas neste aparelho. Nao foi possivel atualizar do servidor: {visitLoadError}
+          </section>
+        )}
 
         <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
           <SectionHeader eyebrow="Semana" title="Cobertura do supervisor" />
@@ -142,7 +162,17 @@ export default function SupervisionPage() {
         {currentUser.role !== "member" && (
           <form onSubmit={handleSubmit} className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
             <SectionHeader eyebrow="Registrar" title="Visita ou acompanhamento" />
-            {saved && <p className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{saved}</p>}
+            {saveFeedback && (
+              <p
+                className={`mb-4 rounded-lg p-3 text-sm font-semibold ${
+                  saveFeedback.tone === "success"
+                    ? "border border-emerald-100 bg-emerald-50 text-emerald-900"
+                    : "border border-amber-200 bg-amber-50 text-amber-900"
+                }`}
+              >
+                {saveFeedback.message}
+              </p>
+            )}
             <div className="space-y-3">
               <select
                 value={selectedCellId}

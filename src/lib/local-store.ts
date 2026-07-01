@@ -904,10 +904,13 @@ export function useCareTasks() {
 
 export function useCellReports() {
   const [reports, setReports] = useState<CellReport[]>([]);
+  const [isLoadingReports, setIsLoadingReports] = useState(false);
+  const [reportLoadError, setReportLoadError] = useState("");
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
+      setReports(readJson<CellReport[]>(CELL_REPORTS_KEY, []));
       setHydrated(true);
     });
   }, []);
@@ -920,19 +923,51 @@ export function useCellReports() {
 
   useEffect(() => {
     async function loadSupabaseReports() {
-      const [reportsResult, cellsResult, profilesResult] = await Promise.all([
-        supabase
-          .from("cell_reports")
-          .select("id, cell_id, leader_id, supervisor_id, meeting_date, present_count, visitors_count, service_count, decisions_count, highlights, needs, prayer_requests, created_at"),
+      setIsLoadingReports(true);
+      setReportLoadError("");
+      const reportSelect =
+        "id, cell_id, leader_id, supervisor_id, meeting_date, present_count, visitors_count, service_count, decisions_count, highlights, needs, prayer_requests, supervisor_visited, supervisor_visit_notes, created_at";
+      const legacyReportSelect =
+        "id, cell_id, leader_id, supervisor_id, meeting_date, present_count, visitors_count, service_count, decisions_count, highlights, needs, prayer_requests, created_at";
+      const initialReportsResult = await supabase.from("cell_reports").select(reportSelect);
+      const reportsResult =
+        initialReportsResult.error && isMissingColumn(initialReportsResult.error.message, ["supervisor_visited", "supervisor_visit_notes"])
+          ? await supabase.from("cell_reports").select(legacyReportSelect)
+          : initialReportsResult;
+      const [cellsResult, profilesResult] = await Promise.all([
         supabase.from("cells").select("id, name"),
         supabase.from("profiles").select("id, name"),
       ]);
 
+      setIsLoadingReports(false);
+
+      if (reportsResult.error) {
+        setReportLoadError(reportsResult.error.message);
+        return;
+      }
+
       if (!reportsResult.error && reportsResult.data) {
         const cellNames = new Map((cellsResult.data ?? []).map((cell) => [cell.id, cell.name]));
         const profileNames = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile.name]));
+        const reportRows = (reportsResult.data ?? []) as Array<{
+          id: string;
+          cell_id: string;
+          leader_id?: string | null;
+          supervisor_id?: string | null;
+          meeting_date: string;
+          present_count: number;
+          visitors_count: number;
+          service_count: number;
+          decisions_count: number;
+          highlights?: string | null;
+          needs?: string | null;
+          prayer_requests?: string | null;
+          supervisor_visited?: boolean | null;
+          supervisor_visit_notes?: string | null;
+          created_at: string;
+        }>;
         setReports(
-          reportsResult.data.map((report) => ({
+          reportRows.map((report) => ({
             id: report.id,
             cellId: report.cell_id,
             cellName: cellNames.get(report.cell_id) ?? "Celula",
@@ -947,6 +982,8 @@ export function useCellReports() {
             highlights: report.highlights ?? "",
             needs: report.needs ?? "",
             prayerRequests: report.prayer_requests ?? "",
+            supervisorVisited: report.supervisor_visited ?? false,
+            supervisorVisitNotes: report.supervisor_visit_notes ?? "",
             createdAt: report.created_at,
           })),
         );
@@ -956,7 +993,9 @@ export function useCellReports() {
     loadSupabaseReports();
   }, []);
 
-  async function addReport(report: Omit<CellReport, "id" | "createdAt"> & { churchId?: string; persistToSupabase?: boolean }): Promise<CellReport> {
+  async function addReport(
+    report: Omit<CellReport, "id" | "createdAt"> & { churchId?: string; persistToSupabase?: boolean },
+  ): Promise<{ ok: boolean; report: CellReport; synced: boolean; error?: string }> {
     const localReport: CellReport = {
       ...report,
       id: `report-${report.cellId}-${Date.now()}`,
@@ -965,7 +1004,7 @@ export function useCellReports() {
 
     if (!report.persistToSupabase) {
       setReports((current) => [localReport, ...current]);
-      return localReport;
+      return { ok: true, report: localReport, synced: false };
     }
 
     const reportPayload = {
@@ -1005,20 +1044,33 @@ export function useCellReports() {
       error = fallback.error;
     }
 
-    const newReport = !error && data ? { ...localReport, id: data.id, createdAt: data.created_at } : localReport;
+    if (error || !data) {
+      setReports((current) => [localReport, ...current]);
+      return {
+        ok: false,
+        report: localReport,
+        synced: false,
+        error: error?.message ?? "Nao foi possivel sincronizar o relatorio agora.",
+      };
+    }
+
+    const newReport = { ...localReport, id: data.id, createdAt: data.created_at };
     setReports((current) => [newReport, ...current]);
-    return newReport;
+    return { ok: true, report: newReport, synced: true };
   }
 
-  return { reports, addReport };
+  return { reports, addReport, isLoadingReports, reportLoadError };
 }
 
 export function useSupervisorVisits() {
   const [visits, setVisits] = useState<SupervisorVisit[]>([]);
+  const [isLoadingVisits, setIsLoadingVisits] = useState(false);
+  const [visitLoadError, setVisitLoadError] = useState("");
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
+      setVisits(readJson<SupervisorVisit[]>(SUPERVISOR_VISITS_KEY, []));
       setHydrated(true);
     });
   }, []);
@@ -1031,6 +1083,8 @@ export function useSupervisorVisits() {
 
   useEffect(() => {
     async function loadSupabaseVisits() {
+      setIsLoadingVisits(true);
+      setVisitLoadError("");
       const [visitsResult, cellsResult, profilesResult] = await Promise.all([
         supabase
           .from("supervisor_visits")
@@ -1038,6 +1092,13 @@ export function useSupervisorVisits() {
         supabase.from("cells").select("id, name"),
         supabase.from("profiles").select("id, name"),
       ]);
+
+      setIsLoadingVisits(false);
+
+      if (visitsResult.error) {
+        setVisitLoadError(visitsResult.error.message);
+        return;
+      }
 
       if (!visitsResult.error && visitsResult.data) {
         const cellNames = new Map((cellsResult.data ?? []).map((cell) => [cell.id, cell.name]));
@@ -1067,7 +1128,9 @@ export function useSupervisorVisits() {
     loadSupabaseVisits();
   }, []);
 
-  async function addVisit(visit: Omit<SupervisorVisit, "id" | "createdAt"> & { persistToSupabase?: boolean }): Promise<SupervisorVisit> {
+  async function addVisit(
+    visit: Omit<SupervisorVisit, "id" | "createdAt"> & { persistToSupabase?: boolean },
+  ): Promise<{ ok: boolean; visit: SupervisorVisit; synced: boolean; error?: string }> {
     const localVisit: SupervisorVisit = {
       ...visit,
       id: `visit-${visit.cellId}-${Date.now()}`,
@@ -1076,7 +1139,7 @@ export function useSupervisorVisits() {
 
     if (!visit.persistToSupabase) {
       setVisits((current) => [localVisit, ...current]);
-      return localVisit;
+      return { ok: true, visit: localVisit, synced: false };
     }
 
     const { data, error } = await supabase
@@ -1096,20 +1159,33 @@ export function useSupervisorVisits() {
       .select("id, created_at")
       .single();
 
-    const newVisit = !error && data ? { ...localVisit, id: data.id, createdAt: data.created_at } : localVisit;
+    if (error || !data) {
+      setVisits((current) => [localVisit, ...current]);
+      return {
+        ok: false,
+        visit: localVisit,
+        synced: false,
+        error: error?.message ?? "Nao foi possivel sincronizar a supervisao agora.",
+      };
+    }
+
+    const newVisit = { ...localVisit, id: data.id, createdAt: data.created_at };
     setVisits((current) => [newVisit, ...current]);
-    return newVisit;
+    return { ok: true, visit: newVisit, synced: true };
   }
 
-  return { visits, addVisit };
+  return { visits, addVisit, isLoadingVisits, visitLoadError };
 }
 
 export function useActivityEvents() {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [eventLoadError, setEventLoadError] = useState("");
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
+      setEvents(readJson<ActivityEvent[]>(ACTIVITY_EVENTS_KEY, []));
       setHydrated(true);
     });
   }, []);
@@ -1122,9 +1198,18 @@ export function useActivityEvents() {
 
   useEffect(() => {
     async function loadSupabaseEvents() {
+      setIsLoadingEvents(true);
+      setEventLoadError("");
       const { data, error } = await supabase
         .from("activity_events")
         .select("id, church_id, actor_user_id, actor_name, actor_role, action, description, target_type, target_id, target_name, cell_id, person_id, visibility, created_at");
+
+      setIsLoadingEvents(false);
+
+      if (error) {
+        setEventLoadError(error.message);
+        return;
+      }
 
       if (!error && data) {
         setEvents(
@@ -1151,7 +1236,9 @@ export function useActivityEvents() {
     loadSupabaseEvents();
   }, []);
 
-  async function addEvent(event: Omit<ActivityEvent, "id" | "createdAt"> & { persistToSupabase?: boolean }): Promise<ActivityEvent> {
+  async function addEvent(
+    event: Omit<ActivityEvent, "id" | "createdAt"> & { persistToSupabase?: boolean },
+  ): Promise<{ ok: boolean; event: ActivityEvent; synced: boolean; error?: string }> {
     const localEvent: ActivityEvent = {
       ...event,
       id: `activity-${Date.now()}`,
@@ -1160,7 +1247,7 @@ export function useActivityEvents() {
 
     if (!event.persistToSupabase) {
       setEvents((current) => [localEvent, ...current]);
-      return localEvent;
+      return { ok: true, event: localEvent, synced: false };
     }
 
     const { data, error } = await supabase
@@ -1182,12 +1269,22 @@ export function useActivityEvents() {
       .select("id, created_at")
       .single();
 
-    const newEvent = !error && data ? { ...localEvent, id: data.id, createdAt: data.created_at } : localEvent;
+    if (error || !data) {
+      setEvents((current) => [localEvent, ...current]);
+      return {
+        ok: false,
+        event: localEvent,
+        synced: false,
+        error: error?.message ?? "Nao foi possivel sincronizar a atividade agora.",
+      };
+    }
+
+    const newEvent = { ...localEvent, id: data.id, createdAt: data.created_at };
     setEvents((current) => [newEvent, ...current]);
-    return newEvent;
+    return { ok: true, event: newEvent, synced: true };
   }
 
-  return { events, addEvent };
+  return { events, addEvent, isLoadingEvents, eventLoadError };
 }
 
 export function useDiscipleship() {

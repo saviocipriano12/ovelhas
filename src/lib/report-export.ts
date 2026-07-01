@@ -69,6 +69,7 @@ export function buildReportSummary({
 }) {
   const overall = getOverallStats(cells, people);
   const attendance = overall.people ? Math.round((overall.present / overall.people) * 100) : 0;
+  const recentReports = reports.filter((report) => Boolean(report.meetingDate)).length;
 
   return [
     "Ovelhas - Relatorio de celulas",
@@ -77,7 +78,7 @@ export function buildReportSummary({
     `Celulas: ${overall.cells}`,
     `Pessoas acompanhadas: ${overall.people}`,
     `Presenca nas celulas: ${attendance}%`,
-    `Pessoas no culto: ${overall.servicePresent}`,
+    `Relatorios recentes enviados: ${recentReports}`,
     `Pessoas em atencao: ${overall.attention}`,
     `Progresso medio no discipulado: ${overall.averageProgress}%`,
     `Visitantes no culto: ${consolidationReports.reduce((sum, report) => sum + report.visitorsCount, 0)}`,
@@ -132,7 +133,6 @@ export function buildReportHtml({
           <td>${escapeHtml(cell.leaderName)}</td>
           <td>${stats.total}</td>
           <td>${stats.present}</td>
-          <td>${stats.servicePresent}</td>
           <td>${stats.attention}</td>
           <td>${stats.averageProgress}%</td>
         </tr>
@@ -156,8 +156,8 @@ export function buildReportHtml({
               </div>
               <div class="mini-grid">
                 <span><b>${escapeHtml(report.visitorsCount)}</b> visitantes</span>
-                <span><b>${escapeHtml(report.serviceCount)}</b> culto</span>
                 <span><b>${escapeHtml(report.decisionsCount)}</b> decisoes</span>
+                <span><b>${escapeHtml(report.supervisorVisited ? "Sim" : "Nao")}</b> visita supervisor</span>
               </div>
               <p>${escapeHtml(report.highlights || "Sem destaques registrados.")}</p>
               ${
@@ -168,6 +168,11 @@ export function buildReportHtml({
               ${
                 report.prayerRequests
                   ? `<p><b>Oracao:</b> ${escapeHtml(report.prayerRequests)}</p>`
+                  : ""
+              }
+              ${
+                report.supervisorVisitNotes
+                  ? `<p><b>Observacao da supervisao:</b> ${escapeHtml(report.supervisorVisitNotes)}</p>`
                   : ""
               }
             </article>
@@ -318,7 +323,6 @@ export function buildReportHtml({
             <th>Lider</th>
             <th>Pessoas</th>
             <th>Presentes</th>
-            <th>Culto</th>
             <th>Alertas</th>
             <th>Discipulado</th>
           </tr>

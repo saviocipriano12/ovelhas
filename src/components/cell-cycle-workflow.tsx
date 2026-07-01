@@ -238,7 +238,7 @@ export default function TodayCellPage() {
       }
     }
 
-    await addReport({
+    const reportResult = await addReport({
       churchId: selectedCell.churchId,
       cellId: selectedCell.id,
       cellName: selectedCell.name,
@@ -248,7 +248,7 @@ export default function TodayCellPage() {
       meetingDate: activeMeetingDate,
       presentCount,
       visitorsCount,
-      serviceCount,
+      serviceCount: 0,
       decisionsCount,
       highlights,
       needs,
@@ -309,6 +309,16 @@ export default function TodayCellPage() {
     });
 
     setSaving(false);
+
+    if (!reportResult.ok) {
+      setFeedback(
+        absenceTasks.length > 0
+          ? `Ciclo fechado com alerta. O relatorio ficou salvo neste dispositivo, mas nao sincronizou: ${reportResult.error}. ${absenceTasks.length} cuidado(s) foram criados automaticamente.`
+          : `Ciclo fechado com alerta. O relatorio ficou salvo neste dispositivo, mas nao sincronizou: ${reportResult.error}.`,
+      );
+      return;
+    }
+
     setFeedback(
       absenceTasks.length > 0
         ? `Ciclo fechado. ${absenceTasks.length} cuidado(s) foram criados automaticamente.`
@@ -726,13 +736,13 @@ export default function TodayCellPage() {
                   <p className="text-2xl font-black text-emerald-950">{presentCount}</p>
                   <p className="text-[11px] font-bold text-emerald-800">presentes</p>
                 </div>
-                <div className="rounded-2xl bg-sky-50 p-3 text-center">
-                  <p className="text-2xl font-black text-sky-950">{serviceCount}</p>
-                  <p className="text-[11px] font-bold text-sky-800">culto</p>
-                </div>
                 <div className="rounded-2xl bg-amber-50 p-3 text-center">
                   <p className="text-2xl font-black text-amber-950">{visitorsCount}</p>
                   <p className="text-[11px] font-bold text-amber-800">visitantes</p>
+                </div>
+                <div className="rounded-2xl bg-orange-50 p-3 text-center">
+                  <p className="text-2xl font-black text-orange-950">{decisionsCount}</p>
+                  <p className="text-[11px] font-bold text-orange-800">decisoes</p>
                 </div>
               </div>
             </section>

@@ -22,7 +22,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const publicRoutes = ["/login", "/convite", "/offline"];
+const publicRoutes = ["/", "/login", "/convite", "/offline"];
 
 type CurrentAppUserProfile = {
   id?: string;

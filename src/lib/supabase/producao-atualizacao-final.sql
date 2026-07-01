@@ -586,6 +586,23 @@ alter table public.cell_reports
   add column if not exists supervisor_visited boolean not null default false,
   add column if not exists supervisor_visit_notes text;
 
+drop policy if exists "cell_reports_insert_by_leader_or_admin" on public.cell_reports;
+create policy "cell_reports_insert_by_leader_or_admin"
+on public.cell_reports
+for insert
+with check (
+  exists (
+    select 1 from public.cells c
+    join public.profiles p on p.id = auth.uid()
+    where c.id = cell_reports.cell_id
+    and (
+      (p.role in ('admin', 'pastor') and p.church_id = c.church_id)
+      or (p.role = 'leader' and p.id = c.leader_id)
+      or (p.role = 'supervisor' and p.id = c.supervisor_id)
+    )
+  )
+);
+
 alter table public.consolidation_reports
   add column if not exists preacher_name text,
   add column if not exists tithe_count integer not null default 0,
