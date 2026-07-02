@@ -31,7 +31,7 @@ import {
 } from "@/lib/data";
 import { supabase } from "@/lib/supabase/client";
 import { mapSupabaseCell, mapSupabasePerson } from "@/lib/supabase/mappers";
-import { enqueueOfflineAction } from "@/lib/offline-queue";
+import { enqueueOfflineAction, useOfflineSyncSuccess } from "@/lib/offline-queue";
 
 const PEOPLE_KEY = "ovelhas:people";
 const CELLS_KEY = "ovelhas:cells";
@@ -993,6 +993,24 @@ export function useCellReports() {
     loadSupabaseReports();
   }, []);
 
+  useOfflineSyncSuccess((detail) => {
+    if (detail.type !== "cell-report" || !detail.localId || !detail.syncedId) {
+      return;
+    }
+
+    setReports((current) =>
+      current.map((report) =>
+        report.id === detail.localId
+          ? {
+              ...report,
+              id: detail.syncedId ?? report.id,
+              createdAt: detail.createdAt ?? report.createdAt,
+            }
+          : report,
+      ),
+    );
+  });
+
   async function addReport(
     report: Omit<CellReport, "id" | "createdAt"> & { churchId?: string; persistToSupabase?: boolean },
   ): Promise<{ ok: boolean; report: CellReport; synced: boolean; error?: string }> {
@@ -1001,10 +1019,39 @@ export function useCellReports() {
       id: `report-${report.cellId}-${Date.now()}`,
       createdAt: new Date().toISOString(),
     };
+    setReports((current) => [localReport, ...current]);
 
     if (!report.persistToSupabase) {
-      setReports((current) => [localReport, ...current]);
       return { ok: true, report: localReport, synced: false };
+    }
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      enqueueOfflineAction({
+        type: "cell-report",
+        payload: {
+          localId: localReport.id,
+          churchId: report.churchId,
+          cellId: report.cellId,
+          leaderUserId: report.leaderUserId,
+          supervisorUserId: report.supervisorUserId,
+          meetingDate: toIsoDate(report.meetingDate),
+          presentCount: report.presentCount,
+          visitorsCount: report.visitorsCount,
+          serviceCount: report.serviceCount,
+          decisionsCount: report.decisionsCount,
+          highlights: report.highlights,
+          needs: report.needs,
+          prayerRequests: report.prayerRequests,
+          supervisorVisited: report.supervisorVisited,
+          supervisorVisitNotes: report.supervisorVisitNotes,
+        },
+      });
+      return {
+        ok: false,
+        report: localReport,
+        synced: false,
+        error: "Sem internet. O relatorio ficou salvo no aparelho e entrou na fila de sincronizacao.",
+      };
     }
 
     const reportPayload = {
@@ -1045,7 +1092,26 @@ export function useCellReports() {
     }
 
     if (error || !data) {
-      setReports((current) => [localReport, ...current]);
+      enqueueOfflineAction({
+        type: "cell-report",
+        payload: {
+          localId: localReport.id,
+          churchId: report.churchId,
+          cellId: report.cellId,
+          leaderUserId: report.leaderUserId,
+          supervisorUserId: report.supervisorUserId,
+          meetingDate: toIsoDate(report.meetingDate),
+          presentCount: report.presentCount,
+          visitorsCount: report.visitorsCount,
+          serviceCount: report.serviceCount,
+          decisionsCount: report.decisionsCount,
+          highlights: report.highlights,
+          needs: report.needs,
+          prayerRequests: report.prayerRequests,
+          supervisorVisited: report.supervisorVisited,
+          supervisorVisitNotes: report.supervisorVisitNotes,
+        },
+      });
       return {
         ok: false,
         report: localReport,
@@ -1055,7 +1121,7 @@ export function useCellReports() {
     }
 
     const newReport = { ...localReport, id: data.id, createdAt: data.created_at };
-    setReports((current) => [newReport, ...current]);
+    setReports((current) => current.map((item) => (item.id === localReport.id ? newReport : item)));
     return { ok: true, report: newReport, synced: true };
   }
 
@@ -1128,6 +1194,24 @@ export function useSupervisorVisits() {
     loadSupabaseVisits();
   }, []);
 
+  useOfflineSyncSuccess((detail) => {
+    if (detail.type !== "supervisor-visit" || !detail.localId || !detail.syncedId) {
+      return;
+    }
+
+    setVisits((current) =>
+      current.map((visit) =>
+        visit.id === detail.localId
+          ? {
+              ...visit,
+              id: detail.syncedId ?? visit.id,
+              createdAt: detail.createdAt ?? visit.createdAt,
+            }
+          : visit,
+      ),
+    );
+  });
+
   async function addVisit(
     visit: Omit<SupervisorVisit, "id" | "createdAt"> & { persistToSupabase?: boolean },
   ): Promise<{ ok: boolean; visit: SupervisorVisit; synced: boolean; error?: string }> {
@@ -1136,10 +1220,35 @@ export function useSupervisorVisits() {
       id: `visit-${visit.cellId}-${Date.now()}`,
       createdAt: new Date().toISOString(),
     };
+    setVisits((current) => [localVisit, ...current]);
 
     if (!visit.persistToSupabase) {
-      setVisits((current) => [localVisit, ...current]);
       return { ok: true, visit: localVisit, synced: false };
+    }
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      enqueueOfflineAction({
+        type: "supervisor-visit",
+        payload: {
+          localId: localVisit.id,
+          churchId: visit.churchId,
+          cellId: visit.cellId,
+          supervisorUserId: visit.supervisorUserId,
+          leaderUserId: visit.leaderUserId,
+          visitDate: toIsoDate(visit.visitDate),
+          visitType: visit.visitType,
+          leaderPresent: visit.leaderPresent,
+          healthScore: visit.healthScore,
+          notes: visit.notes,
+          nextSteps: visit.nextSteps,
+        },
+      });
+      return {
+        ok: false,
+        visit: localVisit,
+        synced: false,
+        error: "Sem internet. A supervisao ficou salva no aparelho e entrou na fila de sincronizacao.",
+      };
     }
 
     const { data, error } = await supabase
@@ -1160,7 +1269,22 @@ export function useSupervisorVisits() {
       .single();
 
     if (error || !data) {
-      setVisits((current) => [localVisit, ...current]);
+      enqueueOfflineAction({
+        type: "supervisor-visit",
+        payload: {
+          localId: localVisit.id,
+          churchId: visit.churchId,
+          cellId: visit.cellId,
+          supervisorUserId: visit.supervisorUserId,
+          leaderUserId: visit.leaderUserId,
+          visitDate: toIsoDate(visit.visitDate),
+          visitType: visit.visitType,
+          leaderPresent: visit.leaderPresent,
+          healthScore: visit.healthScore,
+          notes: visit.notes,
+          nextSteps: visit.nextSteps,
+        },
+      });
       return {
         ok: false,
         visit: localVisit,
@@ -1170,7 +1294,7 @@ export function useSupervisorVisits() {
     }
 
     const newVisit = { ...localVisit, id: data.id, createdAt: data.created_at };
-    setVisits((current) => [newVisit, ...current]);
+    setVisits((current) => current.map((item) => (item.id === localVisit.id ? newVisit : item)));
     return { ok: true, visit: newVisit, synced: true };
   }
 
@@ -1236,6 +1360,24 @@ export function useActivityEvents() {
     loadSupabaseEvents();
   }, []);
 
+  useOfflineSyncSuccess((detail) => {
+    if (detail.type !== "activity-event" || !detail.localId || !detail.syncedId) {
+      return;
+    }
+
+    setEvents((current) =>
+      current.map((event) =>
+        event.id === detail.localId
+          ? {
+              ...event,
+              id: detail.syncedId ?? event.id,
+              createdAt: detail.createdAt ?? event.createdAt,
+            }
+          : event,
+      ),
+    );
+  });
+
   async function addEvent(
     event: Omit<ActivityEvent, "id" | "createdAt"> & { persistToSupabase?: boolean },
   ): Promise<{ ok: boolean; event: ActivityEvent; synced: boolean; error?: string }> {
@@ -1244,10 +1386,37 @@ export function useActivityEvents() {
       id: `activity-${Date.now()}`,
       createdAt: new Date().toISOString(),
     };
+    setEvents((current) => [localEvent, ...current]);
 
     if (!event.persistToSupabase) {
-      setEvents((current) => [localEvent, ...current]);
       return { ok: true, event: localEvent, synced: false };
+    }
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      enqueueOfflineAction({
+        type: "activity-event",
+        payload: {
+          localId: localEvent.id,
+          churchId: event.churchId,
+          actorUserId: event.actorUserId,
+          actorName: event.actorName,
+          actorRole: event.actorRole,
+          action: event.action,
+          description: event.description,
+          targetType: event.targetType,
+          targetId: event.targetId,
+          targetName: event.targetName,
+          cellId: event.cellId,
+          personId: event.personId,
+          visibility: event.visibility,
+        },
+      });
+      return {
+        ok: false,
+        event: localEvent,
+        synced: false,
+        error: "Sem internet. A atividade entrou na fila de sincronizacao.",
+      };
     }
 
     const { data, error } = await supabase
@@ -1270,7 +1439,24 @@ export function useActivityEvents() {
       .single();
 
     if (error || !data) {
-      setEvents((current) => [localEvent, ...current]);
+      enqueueOfflineAction({
+        type: "activity-event",
+        payload: {
+          localId: localEvent.id,
+          churchId: event.churchId,
+          actorUserId: event.actorUserId,
+          actorName: event.actorName,
+          actorRole: event.actorRole,
+          action: event.action,
+          description: event.description,
+          targetType: event.targetType,
+          targetId: event.targetId,
+          targetName: event.targetName,
+          cellId: event.cellId,
+          personId: event.personId,
+          visibility: event.visibility,
+        },
+      });
       return {
         ok: false,
         event: localEvent,
@@ -1280,7 +1466,7 @@ export function useActivityEvents() {
     }
 
     const newEvent = { ...localEvent, id: data.id, createdAt: data.created_at };
-    setEvents((current) => [newEvent, ...current]);
+    setEvents((current) => current.map((item) => (item.id === localEvent.id ? newEvent : item)));
     return { ok: true, event: newEvent, synced: true };
   }
 
@@ -2026,6 +2212,24 @@ export function usePastoralReminders() {
     loadSupabaseReminders();
   }, []);
 
+  useOfflineSyncSuccess((detail) => {
+    if (detail.type !== "pastoral-reminder" || !detail.localId || !detail.syncedId) {
+      return;
+    }
+
+    setReminders((current) =>
+      current.map((reminder) =>
+        reminder.id === detail.localId
+          ? {
+              ...reminder,
+              id: detail.syncedId ?? reminder.id,
+              createdAt: detail.createdAt ?? reminder.createdAt,
+            }
+          : reminder,
+      ),
+    );
+  });
+
   async function addReminder(input: {
     churchId: string;
     assignedTo: string;
@@ -2052,8 +2256,36 @@ export function usePastoralReminders() {
       createdBy: input.createdBy,
       createdAt: new Date().toISOString(),
     };
+    setReminders((current) => [localReminder, ...current].sort((a, b) => a.dueAt.localeCompare(b.dueAt)));
 
-    if (input.persistToSupabase) {
+    if (!input.persistToSupabase) {
+      return { ok: true, reminder: localReminder };
+    }
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      enqueueOfflineAction({
+        type: "pastoral-reminder",
+        payload: {
+          localId: localReminder.id,
+          churchId: input.churchId,
+          assignedTo: input.assignedTo,
+          title: input.title,
+          description: input.description,
+          reminderType: input.reminderType,
+          dueAt: input.dueAt,
+          personId: input.personId,
+          cellId: input.cellId,
+          createdBy: input.createdBy,
+        },
+      });
+      return {
+        ok: false,
+        reminder: localReminder,
+        error: "Sem internet. O lembrete entrou na fila de sincronizacao.",
+      };
+    }
+
+    {
       const { data, error } = await supabase
         .from("pastoral_reminders")
         .insert({
@@ -2072,16 +2304,38 @@ export function usePastoralReminders() {
         .single();
 
       if (error) {
-        return { ok: false, error: error.message };
+        enqueueOfflineAction({
+          type: "pastoral-reminder",
+          payload: {
+            localId: localReminder.id,
+            churchId: input.churchId,
+            assignedTo: input.assignedTo,
+            title: input.title,
+            description: input.description,
+            reminderType: input.reminderType,
+            dueAt: input.dueAt,
+            personId: input.personId,
+            cellId: input.cellId,
+            createdBy: input.createdBy,
+          },
+        });
+        return { ok: false, reminder: localReminder, error: error.message };
       }
 
       if (data) {
-        localReminder.id = data.id;
-        localReminder.createdAt = data.created_at;
+        setReminders((current) =>
+          current
+            .map((reminder) =>
+              reminder.id === localReminder.id
+                ? { ...reminder, id: data.id, createdAt: data.created_at }
+                : reminder,
+            )
+            .sort((a, b) => a.dueAt.localeCompare(b.dueAt)),
+        );
+        return { ok: true, reminder: { ...localReminder, id: data.id, createdAt: data.created_at } };
       }
     }
 
-    setReminders((current) => [localReminder, ...current].sort((a, b) => a.dueAt.localeCompare(b.dueAt)));
     return { ok: true, reminder: localReminder };
   }
 
@@ -2158,6 +2412,24 @@ export function usePrayerRequests() {
     loadSupabasePrayerRequests();
   }, []);
 
+  useOfflineSyncSuccess((detail) => {
+    if (detail.type !== "prayer-request" || !detail.localId || !detail.syncedId) {
+      return;
+    }
+
+    setRequests((current) =>
+      current.map((request) =>
+        request.id === detail.localId
+          ? {
+              ...request,
+              id: detail.syncedId ?? request.id,
+              createdAt: detail.createdAt ?? request.createdAt,
+            }
+          : request,
+      ),
+    );
+  });
+
   async function addPrayerRequest(input: {
     churchId: string;
     personId: string;
@@ -2182,8 +2454,35 @@ export function usePrayerRequests() {
       createdByName: input.createdByName,
       createdAt: new Date().toISOString(),
     };
+    setRequests((current) => [localRequest, ...current]);
 
-    if (input.persistToSupabase) {
+    if (!input.persistToSupabase) {
+      return { ok: true, request: localRequest };
+    }
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      enqueueOfflineAction({
+        type: "prayer-request",
+        payload: {
+          localId: localRequest.id,
+          churchId: input.churchId,
+          personId: input.personId,
+          cellId: input.cellId,
+          title: input.title,
+          request: input.request,
+          visibility: input.visibility,
+          createdBy: input.createdBy,
+          createdByName: input.createdByName,
+        },
+      });
+      return {
+        ok: false,
+        request: localRequest,
+        error: "Sem internet. O pedido ficou salvo no aparelho e entrou na fila de sincronizacao.",
+      };
+    }
+
+    {
       const { data, error } = await supabase
         .from("prayer_requests")
         .insert({
@@ -2201,16 +2500,35 @@ export function usePrayerRequests() {
         .single();
 
       if (error) {
-        return { ok: false, error: error.message };
+        enqueueOfflineAction({
+          type: "prayer-request",
+          payload: {
+            localId: localRequest.id,
+            churchId: input.churchId,
+            personId: input.personId,
+            cellId: input.cellId,
+            title: input.title,
+            request: input.request,
+            visibility: input.visibility,
+            createdBy: input.createdBy,
+            createdByName: input.createdByName,
+          },
+        });
+        return { ok: false, request: localRequest, error: error.message };
       }
 
       if (data) {
-        localRequest.id = data.id;
-        localRequest.createdAt = data.created_at;
+        setRequests((current) =>
+          current.map((request) =>
+            request.id === localRequest.id
+              ? { ...request, id: data.id, createdAt: data.created_at }
+              : request,
+          ),
+        );
+        return { ok: true, request: { ...localRequest, id: data.id, createdAt: data.created_at } };
       }
     }
 
-    setRequests((current) => [localRequest, ...current]);
     return { ok: true, request: localRequest };
   }
 
