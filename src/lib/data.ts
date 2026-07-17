@@ -407,6 +407,7 @@ export type ActivityEvent = {
   cellId?: string;
   personId?: string;
   visibility: "leadership" | "cell" | "member";
+  targetRoles?: UserRole[];
   createdAt: string;
 };
 

@@ -1365,7 +1365,7 @@ export function useActivityEvents() {
       setEventLoadError("");
       const { data, error } = await supabase
         .from("activity_events")
-        .select("id, church_id, actor_user_id, actor_name, actor_role, action, description, target_type, target_id, target_name, cell_id, person_id, visibility, created_at");
+        .select("id, church_id, actor_user_id, actor_name, actor_role, action, description, target_type, target_id, target_name, cell_id, person_id, visibility, target_roles, created_at");
 
       setIsLoadingEvents(false);
 
@@ -1390,6 +1390,7 @@ export function useActivityEvents() {
             cellId: event.cell_id ?? undefined,
             personId: event.person_id ?? undefined,
             visibility: event.visibility as ActivityEvent["visibility"],
+            targetRoles: (event.target_roles as UserRole[] | null) ?? undefined,
             createdAt: event.created_at,
           })),
         );
@@ -1473,6 +1474,7 @@ export function useActivityEvents() {
         cell_id: event.cellId || null,
         person_id: event.personId || null,
         visibility: event.visibility,
+        target_roles: event.targetRoles && event.targetRoles.length > 0 ? event.targetRoles : null,
       })
       .select("id, created_at")
       .single();

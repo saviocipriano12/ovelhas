@@ -316,6 +316,10 @@ export function getVisibleActivityEvents(user: AppUser, events: ActivityEvent[],
   const visiblePersonIds = new Set(visiblePeople.map((person) => person.id));
 
   return events.filter((event) => {
+    if (event.targetRoles && event.targetRoles.length > 0) {
+      return event.churchId === user.churchId && event.targetRoles.includes(user.role);
+    }
+
     if (user.role === "admin" || user.role === "pastor") {
       return (
         event.churchId === user.churchId &&

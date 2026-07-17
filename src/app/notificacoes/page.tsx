@@ -26,6 +26,7 @@ import { SectionHeader } from "@/components/section-header";
 import { useToast } from "@/components/toast-provider";
 import { getScopedCells } from "@/lib/access-control";
 import { isImageMedia, isVideoMedia, parseNoticeDescription } from "@/lib/church-notices";
+import type { UserRole } from "@/lib/data";
 import { notificationsEnabled, requestDeviceNotificationPermission } from "@/lib/device-notifications";
 import { useActivityEvents, useCells } from "@/lib/local-store";
 import type { PastoralNotification } from "@/lib/notifications";
@@ -70,6 +71,14 @@ function priorityTone(priority: PastoralNotification["priority"]) {
   return "bg-emerald-100 text-emerald-800";
 }
 
+const AUDIENCE_OPTIONS: { role: string; label: string }[] = [
+  { role: "member", label: "Membros" },
+  { role: "leader", label: "Lideres" },
+  { role: "supervisor", label: "Supervisores" },
+  { role: "consolidation", label: "Consolidacao" },
+  { role: "communication", label: "Comunicacao" },
+];
+
 function typeLabel(type: PastoralNotification["type"]) {
   const labels: Record<PastoralNotification["type"], string> = {
     care: "Cuidado",
@@ -96,6 +105,7 @@ export default function NotificationsPage() {
   const [deviceEnabled, setDeviceEnabled] = useState(() => notificationsEnabled());
   const [targetMode, setTargetMode] = useState<"church" | "cell">("church");
   const [mediaUrl, setMediaUrl] = useState("");
+  const [noticeAudiences, setNoticeAudiences] = useState<string[]>(["member"]);
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const canSendToChurch = ["admin", "pastor", "communication"].includes(currentUser.role);
   const canSendNotice =
@@ -180,6 +190,11 @@ export default function NotificationsPage() {
       return;
     }
 
+    if (isChurchNotice && noticeAudiences.length === 0) {
+      toast.error("Escolha pelo menos um publico para o comunicado.");
+      return;
+    }
+
     await addEvent({
       churchId: currentUser.churchId,
       actorUserId: currentUser.id,
@@ -192,10 +207,12 @@ export default function NotificationsPage() {
       targetName: isChurchNotice ? "Toda a igreja" : cell?.name,
       cellId: isChurchNotice ? undefined : cell?.id,
       visibility: "member",
+      targetRoles: isChurchNotice ? (noticeAudiences as UserRole[]) : undefined,
       persistToSupabase: !isDemoMode,
     });
 
     event.currentTarget.reset();
+    setNoticeAudiences(["member"]);
     setMediaUrl("");
     toast.success(isChurchNotice ? "Comunicado enviado para toda a igreja." : `Aviso enviado para ${cell?.name}.`);
   }
@@ -280,6 +297,33 @@ export default function NotificationsPage() {
                     </option>
                   ))}
                 </select>
+              )}
+              {canSendToChurch && targetMode === "church" && (
+                <div className="sm:col-span-2">
+                  <p className="mb-1.5 text-xs font-black uppercase text-slate-400">Enviar para</p>
+                  <div className="flex flex-wrap gap-2">
+                    {AUDIENCE_OPTIONS.map((option) => {
+                      const checked = noticeAudiences.includes(option.role);
+                      return (
+                        <button
+                          key={option.role}
+                          type="button"
+                          onClick={() =>
+                            setNoticeAudiences((current) =>
+                              checked ? current.filter((role) => role !== option.role) : [...current, option.role],
+                            )
+                          }
+                          className={`flex min-h-10 items-center gap-1.5 rounded-2xl px-3 text-xs font-black transition ${
+                            checked ? "bg-emerald-900 text-white" : "bg-slate-100 text-slate-500"
+                          }`}
+                        >
+                          {checked && <CheckCircle2 size={14} />}
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
               <select name="noticeType" className="field-control">
                 <option>Aviso</option>

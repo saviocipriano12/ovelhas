@@ -779,6 +779,25 @@ with check (
 
 grant select, insert on public.activity_events to authenticated;
 
+-- Complemento 2026-07-17 (7): avisos com publico selecionavel (mais de um papel ao mesmo tempo).
+
+alter table public.activity_events add column if not exists target_roles text[];
+
+drop policy if exists "activity_events_select_by_target_roles" on public.activity_events;
+create policy "activity_events_select_by_target_roles"
+on public.activity_events
+for select
+using (
+  activity_events.target_roles is not null
+  and exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = activity_events.church_id
+    and p.role::text = any(activity_events.target_roles)
+  )
+);
+
 do $$
 begin
   if not exists (
