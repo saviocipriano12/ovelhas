@@ -8,11 +8,13 @@ import {
   Building2,
   ChartNoAxesCombined,
   Activity,
+  CreditCard,
   Eye,
   Network,
   HeartHandshake,
   Heart,
   LayoutGrid,
+  MapPin,
   PlayCircle,
   Settings,
   LogIn,
@@ -40,6 +42,7 @@ const menuItems: { href: string; title: string; description: string; icon: Lucid
   { href: "/checkin", title: "Check-in", description: "QR Code para presenca em celula e culto.", icon: QrCode },
   { href: "/agenda", title: "Agenda", description: "Lembretes, visitas, discipulados e aniversarios.", icon: CalendarDays },
   { href: "/cuidados", title: "Cuidados", description: "Fila de mensagens e acompanhamentos.", icon: HeartHandshake },
+  { href: "/lar-de-paz", title: "Lar de Paz", description: "Casas e duplas do Lar de Paz, vinculadas por celula.", icon: MapPin },
   { href: "/oracao", title: "Oracao", description: "Pedidos de oracao com privacidade por nivel.", icon: Heart },
   { href: "/biblioteca", title: "Biblioteca", description: "Materiais, devocionais e certificados.", icon: BookOpen },
   { href: "/notificacoes", title: "Notificacoes", description: "Alertas de ausencia, videos, relatorios e supervisao.", icon: Bell },
@@ -53,8 +56,9 @@ const menuItems: { href: string; title: string; description: string; icon: Lucid
   { href: "/relatorios/novo", title: "Novo relatorio", description: "Registrar a ultima reuniao da celula.", icon: CalendarCheck },
   { href: "/meu-discipulado", title: "Meu discipulado", description: "Visao do membro no aplicativo.", icon: UserRound },
   { href: "/login", title: "Login", description: "Entrar ou criar conta real pelo Supabase.", icon: LogIn },
-  { href: "/configuracao", title: "Configuracao inicial", description: "Criar igreja e preparar o primeiro administrador.", icon: Building2 },
+  { href: "/configuracao", title: "Bootstrap do primeiro acesso", description: "Uso unico: criar a igreja e o primeiro administrador. Nao e a tela de ajustes.", icon: Building2 },
   { href: "/configuracoes", title: "Configuracoes", description: "Marca, mensagens, LGPD, auditoria e backup.", icon: Settings },
+  { href: "/assinatura", title: "Assinatura", description: "Plano da igreja, uso e pagamento.", icon: CreditCard },
 ];
 
 export default function MorePage() {

@@ -9,11 +9,11 @@ import { ChurchNoticeCard } from "@/components/church-notice-card";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
-import { WhatsAppButton } from "@/components/whatsapp-button";
+import { useToast } from "@/components/toast-provider";
 import { getNextMeetingDate, rsvpLabel, rsvpTone, shouldAskForRsvp } from "@/lib/cell-schedule";
-import { getScopedActivityEvents } from "@/lib/access-control";
+import { getScopedActivityEvents, getScopedPrayerRequests } from "@/lib/access-control";
 import { isChurchNotice } from "@/lib/church-notices";
-import { saveVideoReflection, useActivityEvents, useCellRsvps, useCells, useDiscipleship, useLocalPeople } from "@/lib/local-store";
+import { saveVideoReflection, useActivityEvents, useCellRsvps, useCells, useDiscipleship, useLocalPeople, usePrayerRequests } from "@/lib/local-store";
 import { getVideoEmbedUrl, isEmbeddableVideo } from "@/lib/video";
 
 function formatDuration(seconds: number) {
@@ -21,18 +21,110 @@ function formatDuration(seconds: number) {
   return `${minutes} min`;
 }
 
+function normalizePhone(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function prayerStatusLabel(status: "open" | "prayed" | "answered") {
+  if (status === "answered") {
+    return "Respondido";
+  }
+
+  if (status === "prayed") {
+    return "Orado";
+  }
+
+  return "Aberto";
+}
+
+function prayerStatusTone(status: "open" | "prayed" | "answered") {
+  if (status === "answered") {
+    return "bg-emerald-100 text-emerald-800";
+  }
+
+  if (status === "prayed") {
+    return "bg-sky-100 text-sky-800";
+  }
+
+  return "bg-amber-100 text-amber-900";
+}
+
+function buildNextSteps(input: {
+  hasCell: boolean;
+  hasTrack: boolean;
+  progress: number;
+  absences: number;
+  stage: string;
+}) {
+  const items: { title: string; description: string; tone: string }[] = [];
+
+  if (!input.hasCell) {
+    items.push({
+      title: "Regularizar sua celula",
+      description: "Sua conta precisa ficar vinculada a uma celula para receber agenda, cuidado e avisos corretos.",
+      tone: "bg-amber-50 text-amber-950",
+    });
+  }
+
+  if (!input.hasTrack) {
+    items.push({
+      title: "Aguardar liberacao do discipulado",
+      description: "Sua lideranca ainda nao liberou uma trilha para voce. Assim que liberar, ela aparece aqui.",
+      tone: "bg-slate-50 text-slate-800",
+    });
+  } else if (input.progress < 100) {
+    items.push({
+      title: "Continuar sua trilha",
+      description: input.progress < 30 ? "Comece a trilha desta semana para firmar sua caminhada." : "Volte para a proxima aula e mantenha constancia no discipulado.",
+      tone: "bg-emerald-50 text-emerald-950",
+    });
+  }
+
+  if (input.absences >= 2) {
+    items.push({
+      title: "Retomar constancia na celula",
+      description: "Sua lideranca provavelmente vai te procurar. Responda e alinhe seu retorno com tranquilidade.",
+      tone: "bg-rose-50 text-rose-900",
+    });
+  }
+
+  if (input.stage.toLowerCase().includes("visitante")) {
+    items.push({
+      title: "Dar o proximo passo",
+      description: "Participe da proxima celula e converse com sua lideranca sobre integracao e acompanhamento.",
+      tone: "bg-sky-50 text-sky-950",
+    });
+  }
+
+  return items.slice(0, 4);
+}
+
+const careOptions = [
+  { value: "visita", label: "Preciso de visita" },
+  { value: "aconselhamento", label: "Preciso conversar" },
+  { value: "ajuda", label: "Preciso de ajuda" },
+  { value: "oracao", label: "Preciso de oracao" },
+] as const;
+
 export default function MemberDiscipleshipPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { people, updatePerson } = useLocalPeople();
   const { cells } = useCells();
   const { tracks, videos, accesses, progress, updateVideoProgress } = useDiscipleship();
   const { events, addEvent } = useActivityEvents();
+  const { requests, addPrayerRequest } = usePrayerRequests();
   const { rsvps, saveRsvp } = useCellRsvps(currentUser.churchId);
-  const [feedback, setFeedback] = useState("");
+  const toast = useToast();
   const [selectedVideoId, setSelectedVideoId] = useState("");
   const [reflection, setReflection] = useState("");
   const [rsvpNote, setRsvpNote] = useState("");
   const [rsvpPopupDismissed, setRsvpPopupDismissed] = useState(false);
+  const [careType, setCareType] = useState<(typeof careOptions)[number]["value"]>("visita");
+  const [careText, setCareText] = useState("");
   const member =
     people.find((person) => person.personUserId === currentUser.id || person.id === currentUser.personId);
 
@@ -80,6 +172,68 @@ export default function MemberDiscipleshipPage() {
   const memberNotices = getScopedActivityEvents(currentUser, events, cells, people, isDemoMode)
     .filter(isChurchNotice)
     .slice(0, 2);
+  const visibleRequests = getScopedPrayerRequests(currentUser, requests, cells, people, isDemoMode);
+  const memberRequests = visibleRequests
+    .filter((request) => request.personId === member.id || request.createdBy === currentUser.id)
+    .slice(0, 4);
+  const memberEvents = getScopedActivityEvents(currentUser, events, cells, people, isDemoMode)
+    .filter((event) => event.personId === member.id || event.actorUserId === currentUser.id)
+    .slice(0, 5);
+  const personalAgenda = [
+    ...(memberCell
+      ? [
+          {
+            id: `agenda-cell-${memberCell.id}`,
+            title: memberCell.name,
+            description: `${memberCell.meetingDay}, ${memberCell.meetingTime}`,
+            support: nextMeetingDate,
+          },
+        ]
+      : []),
+    ...(selectedVideo
+      ? [
+          {
+            id: `agenda-video-${selectedVideo.id}`,
+            title: "Continuar discipulado",
+            description: selectedVideo.title,
+            support: `${selectedProgress}% concluido`,
+          },
+        ]
+      : []),
+  ];
+  const nextSteps = buildNextSteps({
+    hasCell: Boolean(memberCell),
+    hasTrack: Boolean(activeTrack),
+    progress: trackProgress,
+    absences: member.cellAbsences,
+    stage: member.stage,
+  });
+  const journeyItems = [
+    ...(currentRsvp
+      ? [
+          {
+            id: `rsvp-${currentRsvp.id}`,
+            title: "Confirmacao da proxima celula",
+            description: `Voce respondeu: ${rsvpLabel(currentRsvp.response)}.`,
+            createdAt: currentRsvp.updatedAt,
+          },
+        ]
+      : []),
+    ...memberRequests.map((request) => ({
+      id: request.id,
+      title: request.title,
+      description: request.request,
+      createdAt: request.updatedAt || request.createdAt,
+    })),
+    ...memberEvents.map((event) => ({
+      id: event.id,
+      title: event.action,
+      description: event.description,
+      createdAt: event.createdAt,
+    })),
+  ]
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .slice(0, 6);
 
   async function saveVideoProgress(videoId: string, progressPercent: number) {
     if (!member) {
@@ -99,7 +253,7 @@ export default function MemberDiscipleshipPage() {
     });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui salvar seu progresso: ${result.error}`);
+      toast.error(`Nao consegui salvar seu progresso: ${result.error}`);
       return;
     }
 
@@ -121,7 +275,7 @@ export default function MemberDiscipleshipPage() {
       });
     }
 
-    setFeedback(progressPercent >= 100 ? `Aula concluida: ${video.title}.` : `Progresso salvo em ${progressPercent}%.`);
+    toast.success(progressPercent >= 100 ? `Aula concluida: ${video.title}.` : `Progresso salvo em ${progressPercent}%.`);
   }
 
   async function saveReflection() {
@@ -131,7 +285,7 @@ export default function MemberDiscipleshipPage() {
 
     if (isDemoMode && typeof window !== "undefined") {
       window.localStorage.setItem(`ovelhas:reflection:${member.id}:${selectedVideo.id}`, reflection);
-      setFeedback("Resposta salva no aparelho.");
+      toast.success("Resposta salva no aparelho.");
       return;
     }
 
@@ -141,7 +295,55 @@ export default function MemberDiscipleshipPage() {
       answer: reflection,
     });
 
-    setFeedback(result.ok ? "Resposta salva para sua lideranca acompanhar." : `Nao consegui salvar a resposta: ${result.error}`);
+    if (result.ok) {
+      toast.success("Resposta salva para sua lideranca acompanhar.");
+    } else {
+      toast.error(`Nao consegui salvar a resposta: ${result.error}`);
+    }
+  }
+
+  async function requestCare() {
+    if (!member || !careText.trim()) {
+      toast.error("Escreva o que esta acontecendo para sua lideranca te ajudar com clareza.");
+      return;
+    }
+
+    const selectedCare = careOptions.find((option) => option.value === careType);
+    const result = await addPrayerRequest({
+      churchId: member.churchId,
+      personId: member.id,
+      cellId: member.cellId,
+      title: selectedCare ? selectedCare.label : "Pedido de cuidado",
+      request: careText.trim(),
+      visibility: "leadership",
+      createdBy: currentUser.id,
+      createdByName: currentUser.name,
+      persistToSupabase: !isDemoMode,
+    });
+
+    if (!result.ok || !result.request) {
+      toast.error(`Nao consegui registrar seu pedido de cuidado: ${result.error}`);
+      return;
+    }
+
+    await addEvent({
+      churchId: member.churchId,
+      actorUserId: currentUser.id,
+      actorName: member.name,
+      actorRole: currentUser.role,
+      action: "Pediu cuidado",
+      description: `${member.name} registrou: ${selectedCare?.label ?? "Pedido de cuidado"}.`,
+      targetType: "care",
+      targetId: result.request.id,
+      targetName: result.request.title,
+      personId: member.id,
+      cellId: member.cellId,
+      visibility: "leadership",
+      persistToSupabase: !isDemoMode,
+    });
+
+    setCareText("");
+    toast.success("Pedido de cuidado enviado para sua lideranca acompanhar.");
   }
 
   async function respondRsvp(response: "yes" | "no" | "maybe") {
@@ -161,7 +363,7 @@ export default function MemberDiscipleshipPage() {
     });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui salvar sua confirmacao: ${result.error}`);
+      toast.error(`Nao consegui salvar sua confirmacao: ${result.error}`);
       return;
     }
 
@@ -181,7 +383,7 @@ export default function MemberDiscipleshipPage() {
       persistToSupabase: !isDemoMode,
     });
 
-    setFeedback(`Confirmacao salva: ${rsvpLabel(response)}.`);
+    toast.success(`Confirmacao salva: ${rsvpLabel(response)}.`);
     setRsvpPopupDismissed(true);
   }
 
@@ -192,18 +394,41 @@ export default function MemberDiscipleshipPage() {
     }
 
     const formData = new FormData(event.currentTarget);
+    const phone = normalizePhone(String(formData.get("phone") || member.phone || ""));
+    const familyPhone = normalizePhone(String(formData.get("familyPhone") || member.familyPhone || ""));
+    const email = String(formData.get("email") || member.email || "").trim();
+
+    if (phone && phone.length < 10) {
+      toast.error("Informe um WhatsApp valido com DDD.");
+      return;
+    }
+
+    if (familyPhone && familyPhone.length < 10) {
+      toast.error("Informe um telefone familiar valido com DDD ou deixe o campo vazio.");
+      return;
+    }
+
+    if (email && !isValidEmail(email)) {
+      toast.error("Informe um email valido.");
+      return;
+    }
+
     const result = await updatePerson(member.id, {
       name: String(formData.get("name") || member.name).trim(),
-      phone: String(formData.get("phone") || member.phone).trim(),
-      email: String(formData.get("email") || member.email).trim(),
+      phone,
+      email,
       birthDate: String(formData.get("birthDate") || member.birthDate || ""),
       address: String(formData.get("address") || member.address || ""),
-      familyPhone: String(formData.get("familyPhone") || member.familyPhone || ""),
+      familyPhone,
       photoUrl: String(formData.get("photoUrl") || member.photoUrl || ""),
       persistToSupabase: !isDemoMode,
     });
 
-    setFeedback(result.ok ? "Perfil atualizado." : `Nao consegui atualizar seu perfil: ${result.error}`);
+    if (result.ok) {
+      toast.success("Perfil atualizado.");
+    } else {
+      toast.error(`Nao consegui atualizar seu perfil: ${result.error}`);
+    }
   }
 
   return (
@@ -351,6 +576,115 @@ export default function MemberDiscipleshipPage() {
           </section>
         )}
 
+        <section className="mt-5 rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+          <SectionHeader eyebrow="Minha agenda" title="Semana pessoal" />
+          <div className="grid gap-3">
+            {personalAgenda.map((item) => (
+              <article key={item.id} className="rounded-2xl bg-slate-50 p-4">
+                <p className="font-bold text-slate-950">{item.title}</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">{item.description}</p>
+                <p className="mt-2 text-xs font-bold text-slate-400">{item.support}</p>
+              </article>
+            ))}
+            {personalAgenda.length === 0 && (
+              <p className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">
+                Sua agenda vai aparecer aqui conforme sua celula e seu discipulado forem vinculados.
+              </p>
+            )}
+          </div>
+        </section>
+
+        {nextSteps.length > 0 && (
+          <section className="mt-5 rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+            <SectionHeader eyebrow="Seus proximos passos" title="Caminho da semana" />
+            <div className="grid gap-3">
+              {nextSteps.map((item) => (
+                <article key={item.title} className={`rounded-2xl p-4 ${item.tone}`}>
+                  <p className="font-black">{item.title}</p>
+                  <p className="mt-2 text-sm leading-6 opacity-90">{item.description}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="mt-5 rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+          <SectionHeader eyebrow="Cuidado" title="Como sua lideranca pode te ajudar?" />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {careOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setCareType(option.value)}
+                className={`min-h-11 rounded-lg px-3 text-sm font-bold ${
+                  careType === option.value ? "bg-emerald-900 text-white" : "bg-slate-100 text-slate-700"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={careText}
+            onChange={(event) => setCareText(event.target.value)}
+            rows={4}
+            className="mt-3 min-h-28 w-full rounded-lg border border-slate-200 bg-white p-3 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+            placeholder="Explique com clareza o que esta acontecendo para sua lideranca te acompanhar melhor."
+          />
+          <button
+            type="button"
+            onClick={requestCare}
+            className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white"
+          >
+            <Heart size={17} />
+            Enviar pedido de cuidado
+          </button>
+        </section>
+
+        <section className="mt-5 rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+          <SectionHeader eyebrow="Oracao" title="Meus pedidos recentes" />
+          <div className="space-y-3">
+            {memberRequests.map((request) => (
+              <article key={request.id} className="rounded-2xl bg-slate-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-950">{request.title}</p>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">{request.request}</p>
+                  </div>
+                  <span className={`rounded-lg px-2 py-1 text-xs font-bold ${prayerStatusTone(request.status)}`}>
+                    {prayerStatusLabel(request.status)}
+                  </span>
+                </div>
+              </article>
+            ))}
+            {memberRequests.length === 0 && (
+              <p className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">
+                Seus pedidos de oracao enviados aparecem aqui para voce acompanhar.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="mt-5 rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+          <SectionHeader eyebrow="Minha caminhada" title="Historico recente" />
+          <div className="space-y-3">
+            {journeyItems.map((item) => (
+              <article key={item.id} className="rounded-2xl bg-slate-50 p-4">
+                <p className="font-bold text-slate-950">{item.title}</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">{item.description}</p>
+                <p className="mt-2 text-xs font-bold text-slate-400">
+                  {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(item.createdAt))}
+                </p>
+              </article>
+            ))}
+            {journeyItems.length === 0 && (
+              <p className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">
+                Sua jornada vai aparecer aqui conforme voce confirmar presenca, responder a trilha e registrar pedidos.
+              </p>
+            )}
+          </div>
+        </section>
+
         {activeTrack && nextVideo ? (
           <>
             <section className="mt-5 rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
@@ -471,22 +805,9 @@ export default function MemberDiscipleshipPage() {
           </section>
         )}
 
-        {feedback && (
-          <div className="mt-5 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">
-            {feedback}
-          </div>
-        )}
-
-        <WhatsAppButton
-          phone={member.phone}
-          message={`Ola, ${member.leader}! Tenho uma pergunta sobre meu discipulado.`}
-          label="Falar com lider"
-          className="mt-5 w-full"
-        />
-
         <div className="mt-3 flex items-center justify-center gap-2 text-xs font-semibold text-slate-400">
           <MessageCircle size={14} />
-          Lider responsavel: {member.leader}
+          Lider responsavel: {member.leader}. Se precisar de ajuda, use o pedido de cuidado acima.
         </div>
 
         <section id="perfil" className="rounded-[26px] border border-white/80 bg-white/90 p-5 shadow-sm">

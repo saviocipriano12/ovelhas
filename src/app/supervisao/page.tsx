@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth-provider";
 import { MetricCard } from "@/components/metric-card";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { getScopedCells, getScopedSupervisorVisits } from "@/lib/access-control";
 import { useActivityEvents, useCells, useLocalPeople, useSupervisorVisits } from "@/lib/local-store";
 import { getCellStats } from "@/lib/reports";
@@ -27,15 +28,15 @@ export default function SupervisionPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { cells } = useCells();
   const { people } = useLocalPeople();
-  const { visits, addVisit } = useSupervisorVisits();
+  const { visits, addVisit, visitLoadError } = useSupervisorVisits();
   const { addEvent } = useActivityEvents();
+  const toast = useToast();
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visibleVisits = getScopedSupervisorVisits(currentUser, visits, cells, isDemoMode);
   const supervisorCells = visibleCells.filter((cell) =>
     currentUser.role === "supervisor" ? cell.supervisorUserId === currentUser.id || currentUser.cellIds?.includes(cell.id) : true,
   );
   const [selectedCellId, setSelectedCellId] = useState(supervisorCells[0]?.id ?? visibleCells[0]?.id ?? "");
-  const [saved, setSaved] = useState("");
 
   const selectedCell = cells.find((cell) => cell.id === selectedCellId) ?? supervisorCells[0] ?? visibleCells[0];
 
@@ -43,8 +44,15 @@ export default function SupervisionPage() {
   const pendingCells = visibleCells.filter(
     (cell) => !visibleVisits.some((visit) => visit.cellId === cell.id && isThisWeek(visit.visitDate)),
   );
-  const averageHealth = visibleVisits.length
-    ? Math.round(visibleVisits.reduce((sum, visit) => sum + visit.healthScore, 0) / visibleVisits.length)
+  const latestHealthByCell = new Map<string, number>();
+  visibleVisits.forEach((visit) => {
+    if (!latestHealthByCell.has(visit.cellId)) {
+      latestHealthByCell.set(visit.cellId, visit.healthScore);
+    }
+  });
+  const latestHealthScores = Array.from(latestHealthByCell.values());
+  const averageHealth = latestHealthScores.length
+    ? Math.round(latestHealthScores.reduce((sum, score) => sum + score, 0) / latestHealthScores.length)
     : 0;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -55,7 +63,7 @@ export default function SupervisionPage() {
     }
 
     const formData = new FormData(event.currentTarget);
-    const visit = await addVisit({
+    const result = await addVisit({
       churchId: selectedCell.churchId,
       cellId: selectedCell.id,
       cellName: selectedCell.name,
@@ -78,16 +86,26 @@ export default function SupervisionPage() {
       actorName: currentUser.name,
       actorRole: currentUser.role,
       action: "Registrou supervisao",
-      description: `${currentUser.name} acompanhou a celula ${selectedCell.name}. Saude percebida: ${visit.healthScore}%.`,
+      description: `${currentUser.name} acompanhou a celula ${selectedCell.name}. Saude percebida: ${result.visit.healthScore}%.`,
       targetType: "visit",
-      targetId: visit.id,
+      targetId: result.visit.id,
       targetName: selectedCell.name,
       cellId: selectedCell.id,
       visibility: "leadership",
       persistToSupabase: !isDemoMode,
     });
 
-    setSaved(`Supervisao de ${selectedCell.name} registrada para o pastor acompanhar.`);
+    if (!result.ok) {
+      toast.warning(`Supervisao de ${selectedCell.name} salva apenas neste dispositivo. A sincronizacao falhou: ${result.error}`);
+      event.currentTarget.reset();
+      return;
+    }
+
+    toast.success(
+      isDemoMode
+        ? `Supervisao de ${selectedCell.name} salva neste dispositivo em modo demonstracao.`
+        : `Supervisao de ${selectedCell.name} registrada para o pastor acompanhar.`,
+    );
     event.currentTarget.reset();
   }
 
@@ -102,6 +120,12 @@ export default function SupervisionPage() {
           <MetricCard icon={ClipboardCheck} label="Pendentes" value={String(pendingCells.length)} accent="bg-amber-500" />
           <MetricCard icon={Users} label="Saude media" value={`${averageHealth}%`} accent="bg-violet-500" />
         </div>
+
+        {visitLoadError && (
+          <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+            As supervisoes exibidas podem estar incompletas neste aparelho. Nao foi possivel atualizar do servidor: {visitLoadError}
+          </section>
+        )}
 
         <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
           <SectionHeader eyebrow="Semana" title="Cobertura do supervisor" />
@@ -130,7 +154,7 @@ export default function SupervisionPage() {
                   </div>
                   {lastVisit && (
                     <p className="mt-3 text-sm leading-5 text-slate-500">
-                      Ultima supervisao: {lastVisit.visitDate} - {lastVisit.nextSteps}
+                      Ultima supervisao: {new Intl.DateTimeFormat("pt-BR").format(new Date(lastVisit.visitDate))} - {lastVisit.nextSteps}
                     </p>
                   )}
                 </article>
@@ -142,7 +166,6 @@ export default function SupervisionPage() {
         {currentUser.role !== "member" && (
           <form onSubmit={handleSubmit} className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
             <SectionHeader eyebrow="Registrar" title="Visita ou acompanhamento" />
-            {saved && <p className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{saved}</p>}
             <div className="space-y-3">
               <select
                 value={selectedCellId}

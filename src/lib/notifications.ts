@@ -38,6 +38,23 @@ function dateFromBrazilian(value: string) {
   return new Date(year, month - 1, day);
 }
 
+export function daysUntilBirthday(birthday: string) {
+  if (!birthday || birthday === "--/--" || !birthday.includes("/")) {
+    return null;
+  }
+
+  const [day, month] = birthday.split("/").map(Number);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const target = new Date(now.getFullYear(), month - 1, day);
+
+  if (target < today) {
+    target.setFullYear(now.getFullYear() + 1);
+  }
+
+  return Math.round((target.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+}
+
 function isWithinNextDays(birthday: string, days: number) {
   if (!birthday || birthday === "--/--" || !birthday.includes("/")) {
     return false;

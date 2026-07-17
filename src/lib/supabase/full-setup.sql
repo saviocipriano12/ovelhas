@@ -331,6 +331,7 @@ with check (
     and (
       (p.role in ('admin', 'pastor') and p.church_id = c.church_id)
       or (p.role = 'leader' and p.id = c.leader_id)
+      or (p.role = 'supervisor' and p.id = c.supervisor_id)
     )
   )
 );
@@ -699,6 +700,7 @@ $$;
 
 grant execute on function public.can_admin_church(uuid) to authenticated;
 
+drop function if exists public.can_create_invite(uuid, app_role, uuid);
 create or replace function public.can_create_invite(
   target_church_id uuid,
   target_role app_role,
@@ -2426,6 +2428,19 @@ with check (
   )
 );
 
+drop policy if exists "churches_select_same_church" on public.churches;
+create policy "churches_select_same_church"
+on public.churches
+for select
+using (
+  exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = churches.id
+  )
+);
+
 drop policy if exists "churches_update_admin_or_pastor" on public.churches;
 drop policy if exists "churches_update_admin" on public.churches;
 create policy "churches_update_admin_or_pastor"
@@ -2446,6 +2461,415 @@ with check (
     from public.profiles p
     where p.id = auth.uid()
     and p.church_id = churches.id
+    and p.role in ('admin', 'pastor')
+  )
+);
+
+-- ============================================================
+-- checkin-attendance.sql
+-- ============================================================
+
+-- Ovelhas - conecta check-in por QR a presenca real
+-- Sem isso, quem faz check-in continua aparecendo como ausente para o lider.
+
+create or replace function public.record_checkin_attendance(
+  p_cell_id uuid,
+  p_person_id uuid,
+  p_checkin_type text,
+  p_checkin_date date
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_cell public.cells;
+  target_person public.people;
+  meeting_id uuid;
+  service_id uuid;
+  authorized boolean;
+begin
+  if auth.uid() is null or p_person_id is null then
+    return;
+  end if;
+
+  select * into target_cell from public.cells where id = p_cell_id;
+  if target_cell.id is null then
+    return;
+  end if;
+
+  select * into target_person from public.people where id = p_person_id and church_id = target_cell.church_id;
+  if target_person.id is null then
+    return;
+  end if;
+
+  authorized := target_person.person_user_id = auth.uid()
+    or exists (
+      select 1
+      from public.profiles p
+      where p.id = auth.uid()
+      and p.church_id = target_cell.church_id
+      and (
+        p.role in ('admin', 'pastor')
+        or (p.role = 'supervisor' and target_cell.supervisor_id = p.id)
+        or (p.role = 'leader' and target_cell.leader_id = p.id)
+      )
+    );
+
+  if not authorized then
+    return;
+  end if;
+
+  if p_checkin_type = 'service' then
+    select id into service_id
+    from public.church_services
+    where church_id = target_cell.church_id and service_date = p_checkin_date
+    limit 1;
+
+    if service_id is null then
+      insert into public.church_services (church_id, service_date, created_by)
+      values (target_cell.church_id, p_checkin_date, auth.uid())
+      returning id into service_id;
+    end if;
+
+    insert into public.service_attendance (service_id, person_id, present)
+    values (service_id, p_person_id, true)
+    on conflict (service_id, person_id) do update set present = true;
+
+    return;
+  end if;
+
+  select id into meeting_id
+  from public.cell_meetings
+  where cell_id = p_cell_id and meeting_date = p_checkin_date
+  limit 1;
+
+  if meeting_id is null then
+    insert into public.cell_meetings (cell_id, meeting_date, created_by)
+    values (p_cell_id, p_checkin_date, auth.uid())
+    returning id into meeting_id;
+  end if;
+
+  insert into public.cell_attendance (meeting_id, person_id, present)
+  values (meeting_id, p_person_id, true)
+  on conflict (meeting_id, person_id) do update set present = true;
+end;
+$$;
+
+grant execute on function public.record_checkin_attendance(uuid, uuid, text, date) to authenticated;
+
+-- ============================================================
+-- peace-homes.sql
+-- ============================================================
+
+-- Ovelhas - Lar de Paz (casas e duplas)
+-- Rode depois de schema.sql e admin-management.sql.
+
+-- Duplas primeiro: house_id fica sem FK aqui porque peace_houses ainda nao existe.
+-- A FK de peace_pairs.house_id para peace_houses(id) e adicionada no final deste arquivo.
+create table if not exists public.peace_pairs (
+  id uuid primary key default gen_random_uuid(),
+  church_id uuid not null references public.churches(id) on delete cascade,
+  cell_id uuid not null references public.cells(id) on delete cascade,
+  name text not null,
+  phone text,
+  has_house boolean not null default false,
+  house_id uuid,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.peace_houses (
+  id uuid primary key default gen_random_uuid(),
+  church_id uuid not null references public.churches(id) on delete cascade,
+  cell_id uuid references public.cells(id) on delete set null,
+  full_name text not null,
+  age integer,
+  sex text check (sex in ('feminino', 'masculino')),
+  phone text,
+  address text not null,
+  house_number text,
+  neighborhood text,
+  city text,
+  has_pair boolean not null default false,
+  pair_id uuid references public.peace_pairs(id) on delete set null,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.peace_pairs drop constraint if exists peace_pairs_house_id_fkey;
+alter table public.peace_pairs
+  add constraint peace_pairs_house_id_fkey foreign key (house_id) references public.peace_houses(id) on delete set null;
+
+alter table public.peace_pairs enable row level security;
+alter table public.peace_houses enable row level security;
+
+-- Duplas ---------------------------------------------------------------
+
+drop policy if exists "peace_pairs_select_by_responsibility" on public.peace_pairs;
+create policy "peace_pairs_select_by_responsibility"
+on public.peace_pairs
+for select
+using (
+  created_by = auth.uid()
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = peace_pairs.church_id
+    and p.role in ('admin', 'pastor')
+  )
+  or exists (
+    select 1
+    from public.cells c
+    join public.profiles p on p.id = auth.uid()
+    where c.id = peace_pairs.cell_id
+    and (
+      (p.role = 'supervisor' and c.supervisor_id = p.id)
+      or (p.role = 'leader' and c.leader_id = p.id)
+    )
+  )
+);
+
+drop policy if exists "peace_pairs_insert_by_leadership" on public.peace_pairs;
+create policy "peace_pairs_insert_by_leadership"
+on public.peace_pairs
+for insert
+with check (
+  exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = peace_pairs.church_id
+    and p.role in ('admin', 'pastor', 'supervisor', 'leader')
+  )
+);
+
+drop policy if exists "peace_pairs_update_by_responsibility" on public.peace_pairs;
+create policy "peace_pairs_update_by_responsibility"
+on public.peace_pairs
+for update
+using (
+  created_by = auth.uid()
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = peace_pairs.church_id
+    and p.role in ('admin', 'pastor')
+  )
+  or exists (
+    select 1
+    from public.cells c
+    join public.profiles p on p.id = auth.uid()
+    where c.id = peace_pairs.cell_id
+    and (
+      (p.role = 'supervisor' and c.supervisor_id = p.id)
+      or (p.role = 'leader' and c.leader_id = p.id)
+    )
+  )
+)
+with check (
+  created_by = auth.uid()
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = peace_pairs.church_id
+    and p.role in ('admin', 'pastor')
+  )
+  or exists (
+    select 1
+    from public.cells c
+    join public.profiles p on p.id = auth.uid()
+    where c.id = peace_pairs.cell_id
+    and (
+      (p.role = 'supervisor' and c.supervisor_id = p.id)
+      or (p.role = 'leader' and c.leader_id = p.id)
+    )
+  )
+);
+
+-- Casas ------------------------------------------------------------------
+
+drop policy if exists "peace_houses_select_by_responsibility" on public.peace_houses;
+create policy "peace_houses_select_by_responsibility"
+on public.peace_houses
+for select
+using (
+  created_by = auth.uid()
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = peace_houses.church_id
+    and p.role in ('admin', 'pastor')
+  )
+  or exists (
+    select 1
+    from public.cells c
+    join public.profiles p on p.id = auth.uid()
+    where c.id = peace_houses.cell_id
+    and (
+      (p.role = 'supervisor' and c.supervisor_id = p.id)
+      or (p.role = 'leader' and c.leader_id = p.id)
+    )
+  )
+);
+
+drop policy if exists "peace_houses_insert_by_leadership" on public.peace_houses;
+create policy "peace_houses_insert_by_leadership"
+on public.peace_houses
+for insert
+with check (
+  exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = peace_houses.church_id
+    and p.role in ('admin', 'pastor', 'supervisor', 'leader')
+  )
+);
+
+drop policy if exists "peace_houses_update_by_responsibility" on public.peace_houses;
+create policy "peace_houses_update_by_responsibility"
+on public.peace_houses
+for update
+using (
+  created_by = auth.uid()
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = peace_houses.church_id
+    and p.role in ('admin', 'pastor')
+  )
+  or exists (
+    select 1
+    from public.cells c
+    join public.profiles p on p.id = auth.uid()
+    where c.id = peace_houses.cell_id
+    and (
+      (p.role = 'supervisor' and c.supervisor_id = p.id)
+      or (p.role = 'leader' and c.leader_id = p.id)
+    )
+  )
+)
+with check (
+  created_by = auth.uid()
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = peace_houses.church_id
+    and p.role in ('admin', 'pastor')
+  )
+  or exists (
+    select 1
+    from public.cells c
+    join public.profiles p on p.id = auth.uid()
+    where c.id = peace_houses.cell_id
+    and (
+      (p.role = 'supervisor' and c.supervisor_id = p.id)
+      or (p.role = 'leader' and c.leader_id = p.id)
+    )
+  )
+);
+
+-- ============================================================
+-- media-storage.sql
+-- ============================================================
+
+-- Ovelhas - storage real para foto de perfil e midia de avisos
+-- Sem isso, fotos e midias de avisos ficam em base64 dentro das tabelas, o que nao escala.
+
+insert into storage.buckets (id, name, public)
+values ('profile-photos', 'profile-photos', true)
+on conflict (id) do nothing;
+
+insert into storage.buckets (id, name, public)
+values ('notice-media', 'notice-media', true)
+on conflict (id) do nothing;
+
+drop policy if exists "profile_photos_public_read" on storage.objects;
+create policy "profile_photos_public_read"
+on storage.objects
+for select
+using (bucket_id = 'profile-photos');
+
+drop policy if exists "profile_photos_insert_own" on storage.objects;
+create policy "profile_photos_insert_own"
+on storage.objects
+for insert
+to authenticated
+with check (bucket_id = 'profile-photos');
+
+drop policy if exists "profile_photos_update_own" on storage.objects;
+create policy "profile_photos_update_own"
+on storage.objects
+for update
+to authenticated
+using (bucket_id = 'profile-photos')
+with check (bucket_id = 'profile-photos');
+
+drop policy if exists "notice_media_public_read" on storage.objects;
+create policy "notice_media_public_read"
+on storage.objects
+for select
+using (bucket_id = 'notice-media');
+
+drop policy if exists "notice_media_insert_leadership" on storage.objects;
+create policy "notice_media_insert_leadership"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'notice-media'
+  and exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.role in ('admin', 'pastor', 'supervisor', 'leader', 'communication')
+  )
+);
+
+-- ============================================================
+-- subscriptions.sql
+-- ============================================================
+
+-- Ovelhas - assinaturas por igreja (Stripe)
+-- Escrita nesta tabela so acontece pelo webhook (service role, bypassa RLS).
+-- O cliente nunca escreve aqui diretamente.
+
+create table if not exists public.church_subscriptions (
+  church_id uuid primary key references public.churches(id) on delete cascade,
+  stripe_customer_id text,
+  stripe_subscription_id text,
+  tier text check (tier in ('pequena', 'media', 'grande')),
+  status text not null default 'incomplete' check (
+    status in ('trialing', 'active', 'past_due', 'canceled', 'incomplete', 'incomplete_expired', 'unpaid')
+  ),
+  trial_ends_at timestamptz,
+  current_period_end timestamptz,
+  cancel_at_period_end boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.church_subscriptions enable row level security;
+
+drop policy if exists "church_subscriptions_select_by_leadership" on public.church_subscriptions;
+create policy "church_subscriptions_select_by_leadership"
+on public.church_subscriptions
+for select
+using (
+  exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = church_subscriptions.church_id
     and p.role in ('admin', 'pastor')
   )
 );

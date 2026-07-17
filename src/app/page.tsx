@@ -10,6 +10,7 @@ import {
   Layers3,
   LockKeyhole,
   MapPinned,
+  MessageCircle,
   Network,
   PlayCircle,
   QrCode,
@@ -18,6 +19,13 @@ import {
   UserCheck,
   UsersRound,
 } from "lucide-react";
+import { getSupportWhatsAppLink } from "@/lib/subscription-plans";
+
+export const metadata = {
+  title: "Ovelhas | Plataforma de cuidado pastoral para igrejas e células",
+  description:
+    "Ovelhas ajuda pastores, líderes e igrejas a cuidar de pessoas, monitorar presença, disciplinar e apoiar células com dados e notificações.",
+};
 
 const painPoints = [
   "Lideres usando planilhas diferentes",
@@ -95,6 +103,30 @@ const metrics = [
   { value: "PWA", label: "instalavel no celular" },
 ];
 
+const plans = [
+  {
+    label: "Pequena",
+    range: "Ate 300 pessoas cadastradas",
+    price: "R$ 59,90",
+    highlighted: false,
+    features: ["Celulas e pessoas ilimitadas", "Presenca, discipulado e cuidados", "Relatorios e tendencias"],
+  },
+  {
+    label: "Media",
+    range: "Ate 800 pessoas cadastradas",
+    price: "R$ 89,90",
+    highlighted: true,
+    features: ["Tudo do plano Pequena", "Suporte prioritario", "Ideal para igrejas em crescimento"],
+  },
+  {
+    label: "Grande",
+    range: "Acima de 800 pessoas",
+    price: "R$ 129,90",
+    highlighted: false,
+    features: ["Tudo do plano Media", "Estrutura para multiplas redes de celulas", "Acompanhamento dedicado"],
+  },
+];
+
 export default function Home() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#f7f8f3] text-slate-950">
@@ -116,6 +148,7 @@ export default function Home() {
             <a href="#modulos" className="hover:text-emerald-900">Modulos</a>
             <a href="#celulas" className="hover:text-emerald-900">Celulas</a>
             <a href="#acesso" className="hover:text-emerald-900">Acessos</a>
+            <a href="#planos" className="hover:text-emerald-900">Planos</a>
             <a href="#contato" className="hover:text-emerald-900">Contato</a>
           </nav>
 
@@ -145,10 +178,10 @@ export default function Home() {
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
             <a
-              href="#contato"
+              href="#planos"
               className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-emerald-950 px-7 text-base font-black text-white shadow-xl shadow-emerald-950/20 transition hover:-translate-y-0.5 hover:bg-emerald-900"
             >
-              Quero apresentar para minha igreja
+              Ver planos e comecar
               <ArrowRight size={19} />
             </a>
             <Link
@@ -342,6 +375,92 @@ export default function Home() {
                 <p className="mt-3 text-sm leading-7 text-slate-600">{role.text}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="planos" className="mx-auto max-w-7xl px-5 pb-20 sm:px-8 lg:pb-28">
+        <div className="max-w-3xl">
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-emerald-800">Planos</p>
+          <h2 className="mt-4 text-4xl font-black tracking-[-0.05em] sm:text-5xl">
+            Um plano para cada tamanho de igreja.
+          </h2>
+          <p className="mt-5 text-lg leading-8 text-slate-600">
+            14 dias de teste gratis em qualquer plano. Cobranca mensal recorrente no cartao, cancele quando quiser.
+          </p>
+        </div>
+
+        <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          {plans.map((plan) => (
+            <div
+              key={plan.label}
+              className={`flex flex-col rounded-[2rem] border p-7 shadow-sm backdrop-blur ${
+                plan.highlighted
+                  ? "border-emerald-900 bg-emerald-950 text-white shadow-xl shadow-emerald-950/20"
+                  : "border-white/80 bg-white/75"
+              }`}
+            >
+              {plan.highlighted ? (
+                <span className="inline-flex w-fit rounded-full bg-emerald-400 px-3 py-1 text-[11px] font-black text-emerald-950">
+                  Mais escolhido
+                </span>
+              ) : (
+                <span className="inline-flex w-fit rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-800">
+                  Plano
+                </span>
+              )}
+              <h3 className={`mt-4 text-xl font-black ${plan.highlighted ? "text-white" : "text-slate-950"}`}>{plan.label}</h3>
+              <p className={`mt-2 text-sm font-bold ${plan.highlighted ? "text-emerald-200" : "text-slate-500"}`}>{plan.range}</p>
+              <p className="mt-6 flex items-baseline gap-1">
+                <span className="text-4xl font-black">{plan.price}</span>
+                <span className={`text-sm font-bold ${plan.highlighted ? "text-emerald-200" : "text-slate-500"}`}>/mes</span>
+              </p>
+              <ul className="mt-6 space-y-3">
+                {plan.features.map((feature) => (
+                  <li key={feature} className="flex items-center gap-2 text-sm font-semibold">
+                    <CheckCircle2 size={16} className={plan.highlighted ? "text-emerald-300" : "text-emerald-700"} />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/login"
+                className={`mt-7 flex min-h-12 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-black transition ${
+                  plan.highlighted ? "bg-white text-emerald-950 hover:bg-emerald-50" : "bg-emerald-950 text-white hover:bg-emerald-900"
+                }`}
+              >
+                Comecar teste gratis
+                <ClipboardCheck size={16} />
+              </Link>
+            </div>
+          ))}
+
+          <div className="flex flex-col rounded-[2rem] border border-white/80 bg-white/75 p-7 shadow-sm backdrop-blur">
+            <span className="inline-flex w-fit rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-800">
+              Plano
+            </span>
+            <h3 className="mt-4 text-xl font-black text-slate-950">Personalizado</h3>
+            <p className="mt-2 text-sm font-bold text-slate-500">Multiplas sedes ou necessidades especiais</p>
+            <p className="mt-6 flex items-baseline gap-1">
+              <span className="text-4xl font-black">Sob consulta</span>
+            </p>
+            <ul className="mt-6 space-y-3">
+              {["Tudo do plano Grande", "Onboarding assistido", "Condicoes negociadas com o suporte"].map((feature) => (
+                <li key={feature} className="flex items-center gap-2 text-sm font-semibold">
+                  <CheckCircle2 size={16} className="text-emerald-700" />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+            <a
+              href={getSupportWhatsAppLink("Ola! Quero saber mais sobre o plano personalizado do Ovelhas.")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-7 flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-950 px-5 text-sm font-black text-white transition hover:bg-emerald-900"
+            >
+              Falar com suporte
+              <MessageCircle size={16} />
+            </a>
           </div>
         </div>
       </section>

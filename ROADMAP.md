@@ -2,87 +2,117 @@
 
 ## Estado atual
 
-O app ja tem uma base mobile-first com:
+O Ovelhas ja funciona como base real de operacao pastoral com:
 
-- PWA instalavel.
-- Base nativa com Capacitor para Android/iOS.
-- Central `/instalar` para PWA, compartilhamento e permissao de notificacoes.
-- Modo offline com fila local para presenca.
-- Navegacao inferior para uso no telefone.
-- Rotas reais para dashboard, pessoas, perfil, presencas, videos, cuidados e meu discipulado.
-- Rotas de celulas, relatorios, agenda, notificacoes, oracao, biblioteca, check-in e menu Mais para mobile.
-- Componentes reutilizaveis.
-- Dados mockados centralizados.
-- Design responsivo com foco em lider de celula usando no celular.
+- autenticacao e perfis por acesso;
+- rotas protegidas por papel;
+- Supabase como backend principal;
+- PWA instalavel com suporte nativo via Capacitor;
+- presenca de celula, consolidacao, check-in, relatorios e supervisao;
+- discipulado com trilhas, progresso e reflexoes;
+- pedidos de oracao, agenda pastoral, comunicados e biblioteca;
+- fallback local para varios modulos e fila offline para presenca.
 
-## Proxima fase: produto funcional com dados reais
+## O que entra agora
 
-1. Adicionar Supabase.
-2. Criar autenticacao.
-3. Criar perfis: administrador, pastor, supervisor, lider e membro.
-4. Criar tabelas reais no PostgreSQL.
-5. Substituir dados mockados de `src/lib/data.ts` por consultas reais.
-6. Proteger rotas por perfil.
-7. Implementar RLS conforme `ACCESS_CONTROL.md`.
+### 1. Lider sem sobrecarga no culto
 
-## Modelo de dados inicial
+- remover o controle de presenca no culto do fluxo semanal do lider;
+- manter o lider focado em preparar, reunir e fechar a celula;
+- deixar a consolidacao como responsavel pelo culto e seus numeros.
 
-- churches
-- users
-- cells
-- people
-- cell_meetings
-- cell_attendance
-- church_services
-- service_attendance
-- discipleship_tracks
-- discipleship_videos
-- person_track_access
-- video_progress
-- follow_ups
-- pastoral_notes
-- timeline_events
-- prayer_requests
-- pastoral_reminders
-- library_materials
-- certificates
-- checkins
-- church_settings
+### 2. Central do membro v1
 
-## Fluxos essenciais
+- historico pessoal da caminhada;
+- leitura clara de proximo passo;
+- agenda pessoal da celula e do discipulado;
+- pedidos de cuidado mais claros;
+- mural segmentado com avisos relevantes;
+- perfil com melhor contexto e validacao.
 
-- Lider cadastra pessoa.
-- Lider vincula pessoa a celula.
-- Lider marca presenca da celula.
-- Lider marca presenca no culto.
-- Pastor cria trilha de videos.
-- Lider libera trilha para novo membro.
-- Novo membro assiste videos em `/meu-discipulado`.
-- Sistema registra progresso.
-- Sistema gera cuidados automaticos.
-- Lider abre WhatsApp com mensagem pronta.
-- Membro registra pedido de oracao.
-- Lider gera QR de check-in.
-- Pastor/admin cadastra materiais e emite certificados.
-- Admin/pastor exporta backup e acompanha auditoria.
-- Lider ou membro instala o app e ativa avisos do aparelho.
-- Membro assiste video embutido, salva progresso e registra reflexao.
+### 3. Sincronizacao mais confiavel
 
-## Automacoes
+- expandir fila offline e retry para relatorios, supervisao, agenda e registros sensiveis;
+- deixar claro para o usuario quando algo salvou localmente e quando sincronizou;
+- reduzir risco de dados ficarem presos so no aparelho.
 
-- Faltou 2 celulas: cuidado de prioridade alta.
-- Faltou 3 celulas: cuidado urgente.
-- Visitante novo: tarefa de boas-vindas.
-- Novo membro sem trilha iniciada em 7 dias: alerta.
-- Discipulo parado no mesmo video por 7 dias: alerta.
-- Pessoa sem celula: alerta para pastor ou secretaria.
-- Pessoa sem lider responsavel: alerta para supervisor ou pastor.
+### 4. Base tecnica mais modular
 
-## Qualidade mobile
+- separar a camada atual por dominio;
+- reduzir o acoplamento de `src/lib/local-store.ts`;
+- preparar o projeto para crescer sem perder legibilidade.
 
-- Todas as acoes importantes devem caber no polegar.
-- Botoes principais devem ter pelo menos 44px de altura.
-- Presenca deve ser marcada em menos de 30 segundos.
-- WhatsApp deve estar sempre a um toque de distancia.
-- O app deve funcionar bem como PWA instalado no Android e iOS.
-- O empacotamento nativo deve manter a mesma experiencia mobile do PWA.
+## Backlog estrategico
+
+### Permissoes e estrutura
+
+- permitir multiplos papeis por pessoa conforme escopo;
+- separar permissoes como `ver`, `editar`, `aprovar`, `exportar`, `convidar` e `auditar`;
+- evoluir de papel global para responsabilidade por escopo;
+- suportar igreja, campus, rede, supervisao, celula e ministerio.
+
+Exemplo futuro:
+
+- uma pessoa pode ser lider em uma celula;
+- membro em outra frente;
+- comunicacao apenas para avisos de um campus.
+
+### Estrutura da igreja
+
+- campus ou unidade;
+- rede ou setor;
+- supervisao;
+- ministerios;
+- familias;
+- jornada pastoral mais completa por etapa.
+
+### Central do membro v2
+
+- historico completo de presenca em celula e culto;
+- acompanhamento de batismo, integracao, curso e servico;
+- pedidos estruturados de visita, aconselhamento, ajuda e oracao;
+- confirmacao de presenca em eventos alem da celula;
+- perfil familiar com mais contexto pastoral.
+
+### Governanca e auditoria
+
+- trilha de auditoria seria por criacao, edicao e exclusao;
+- registro de antes e depois;
+- informacao de sincronizado ou pendente;
+- leitura operacional para admin, pastor e supervisao.
+
+### Inteligencia e analytics
+
+- saude da celula;
+- crescimento e retencao;
+- visitantes convertidos em membros;
+- membros evoluindo para lideranca;
+- gargalos de consolidacao e discipulado.
+
+## Direcao de arquitetura
+
+Estrutura desejada para as proximas fases:
+
+- `domain`
+- `permissions`
+- `repositories`
+- `offline-sync`
+- `ui-hooks`
+
+Divisao sugerida dos stores:
+
+- `people-store`
+- `reports-store`
+- `supervision-store`
+- `discipleship-store`
+- `settings-store`
+- `notifications-store`
+
+## Qualidade esperada
+
+- acoes principais resolvidas com poucos toques no celular;
+- feedback claro de salvamento e sincronizacao;
+- cada perfil vendo apenas o que deve ver;
+- fluxo do lider simples;
+- fluxo do membro acolhedor;
+- crescimento de produto sem depender de remendos.

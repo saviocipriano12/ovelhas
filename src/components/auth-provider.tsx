@@ -3,10 +3,11 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { canAccessRoute, getDefaultRoute } from "@/lib/access-control";
+import { canAccessRoute, getDefaultRoute, isPendingAccount } from "@/lib/access-control";
 import type { AppUser } from "@/lib/data";
 import { users, type UserRole } from "@/lib/data";
 import { supabase } from "@/lib/supabase/client";
+import { isSubscriptionBlocked } from "@/lib/subscription-plans";
 
 const AUTH_KEY = "ovelhas:current-user";
 const PENDING_INVITE_KEY = "ovelhas:pending-invite-token";
@@ -22,7 +23,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const publicRoutes = ["/login", "/convite", "/offline"];
+const publicRoutes = ["/", "/login", "/convite", "/offline"];
 
 type CurrentAppUserProfile = {
   id?: string;
@@ -43,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUserId, setCurrentUserIdState] = useState(users[3].id);
   const [supabaseUser, setSupabaseUser] = useState<AppUser | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -211,6 +213,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [isLoadingAuth, pathname, router, supabaseUser]);
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadSubscriptionStatus() {
+      if (!supabaseUser || isPendingAccount(supabaseUser)) {
+        if (active) {
+          setSubscriptionBlocked(false);
+        }
+        return;
+      }
+
+      const { data } = await supabase
+        .from("church_subscriptions")
+        .select("status")
+        .eq("church_id", supabaseUser.churchId)
+        .maybeSingle();
+
+      if (active) {
+        setSubscriptionBlocked(isSubscriptionBlocked(data?.status));
+      }
+    }
+
+    loadSubscriptionStatus();
+
+    return () => {
+      active = false;
+    };
+  }, [supabaseUser]);
+
+  useEffect(() => {
+    if (isLoadingAuth || !supabaseUser || isPublicRoute(pathname) || pathname === "/assinatura") {
+      return;
+    }
+
+    if (subscriptionBlocked) {
+      router.replace("/assinatura");
+    }
+  }, [isLoadingAuth, pathname, router, subscriptionBlocked, supabaseUser]);
+
   const demoUser = users.find((user) => user.id === currentUserId) ?? users[3];
   const currentUser = supabaseUser ?? demoUser;
   const isDemoMode = !supabaseUser;
@@ -232,10 +273,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const blockedProtectedRoute = !isLoadingAuth && !supabaseUser && !isPublicRoute(pathname);
   const blockedByRole = !isLoadingAuth && Boolean(supabaseUser) && !isPublicRoute(pathname) && !canAccessRoute(currentUser, pathname);
+  const blockedBySubscription =
+    !isLoadingAuth &&
+    Boolean(supabaseUser) &&
+    !isPublicRoute(pathname) &&
+    pathname !== "/assinatura" &&
+    subscriptionBlocked;
 
   return (
     <AuthContext.Provider value={value}>
-      {isLoadingAuth || blockedProtectedRoute || blockedByRole ? (
+      {isLoadingAuth || blockedProtectedRoute || blockedByRole || blockedBySubscription ? (
         <main className="flex min-h-screen items-center justify-center bg-[#f7f8f3] px-6 text-center text-slate-900">
           <div>
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-900 text-xl font-black text-white shadow-lg shadow-emerald-900/20">
@@ -243,7 +290,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             </div>
             <p className="mt-4 text-sm font-bold text-emerald-800">Ovelhas</p>
             <p className="mt-2 text-sm text-slate-500">
-              {isLoadingAuth ? "Verificando acesso..." : blockedByRole ? "Ajustando area permitida..." : "Redirecionando para login..."}
+              {isLoadingAuth
+                ? "Verificando acesso..."
+                : blockedBySubscription
+                  ? "Verificando assinatura..."
+                  : blockedByRole
+                    ? "Ajustando area permitida..."
+                    : "Redirecionando para login..."}
             </p>
           </div>
         </main>

@@ -11,7 +11,6 @@ import {
   MessageCircle,
   Send,
   UserRoundPlus,
-  UsersRound,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
@@ -21,7 +20,6 @@ import { getVisibleCells, getVisiblePeople } from "@/lib/access-control";
 import { getNextMeetingDate, rsvpLabel, rsvpTone } from "@/lib/cell-schedule";
 import {
   saveCellAttendance,
-  saveServiceAttendance,
   useActivityEvents,
   useCareTasks,
   useCellReports,
@@ -48,7 +46,7 @@ function whatsappUrl(phone: string, message: string) {
 
 const steps: { id: CycleStep; label: string; description: string }[] = [
   { id: "prepare", label: "Preparar", description: "Confirmacoes e pessoas que precisam de contato." },
-  { id: "meeting", label: "Reuniao", description: "Presenca da celula e do culto no mesmo lugar." },
+  { id: "meeting", label: "Reuniao", description: "Presenca da celula, visitantes e cuidado no mesmo fluxo." },
   { id: "close", label: "Fechar", description: "Relatorio enviado para supervisor, pastor e admin." },
 ];
 
@@ -65,10 +63,8 @@ export default function TodayCellPage() {
   const visiblePeople = getVisiblePeople(currentUser, people);
   const [selectedCellId, setSelectedCellId] = useState("");
   const [meetingDate, setMeetingDate] = useState("");
-  const [serviceDate, setServiceDate] = useState(todayIso());
   const [step, setStep] = useState<CycleStep>("meeting");
   const [cellPresence, setCellPresence] = useState<Record<string, boolean>>({});
-  const [servicePresence, setServicePresence] = useState<Record<string, boolean>>({});
   const [visitorsCount, setVisitorsCount] = useState(0);
   const [decisionsCount, setDecisionsCount] = useState(0);
   const [highlights, setHighlights] = useState("");
@@ -107,7 +103,6 @@ export default function TodayCellPage() {
   }
 
   const presentCount = cellPeople.filter((person) => cellPresence[person.id] ?? defaultCellPresence(person.id, false)).length;
-  const serviceCount = cellPeople.filter((person) => servicePresence[person.id] ?? person.servicePresent).length;
   const confirmedCount = Array.from(rsvpsByPerson.values()).filter((rsvp) => rsvp.response === "yes").length;
   const maybeCount = Array.from(rsvpsByPerson.values()).filter((rsvp) => rsvp.response === "maybe").length;
   const noCount = Array.from(rsvpsByPerson.values()).filter((rsvp) => rsvp.response === "no").length;
@@ -116,23 +111,13 @@ export default function TodayCellPage() {
     (person) => person.cellAbsences >= 1 || person.progress < 20 || !rsvpsByPerson.has(person.id),
   );
 
-  function markAll(value: boolean, type: "cell" | "service") {
+  function markAll(value: boolean) {
     const next = Object.fromEntries(cellPeople.map((person) => [person.id, value]));
-
-    if (type === "cell") {
-      setCellPresence(next);
-    } else {
-      setServicePresence(next);
-    }
+    setCellPresence(next);
   }
 
-  function setPersonPresence(personId: string, value: boolean, type: "cell" | "service") {
-    if (type === "cell") {
-      setCellPresence((current) => ({ ...current, [personId]: value }));
-      return;
-    }
-
-    setServicePresence((current) => ({ ...current, [personId]: value }));
+  function setPersonPresence(personId: string, value: boolean) {
+    setCellPresence((current) => ({ ...current, [personId]: value }));
   }
 
   async function addVisitorToCell() {
@@ -221,24 +206,9 @@ export default function TodayCellPage() {
         setFeedback(`Nao consegui salvar a presenca: ${attendanceResult.error}`);
         return;
       }
-
-      const serviceResult = await saveServiceAttendance({
-        churchId: currentUser.churchId,
-        serviceDate,
-        title: "Culto principal",
-        createdBy: currentUser.id,
-        records: cellPeople.map((person) => ({
-          personId: person.id,
-          present: servicePresence[person.id] ?? person.servicePresent,
-        })),
-      });
-
-      if (!serviceResult.ok) {
-        setFeedback(`Presenca da celula salva, mas o culto nao salvou: ${serviceResult.error}`);
-      }
     }
 
-    await addReport({
+    const reportResult = await addReport({
       churchId: selectedCell.churchId,
       cellId: selectedCell.id,
       cellName: selectedCell.name,
@@ -248,7 +218,7 @@ export default function TodayCellPage() {
       meetingDate: activeMeetingDate,
       presentCount,
       visitorsCount,
-      serviceCount,
+      serviceCount: 0,
       decisionsCount,
       highlights,
       needs,
@@ -268,7 +238,6 @@ export default function TodayCellPage() {
         return {
           ...person,
           cellAbsences: present ? 0 : person.cellAbsences + 1,
-          servicePresent: servicePresence[person.id] ?? person.servicePresent,
         };
       }),
     );
@@ -309,6 +278,16 @@ export default function TodayCellPage() {
     });
 
     setSaving(false);
+
+    if (!reportResult.ok) {
+      setFeedback(
+        absenceTasks.length > 0
+          ? `Ciclo fechado com alerta. O relatorio ficou salvo neste dispositivo, mas nao sincronizou: ${reportResult.error}. ${absenceTasks.length} cuidado(s) foram criados automaticamente.`
+          : `Ciclo fechado com alerta. O relatorio ficou salvo neste dispositivo, mas nao sincronizou: ${reportResult.error}.`,
+      );
+      return;
+    }
+
     setFeedback(
       absenceTasks.length > 0
         ? `Ciclo fechado. ${absenceTasks.length} cuidado(s) foram criados automaticamente.`
@@ -336,13 +315,13 @@ export default function TodayCellPage() {
               <p className="text-xs font-black uppercase text-emerald-200">Fluxo inteligente</p>
               <h2 className="mt-1 text-2xl font-bold leading-tight">{selectedCell?.name ?? "Nenhuma celula"}</h2>
               <p className="mt-2 text-sm leading-6 text-slate-300">
-                Prepare, registre e envie o resumo para a hierarquia sem sair desta tela.
+                Prepare, registre a reuniao e envie o resumo para a lideranca sem misturar o fluxo da consolidacao do culto.
               </p>
             </div>
             <CalendarCheck className="shrink-0 text-emerald-200" size={30} />
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="mt-4 grid grid-cols-1 gap-2">
             <label className="col-span-2">
               <span className="text-[11px] font-black uppercase text-slate-400">Celula</span>
               <select
@@ -352,7 +331,6 @@ export default function TodayCellPage() {
                   setSelectedCellId(event.target.value);
                   setMeetingDate(nextCell ? getNextMeetingDate(nextCell.meetingDay) : "");
                   setCellPresence({});
-                  setServicePresence({});
                 }}
                 className="mt-2 min-h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-3 text-sm font-bold text-white outline-none"
               >
@@ -369,15 +347,6 @@ export default function TodayCellPage() {
                 type="date"
                 value={activeMeetingDate}
                 onChange={(event) => setMeetingDate(event.target.value)}
-                className="mt-2 min-h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-3 text-sm font-bold text-white outline-none"
-              />
-            </label>
-            <label>
-              <span className="text-[11px] font-black uppercase text-slate-400">Culto</span>
-              <input
-                type="date"
-                value={serviceDate}
-                onChange={(event) => setServiceDate(event.target.value)}
                 className="mt-2 min-h-12 w-full rounded-2xl border border-white/10 bg-white/10 px-3 text-sm font-bold text-white outline-none"
               />
             </label>
@@ -474,46 +443,28 @@ export default function TodayCellPage() {
 
         {step === "meeting" && (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={() => markAll(true, "cell")}
+                onClick={() => markAll(true)}
                 className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-900 text-sm font-black text-white"
               >
                 <Check size={17} />
                 Todos presentes
               </button>
               <button
-                onClick={() => markAll(false, "cell")}
+                onClick={() => markAll(false)}
                 className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white text-sm font-black text-slate-600 shadow-sm"
               >
                 Limpar celula
               </button>
-              <button
-                onClick={() => markAll(true, "service")}
-                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-sky-700 text-sm font-black text-white"
-              >
-                <UsersRound size={17} />
-                Todos no culto
-              </button>
-              <button
-                onClick={() => markAll(false, "service")}
-                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white text-sm font-black text-slate-600 shadow-sm"
-              >
-                Limpar culto
-              </button>
             </div>
 
             <section className="rounded-[28px] border border-white/80 bg-white/90 p-4 shadow-sm">
-              <SectionHeader
-                eyebrow={`${presentCount}/${cellPeople.length} presentes`}
-                title="Lista da celula"
-                action={<span className="rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-900">{serviceCount} culto</span>}
-              />
+              <SectionHeader eyebrow={`${presentCount}/${cellPeople.length} presentes`} title="Lista da celula" />
               <div className="space-y-3">
                 {cellPeople.map((person) => {
                   const rsvp = rsvpsByPerson.get(person.id);
                   const isCellPresent = cellPresence[person.id] ?? defaultCellPresence(person.id, false);
-                  const isServicePresent = servicePresence[person.id] ?? person.servicePresent;
 
                   return (
                     <article key={person.id} className="rounded-[24px] border border-slate-100 bg-slate-50 p-3">
@@ -531,58 +482,30 @@ export default function TodayCellPage() {
                           <span className={`rounded-full px-3 py-1 text-[11px] font-black ${isCellPresent ? "bg-emerald-100 text-emerald-900" : "bg-slate-200 text-slate-500"}`}>
                             {isCellPresent ? "Na celula" : "Ausente"}
                           </span>
-                          <span className={`rounded-full px-3 py-1 text-[11px] font-black ${isServicePresent ? "bg-sky-100 text-sky-900" : "bg-slate-200 text-slate-500"}`}>
-                            {isServicePresent ? "Foi ao culto" : "Nao foi"}
-                          </span>
                         </div>
                       </div>
 
-                      <div className="mt-3 grid gap-2 lg:grid-cols-2">
-                        <div className="rounded-2xl bg-white p-2">
-                          <p className="px-2 pb-2 text-[11px] font-black uppercase text-slate-400">Presenca na celula</p>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setPersonPresence(person.id, true, "cell")}
-                              className={`min-h-12 rounded-xl px-3 text-sm font-black transition ${
-                                isCellPresent ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/15" : "bg-slate-100 text-slate-500"
-                              }`}
-                            >
-                              Presente
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setPersonPresence(person.id, false, "cell")}
-                              className={`min-h-12 rounded-xl px-3 text-sm font-black transition ${
-                                !isCellPresent ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-500"
-                              }`}
-                            >
-                              Ausente
-                            </button>
-                          </div>
-                        </div>
-                        <div className="rounded-2xl bg-white p-2">
-                          <p className="px-2 pb-2 text-[11px] font-black uppercase text-slate-400">Presenca no culto</p>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setPersonPresence(person.id, true, "service")}
-                              className={`min-h-12 rounded-xl px-3 text-sm font-black transition ${
-                                isServicePresent ? "bg-sky-700 text-white shadow-lg shadow-sky-700/15" : "bg-slate-100 text-slate-500"
-                              }`}
-                            >
-                              Foi
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setPersonPresence(person.id, false, "service")}
-                              className={`min-h-12 rounded-xl px-3 text-sm font-black transition ${
-                                !isServicePresent ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-500"
-                              }`}
-                            >
-                              Nao foi
-                            </button>
-                          </div>
+                      <div className="mt-3 rounded-2xl bg-white p-2">
+                        <p className="px-2 pb-2 text-[11px] font-black uppercase text-slate-400">Presenca na celula</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setPersonPresence(person.id, true)}
+                            className={`min-h-12 rounded-xl px-3 text-sm font-black transition ${
+                              isCellPresent ? "bg-emerald-900 text-white shadow-lg shadow-emerald-900/15" : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            Presente
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPersonPresence(person.id, false)}
+                            className={`min-h-12 rounded-xl px-3 text-sm font-black transition ${
+                              !isCellPresent ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            Ausente
+                          </button>
                         </div>
                       </div>
                     </article>
@@ -726,13 +649,13 @@ export default function TodayCellPage() {
                   <p className="text-2xl font-black text-emerald-950">{presentCount}</p>
                   <p className="text-[11px] font-bold text-emerald-800">presentes</p>
                 </div>
-                <div className="rounded-2xl bg-sky-50 p-3 text-center">
-                  <p className="text-2xl font-black text-sky-950">{serviceCount}</p>
-                  <p className="text-[11px] font-bold text-sky-800">culto</p>
-                </div>
                 <div className="rounded-2xl bg-amber-50 p-3 text-center">
                   <p className="text-2xl font-black text-amber-950">{visitorsCount}</p>
                   <p className="text-[11px] font-bold text-amber-800">visitantes</p>
+                </div>
+                <div className="rounded-2xl bg-orange-50 p-3 text-center">
+                  <p className="text-2xl font-black text-orange-950">{decisionsCount}</p>
+                  <p className="text-[11px] font-bold text-orange-800">decisoes</p>
                 </div>
               </div>
             </section>

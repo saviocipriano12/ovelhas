@@ -22,6 +22,7 @@ import {
   Home,
   Eye,
   LayoutGrid,
+  MapPin,
   Menu,
   MoreHorizontal,
   QrCode,
@@ -40,6 +41,7 @@ import { NotificationBridge } from "@/components/notification-bridge";
 import { PwaStatus } from "@/components/pwa-status";
 import { canAccessRoute, getDefaultRoute } from "@/lib/access-control";
 import { roleLabels } from "@/lib/data";
+import { useChurchSettings } from "@/lib/local-store";
 import { usePastoralNotifications } from "@/lib/use-pastoral-notifications";
 
 const navItems: { href: string; label: string; icon: LucideIcon }[] = [
@@ -53,6 +55,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/checkin", label: "Check-in", icon: QrCode },
   { href: "/agenda", label: "Agenda", icon: CalendarDays },
   { href: "/cuidados", label: "Cuidados", icon: HeartHandshake },
+  { href: "/lar-de-paz", label: "Lar de Paz", icon: MapPin },
   { href: "/oracao", label: "Oracao", icon: Heart },
   { href: "/biblioteca", label: "Biblioteca", icon: BookOpen },
   { href: "/videos", label: "Videos", icon: Video },
@@ -70,7 +73,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
 const navGroups = [
   {
     label: "Cuidado",
-    hrefs: ["/dashboard", "/perfil", "/celulas", "/pessoas", "/consolidacao", "/consolidacao/contatos", "/presenca", "/checkin", "/agenda", "/cuidados"],
+    hrefs: ["/dashboard", "/perfil", "/celulas", "/pessoas", "/consolidacao", "/consolidacao/contatos", "/presenca", "/checkin", "/agenda", "/cuidados", "/lar-de-paz"],
   },
   {
     label: "Discipulado",
@@ -129,10 +132,19 @@ function pageLabel(pathname: string) {
   return item?.label ?? "Ovelhas";
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  hideMobileNav = false,
+  hidePwaStatus = false,
+}: {
+  children: ReactNode;
+  hideMobileNav?: boolean;
+  hidePwaStatus?: boolean;
+}) {
   const pathname = usePathname();
   const { currentUser, isDemoMode, signOut } = useAuth();
   const { unread } = usePastoralNotifications();
+  const { settings: churchSettings } = useChurchSettings(currentUser.churchId);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const visibleNavItems = navItems.filter((item) => canAccessRoute(currentUser, item.href));
   const groupedNavItems = navGroups
@@ -167,7 +179,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="min-w-0">
               <p className="text-lg font-semibold leading-tight text-slate-950">Ovelhas</p>
               <p className="text-xs font-medium text-slate-500">by Savio Cipriano</p>
-              <p className="text-xs font-bold text-emerald-700">{roleLabels[currentUser.role]}</p>
+              <p className="truncate text-xs font-bold text-emerald-700">
+                {roleLabels[currentUser.role]} · {churchSettings.churchName}
+              </p>
             </div>
           </Link>
         </div>
@@ -226,7 +240,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="native-scroll min-h-screen w-full px-3 pb-[calc(7.8rem+env(safe-area-inset-bottom))] pt-[calc(0.75rem+env(safe-area-inset-top))] lg:ml-72 lg:w-[calc(100%-18rem)] lg:px-8 lg:pb-10 lg:pt-4 xl:px-10">
+      <main
+        className={`native-scroll min-h-screen w-full px-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:ml-72 lg:w-[calc(100%-18rem)] lg:px-8 lg:pb-10 lg:pt-4 xl:px-10 ${
+          hideMobileNav ? "pb-[calc(1rem+env(safe-area-inset-bottom))]" : "pb-[calc(7.8rem+env(safe-area-inset-bottom))]"
+        }`}
+      >
         <header className="sticky top-[calc(0.6rem+env(safe-area-inset-top))] z-30 mb-4 lg:hidden">
           <div className="relative overflow-hidden rounded-[26px] border border-white/70 bg-slate-950/90 p-2.5 text-white shadow-2xl shadow-slate-900/15 backdrop-blur-2xl">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,#34d39955_0,transparent_38%),linear-gradient(135deg,#02061700,#064e3b55)]" />
@@ -236,8 +254,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                   O
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-[10px] font-black uppercase text-emerald-200">
-                    {roleLabels[currentUser.role]}
+                  <span className="block truncate text-[10px] font-black uppercase text-emerald-200">
+                    {roleLabels[currentUser.role]} · {churchSettings.churchName}
                   </span>
                   <span className="block truncate text-[15px] font-semibold leading-tight">{currentUser.name}</span>
                   <span className="block truncate text-xs font-semibold text-slate-300">{currentPageLabel}</span>
@@ -274,7 +292,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         <header className="sticky top-3 z-30 mb-5 hidden rounded-lg border border-white/70 bg-white/85 p-3 shadow-sm backdrop-blur-xl lg:block">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-emerald-700">{roleLabels[currentUser.role]}</p>
+              <p className="truncate text-sm font-semibold text-emerald-700">
+                {roleLabels[currentUser.role]} · {churchSettings.churchName}
+              </p>
               <h1 className="truncate text-xl font-semibold text-slate-950 sm:text-2xl">Bom te ver, {currentUser.name}</h1>
             </div>
             <div className="flex items-center gap-2">
@@ -336,7 +356,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {children}
       </main>
 
-      <PwaStatus />
+      {!hidePwaStatus && <PwaStatus />}
       <NotificationBridge />
 
       {mobileMenuOpen && (
@@ -424,7 +444,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <nav className="fixed inset-x-3 bottom-[calc(0.65rem+env(safe-area-inset-bottom))] z-40 rounded-[26px] border border-white/75 bg-white/90 p-1.5 shadow-2xl shadow-slate-900/10 backdrop-blur-2xl lg:hidden">
+      {!hideMobileNav && <nav className="fixed inset-x-3 bottom-[calc(0.65rem+env(safe-area-inset-bottom))] z-40 rounded-[26px] border border-white/75 bg-white/90 p-1.5 shadow-2xl shadow-slate-900/10 backdrop-blur-2xl lg:hidden">
         <div
           className="grid gap-1"
           style={{ gridTemplateColumns: `repeat(${Math.max(visibleMobileNavItems.length, 1)}, minmax(0, 1fr))` }}
@@ -445,7 +465,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             );
           })}
         </div>
-      </nav>
+      </nav>}
     </div>
   );
 }

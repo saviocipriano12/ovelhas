@@ -586,6 +586,23 @@ alter table public.cell_reports
   add column if not exists supervisor_visited boolean not null default false,
   add column if not exists supervisor_visit_notes text;
 
+drop policy if exists "cell_reports_insert_by_leader_or_admin" on public.cell_reports;
+create policy "cell_reports_insert_by_leader_or_admin"
+on public.cell_reports
+for insert
+with check (
+  exists (
+    select 1 from public.cells c
+    join public.profiles p on p.id = auth.uid()
+    where c.id = cell_reports.cell_id
+    and (
+      (p.role in ('admin', 'pastor') and p.church_id = c.church_id)
+      or (p.role = 'leader' and p.id = c.leader_id)
+      or (p.role = 'supervisor' and p.id = c.supervisor_id)
+    )
+  )
+);
+
 alter table public.consolidation_reports
   add column if not exists preacher_name text,
   add column if not exists tithe_count integer not null default 0,
@@ -726,7 +743,7 @@ using (
         p.role::text = 'communication'
         and activity_events.visibility = 'member'
       )
-      or (p.role::text = 'consolidation' and (p.id = activity_events.actor_user_id or activity_events.target_type = 'person'))
+      or (p.role::text = 'consolidation' and p.id = activity_events.actor_user_id)
       or (p.role::text = 'supervisor' and (p.id = c.supervisor_id or p.id = activity_events.actor_user_id))
       or (p.role::text = 'leader' and (p.id = c.leader_id or p.id = pe.leader_user_id or p.id = activity_events.actor_user_id))
       or (
@@ -774,3 +791,479 @@ begin
     alter type app_role add value 'communication';
   end if;
 end $$;
+
+-- Complemento 2026-07-17: area administrativa da plataforma (financeiro, suporte, auditoria).
+-- Depende de subscriptions.sql ja ter sido executado (tabela church_subscriptions).
+
+create table if not exists public.platform_audit_log (
+  id uuid primary key default gen_random_uuid(),
+  actor_id uuid references auth.users(id) on delete set null,
+  action text not null,
+  target_church_id uuid references public.churches(id) on delete set null,
+  details jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+alter table public.platform_audit_log enable row level security;
+
+drop policy if exists "platform_audit_log_platform_admin_only" on public.platform_audit_log;
+create policy "platform_audit_log_platform_admin_only"
+on public.platform_audit_log
+for select
+using (public.is_platform_admin());
+
+grant select on public.platform_audit_log to authenticated;
+
+create table if not exists public.platform_church_notes (
+  id uuid primary key default gen_random_uuid(),
+  church_id uuid not null references public.churches(id) on delete cascade,
+  note text not null,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.platform_church_notes enable row level security;
+
+drop policy if exists "platform_church_notes_platform_admin_only" on public.platform_church_notes;
+create policy "platform_church_notes_platform_admin_only"
+on public.platform_church_notes
+for select
+using (public.is_platform_admin());
+
+grant select on public.platform_church_notes to authenticated;
+
+create or replace function public.platform_create_church_with_admin_invite(
+  church_name text,
+  church_city text default null,
+  church_state text default null,
+  admin_name text default null,
+  admin_email text default null
+)
+returns table (
+  church_id uuid,
+  invite_id uuid,
+  invite_token text
+)
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  created_church_id uuid;
+  created_invite_id uuid;
+  generated_token text;
+  creator_profile_id uuid;
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Acesso restrito ao admin geral da plataforma.';
+  end if;
+
+  if nullif(trim(coalesce(church_name, '')), '') is null then
+    raise exception 'Informe o nome da igreja.';
+  end if;
+
+  if nullif(trim(coalesce(admin_email, '')), '') is null then
+    raise exception 'Informe o email do admin da igreja.';
+  end if;
+
+  select p.id
+  into creator_profile_id
+  from public.profiles p
+  where p.id = auth.uid()
+  limit 1;
+
+  insert into public.churches (name, city, state)
+  values (
+    trim(church_name),
+    nullif(trim(coalesce(church_city, '')), ''),
+    nullif(trim(coalesce(church_state, '')), '')
+  )
+  returning id into created_church_id;
+
+  if to_regclass('public.church_settings') is not null then
+    insert into public.church_settings (church_id)
+    values (created_church_id)
+    on conflict (church_id) do nothing;
+  end if;
+
+  generated_token := replace(gen_random_uuid()::text, '-', '') || substring(replace(gen_random_uuid()::text, '-', '') from 1 for 8);
+
+  insert into public.invites (
+    church_id,
+    token,
+    email,
+    name,
+    role,
+    cell_id,
+    person_id,
+    created_by,
+    status,
+    expires_at
+  )
+  values (
+    created_church_id,
+    generated_token,
+    lower(trim(admin_email)),
+    nullif(trim(coalesce(admin_name, '')), ''),
+    'admin',
+    null,
+    null,
+    creator_profile_id,
+    'pending',
+    now() + interval '14 days'
+  )
+  returning id into created_invite_id;
+
+  insert into public.platform_audit_log (actor_id, action, target_church_id, details)
+  values (auth.uid(), 'create_church', created_church_id, jsonb_build_object('church_name', trim(church_name), 'admin_email', lower(trim(admin_email))));
+
+  return query
+  select created_church_id, created_invite_id, generated_token;
+end;
+$$;
+
+grant execute on function public.platform_create_church_with_admin_invite(text, text, text, text, text) to authenticated;
+
+create or replace function public.platform_list_subscriptions()
+returns table (
+  church_id uuid,
+  church_name text,
+  tier text,
+  status text,
+  trial_ends_at timestamptz,
+  current_period_end timestamptz,
+  cancel_at_period_end boolean,
+  updated_at timestamptz,
+  people_count bigint
+)
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Acesso restrito ao admin geral da plataforma.';
+  end if;
+
+  if to_regclass('public.church_subscriptions') is null then
+    return;
+  end if;
+
+  return query
+  select
+    church.id as church_id,
+    church.name as church_name,
+    sub.tier,
+    coalesce(sub.status, 'sem_assinatura') as status,
+    sub.trial_ends_at,
+    sub.current_period_end,
+    coalesce(sub.cancel_at_period_end, false) as cancel_at_period_end,
+    sub.updated_at,
+    (select count(*) from public.people pe where pe.church_id = church.id) as people_count
+  from public.churches church
+  left join public.church_subscriptions sub on sub.church_id = church.id
+  order by
+    case coalesce(sub.status, 'sem_assinatura')
+      when 'past_due' then 0
+      when 'unpaid' then 1
+      when 'incomplete' then 2
+      when 'trialing' then 3
+      when 'active' then 4
+      else 5
+    end,
+    church.created_at desc;
+end;
+$$;
+
+grant execute on function public.platform_list_subscriptions() to authenticated;
+
+create or replace function public.platform_extend_trial(
+  target_church_id uuid,
+  extra_days integer default 14
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Acesso restrito ao admin geral da plataforma.';
+  end if;
+
+  if extra_days is null or extra_days <= 0 then
+    raise exception 'Informe uma quantidade de dias valida.';
+  end if;
+
+  insert into public.church_subscriptions (church_id, status, trial_ends_at)
+  values (target_church_id, 'trialing', now() + make_interval(days => extra_days))
+  on conflict (church_id) do update
+  set
+    status = 'trialing',
+    trial_ends_at = greatest(coalesce(public.church_subscriptions.trial_ends_at, now()), now()) + make_interval(days => extra_days),
+    updated_at = now();
+
+  insert into public.platform_audit_log (actor_id, action, target_church_id, details)
+  values (auth.uid(), 'extend_trial', target_church_id, jsonb_build_object('extra_days', extra_days));
+end;
+$$;
+
+grant execute on function public.platform_extend_trial(uuid, integer) to authenticated;
+
+create or replace function public.platform_add_church_note(
+  target_church_id uuid,
+  note_text text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  new_note_id uuid;
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Acesso restrito ao admin geral da plataforma.';
+  end if;
+
+  if nullif(trim(coalesce(note_text, '')), '') is null then
+    raise exception 'Escreva uma anotacao antes de salvar.';
+  end if;
+
+  insert into public.platform_church_notes (church_id, note, created_by)
+  values (target_church_id, trim(note_text), auth.uid())
+  returning id into new_note_id;
+
+  insert into public.platform_audit_log (actor_id, action, target_church_id, details)
+  values (auth.uid(), 'add_note', target_church_id, jsonb_build_object('note', trim(note_text)));
+
+  return new_note_id;
+end;
+$$;
+
+grant execute on function public.platform_add_church_note(uuid, text) to authenticated;
+
+create or replace function public.platform_list_church_notes(target_church_id uuid)
+returns table (
+  id uuid,
+  note text,
+  created_by_name text,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Acesso restrito ao admin geral da plataforma.';
+  end if;
+
+  return query
+  select n.id, n.note, p.name as created_by_name, n.created_at
+  from public.platform_church_notes n
+  left join public.profiles p on p.id = n.created_by
+  where n.church_id = target_church_id
+  order by n.created_at desc;
+end;
+$$;
+
+grant execute on function public.platform_list_church_notes(uuid) to authenticated;
+
+create or replace function public.platform_list_audit_log(limit_count integer default 100)
+returns table (
+  id uuid,
+  actor_name text,
+  action text,
+  target_church_id uuid,
+  target_church_name text,
+  details jsonb,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Acesso restrito ao admin geral da plataforma.';
+  end if;
+
+  return query
+  select
+    log.id,
+    p.name as actor_name,
+    log.action,
+    log.target_church_id,
+    church.name as target_church_name,
+    log.details,
+    log.created_at
+  from public.platform_audit_log log
+  left join public.profiles p on p.id = log.actor_id
+  left join public.churches church on church.id = log.target_church_id
+  order by log.created_at desc
+  limit greatest(limit_count, 1);
+end;
+$$;
+
+grant execute on function public.platform_list_audit_log(integer) to authenticated;
+
+-- Complemento 2026-07-17 (2): suporte via "entrar como admin da igreja" (impersonacao).
+
+create or replace function public.platform_list_church_admins(target_church_id uuid)
+returns table (
+  id uuid,
+  name text,
+  role text,
+  email text,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Acesso restrito ao admin geral da plataforma.';
+  end if;
+
+  return query
+  select
+    p.id,
+    p.name,
+    p.role::text,
+    u.email,
+    p.created_at
+  from public.profiles p
+  join auth.users u on u.id = p.id
+  where p.church_id = target_church_id
+    and p.role::text in ('admin', 'pastor')
+  order by
+    case p.role::text when 'admin' then 0 else 1 end,
+    p.created_at asc;
+end;
+$$;
+
+grant execute on function public.platform_list_church_admins(uuid) to authenticated;
+
+drop function if exists public.platform_list_churches();
+
+create or replace function public.platform_list_churches()
+returns table (
+  church_id uuid,
+  church_name text,
+  city text,
+  state text,
+  created_at timestamptz,
+  admins_count bigint,
+  profiles_count bigint,
+  cells_count bigint,
+  people_count bigint,
+  invites_count bigint,
+  primary_admin_id uuid,
+  primary_admin_name text
+)
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Acesso restrito ao admin geral da plataforma.';
+  end if;
+
+  return query
+  select
+    church.id as church_id,
+    church.name as church_name,
+    church.city,
+    church.state,
+    church.created_at,
+    (select count(*) from public.profiles p where p.church_id = church.id and p.role = 'admin') as admins_count,
+    (select count(*) from public.profiles p where p.church_id = church.id) as profiles_count,
+    (select count(*) from public.cells c where c.church_id = church.id) as cells_count,
+    (select count(*) from public.people pe where pe.church_id = church.id) as people_count,
+    (select count(*) from public.invites inv where inv.church_id = church.id and inv.status = 'pending') as invites_count,
+    leadership.id as primary_admin_id,
+    leadership.name as primary_admin_name
+  from public.churches church
+  left join lateral (
+    select p.id, p.name
+    from public.profiles p
+    where p.church_id = church.id
+      and p.role::text in ('admin', 'pastor')
+    order by case p.role::text when 'admin' then 0 else 1 end, p.created_at asc
+    limit 1
+  ) leadership on true
+  order by church.created_at desc;
+end;
+$$;
+
+grant execute on function public.platform_list_churches() to authenticated;
+
+-- Complemento 2026-07-17 (3): gestao completa da assinatura (vitalicio gratis, revogar acesso).
+
+alter table public.church_subscriptions drop constraint if exists church_subscriptions_status_check;
+alter table public.church_subscriptions add constraint church_subscriptions_status_check
+  check (status in ('trialing', 'active', 'past_due', 'canceled', 'incomplete', 'incomplete_expired', 'unpaid', 'lifetime'));
+
+create or replace function public.platform_grant_lifetime_access(target_church_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Acesso restrito ao admin geral da plataforma.';
+  end if;
+
+  insert into public.church_subscriptions (church_id, status, trial_ends_at, current_period_end, cancel_at_period_end)
+  values (target_church_id, 'lifetime', null, null, false)
+  on conflict (church_id) do update
+  set
+    status = 'lifetime',
+    trial_ends_at = null,
+    current_period_end = null,
+    cancel_at_period_end = false,
+    updated_at = now();
+
+  insert into public.platform_audit_log (actor_id, action, target_church_id, details)
+  values (auth.uid(), 'grant_lifetime', target_church_id, '{}'::jsonb);
+end;
+$$;
+
+grant execute on function public.platform_grant_lifetime_access(uuid) to authenticated;
+
+create or replace function public.platform_revoke_access(target_church_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Acesso restrito ao admin geral da plataforma.';
+  end if;
+
+  insert into public.church_subscriptions (church_id, status)
+  values (target_church_id, 'canceled')
+  on conflict (church_id) do update
+  set status = 'canceled', updated_at = now();
+
+  insert into public.platform_audit_log (actor_id, action, target_church_id, details)
+  values (auth.uid(), 'revoke_access', target_church_id, '{}'::jsonb);
+end;
+$$;
+
+grant execute on function public.platform_revoke_access(uuid) to authenticated;

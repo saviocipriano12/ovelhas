@@ -7,7 +7,9 @@ import type { FormEvent } from "react";
 import { Copy, Link2, MessageCircle, QrCode, Send, Share2, Trash2, UserPlus } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
+import { useConfirm } from "@/components/confirm-dialog";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { getInviteableRoles, getScopedCells } from "@/lib/access-control";
 import { roleLabels, type UserRole } from "@/lib/data";
 import { useCells, useInvites } from "@/lib/local-store";
@@ -43,7 +45,8 @@ export default function InvitesPage() {
   const inviteableRoles = useMemo(() => getInviteableRoles(currentUser), [currentUser]);
   const [role, setRole] = useState<UserRole>(inviteableRoles[0] ?? "member");
   const [cellId, setCellId] = useState(visibleCells[0]?.id ?? "");
-  const [feedback, setFeedback] = useState("");
+  const toast = useToast();
+  const confirm = useConfirm();
   const [lastLink, setLastLink] = useState("");
   const canInvite = inviteableRoles.length > 0;
   const allowedRoles = inviteableRoles;
@@ -54,7 +57,7 @@ export default function InvitesPage() {
 
   async function copyLink(link: string) {
     await navigator.clipboard?.writeText(link);
-    setFeedback("Link copiado.");
+    toast.success("Link copiado.");
   }
 
   async function shareInvite(link: string, inviteName = "novo acesso") {
@@ -70,24 +73,24 @@ export default function InvitesPage() {
     }
 
     await navigator.clipboard?.writeText(text);
-    setFeedback("Mensagem do convite copiada.");
+    toast.success("Mensagem do convite copiada.");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!canInvite) {
-      setFeedback("Seu acesso nao permite criar convites.");
+      toast.error("Seu acesso nao permite criar convites.");
       return;
     }
 
     if (!allowedRoles.includes(role)) {
-      setFeedback("Esse tipo de acesso nao pode ser convidado pelo seu perfil.");
+      toast.error("Esse tipo de acesso nao pode ser convidado pelo seu perfil.");
       return;
     }
 
     if ((role === "member" || role === "leader" || role === "supervisor") && !selectedCell?.id) {
-      setFeedback("Escolha uma celula antes de gerar convite para supervisor, lider ou membro.");
+      toast.error("Escolha uma celula antes de gerar convite para supervisor, lider ou membro.");
       return;
     }
 
@@ -102,7 +105,7 @@ export default function InvitesPage() {
     });
 
     if (!result.ok || !result.invite) {
-      setFeedback(`Nao consegui criar o convite: ${result.error}`);
+      toast.error(`Nao consegui criar o convite: ${result.error}`);
       return;
     }
 
@@ -110,20 +113,28 @@ export default function InvitesPage() {
     setLastLink(link);
     setName("");
     setEmail("");
-    setFeedback(`Convite criado para ${result.invite.name || roleLabels[result.invite.role]}.`);
+    toast.success(`Convite criado para ${result.invite.name || roleLabels[result.invite.role]}.`);
     await refreshInvites();
   }
 
   async function handleDeleteInvite(id: string, inviteName: string) {
-    if (!window.confirm(`Apagar o convite de ${inviteName}?`)) {
+    const confirmed = await confirm({
+      title: `Apagar o convite de ${inviteName}?`,
+      confirmLabel: "Apagar",
+      tone: "danger",
+    });
+
+    if (!confirmed) {
       return;
     }
 
     const result = await deleteInvite(id);
-    setFeedback(result.ok ? "Convite apagado." : `Nao consegui apagar o convite: ${result.error}`);
 
     if (result.ok) {
+      toast.success("Convite apagado.");
       await refreshInvites();
+    } else {
+      toast.error(`Nao consegui apagar o convite: ${result.error}`);
     }
   }
 
@@ -137,7 +148,11 @@ export default function InvitesPage() {
             <button
               onClick={async () => {
                 const result = await refreshInvites();
-                setFeedback(result.ok ? "Convites atualizados." : `Nao consegui carregar convites: ${result.error}`);
+                if (result.ok) {
+                  toast.success("Convites atualizados.");
+                } else {
+                  toast.error(`Nao consegui carregar convites: ${result.error}`);
+                }
               }}
               className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800"
             >
@@ -245,7 +260,6 @@ export default function InvitesPage() {
                   O link gerado aparece aqui para copiar ou enviar no WhatsApp.
                 </div>
               )}
-              {feedback && <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{feedback}</p>}
             </div>
           </section>
         )}

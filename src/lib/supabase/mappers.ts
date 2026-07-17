@@ -1,4 +1,4 @@
-import type { Cell, Person } from "@/lib/data";
+import type { Cell, PeaceHouse, PeacePair, Person } from "@/lib/data";
 
 type SupabaseCell = {
   id: string;
@@ -33,6 +33,49 @@ type SupabasePerson = {
   family_phone?: string | null;
   notes?: string | null;
 };
+
+type SupabasePeacePair = {
+  id: string;
+  church_id: string;
+  cell_id: string;
+  name: string;
+  phone: string | null;
+  has_house: boolean;
+  house_id: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+type SupabasePeaceHouse = {
+  id: string;
+  church_id: string;
+  cell_id: string | null;
+  full_name: string;
+  age: number | null;
+  sex: string | null;
+  phone: string | null;
+  address: string;
+  house_number: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  has_pair: boolean;
+  pair_id: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export function birthdayFromDate(birthDate: string | null | undefined) {
+  if (!birthDate) {
+    return "--/--";
+  }
+
+  const [, month, day] = birthDate.split("-");
+  if (!month || !day) {
+    return "--/--";
+  }
+
+  return `${day}/${month}`;
+}
 
 function initials(name: string) {
   return name
@@ -88,7 +131,7 @@ export function mapSupabasePerson(
     photoUrl: person.photo_url ?? "",
     familyPhone: person.family_phone ?? "",
     privateNotes: person.notes ?? "",
-    birthday: "--/--",
+    birthday: birthdayFromDate(person.birth_date),
     progress: options.progress ?? 0,
     cellAbsences: options.cellAbsences ?? 0,
     servicePresent: options.servicePresent ?? false,
@@ -98,5 +141,39 @@ export function mapSupabasePerson(
     createdByUserId: person.created_by_user_id ?? "",
     leaderUserId: person.leader_user_id ?? "",
     personUserId: person.person_user_id ?? undefined,
+  };
+}
+
+export function mapSupabasePeacePair(pair: SupabasePeacePair): PeacePair {
+  return {
+    id: pair.id,
+    churchId: pair.church_id,
+    cellId: pair.cell_id,
+    name: pair.name,
+    phone: pair.phone ?? "",
+    hasHouse: pair.has_house,
+    houseId: pair.house_id ?? undefined,
+    createdBy: pair.created_by ?? "",
+    createdAt: pair.created_at,
+  };
+}
+
+export function mapSupabasePeaceHouse(house: SupabasePeaceHouse): PeaceHouse {
+  return {
+    id: house.id,
+    churchId: house.church_id,
+    cellId: house.cell_id ?? undefined,
+    fullName: house.full_name,
+    age: house.age ?? undefined,
+    sex: house.sex === "feminino" || house.sex === "masculino" ? house.sex : undefined,
+    phone: house.phone ?? "",
+    address: house.address,
+    houseNumber: house.house_number ?? "",
+    neighborhood: house.neighborhood ?? "",
+    city: house.city ?? "",
+    hasPair: house.has_pair,
+    pairId: house.pair_id ?? undefined,
+    createdBy: house.created_by ?? "",
+    createdAt: house.created_at,
   };
 }

@@ -87,7 +87,7 @@ export function PwaStatus() {
               {syncing ? <RefreshCw size={20} className="shrink-0 animate-spin" /> : <Wifi size={20} className="shrink-0" />}
               <div className="min-w-0">
                 <p className="text-sm font-bold">{pendingCount} item(ns) para sincronizar</p>
-                <p className="text-xs leading-5 text-emerald-800">Presencas offline serao enviadas automaticamente.</p>
+                <p className="text-xs leading-5 text-emerald-800">Relatorios, supervisoes, agenda, oracao e outros registros offline serao enviados automaticamente.</p>
               </div>
             </div>
           </div>

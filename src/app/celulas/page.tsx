@@ -5,9 +5,11 @@ import { FormEvent, useState } from "react";
 import { CalendarCheck, CalendarClock, MapPin, Pencil, Plus, Save, Trash2, Users, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
+import { useConfirm } from "@/components/confirm-dialog";
 import { MetricCard } from "@/components/metric-card";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { canCreateCell, getScopedCells } from "@/lib/access-control";
 import { roleLabels } from "@/lib/data";
 import { useCells, useLocalPeople, useProfiles } from "@/lib/local-store";
@@ -18,9 +20,10 @@ export default function CellsPage() {
   const { people } = useLocalPeople();
   const { cells, addCell, updateCell, deleteCell, refreshCells, isLoadingCells, cellLoadError } = useCells();
   const { profiles } = useProfiles();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [editingCellId, setEditingCellId] = useState("");
-  const [feedback, setFeedback] = useState("");
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visibleCellIds = new Set(visibleCells.map((cell) => cell.id));
   const visiblePeople = people.filter((person) => visibleCellIds.has(person.cellId));
@@ -46,13 +49,20 @@ export default function CellsPage() {
 
     const formData = new FormData(event.currentTarget);
     const name = String(formData.get("name") || "").trim();
+    const meetingDay = String(formData.get("meetingDay") || "").trim();
+    const meetingTime = String(formData.get("meetingTime") || "").trim();
     const supervisorId =
       currentUser.role === "supervisor" ? currentUser.id : String(formData.get("supervisorId") || "");
     const leaderId = String(formData.get("leaderId") || "");
     const leader = leaders.find((profile) => profile.id === leaderId);
 
     if (!name) {
-      setFeedback("Informe o nome da celula.");
+      toast.error("Informe o nome da celula.");
+      return;
+    }
+
+    if (!meetingDay || !meetingTime) {
+      toast.error("Informe o dia e o horario da reuniao da celula.");
       return;
     }
 
@@ -61,8 +71,8 @@ export default function CellsPage() {
       supervisorUserId: supervisorId,
       leaderUserId: leaderId,
       leaderName: leader?.name,
-      meetingDay: String(formData.get("meetingDay") || "").trim(),
-      meetingTime: String(formData.get("meetingTime") || "").trim(),
+      meetingDay,
+      meetingTime,
       address: String(formData.get("address") || "").trim(),
       neighborhood: String(formData.get("neighborhood") || "").trim(),
       persistToSupabase: !isDemoMode,
@@ -79,11 +89,11 @@ export default function CellsPage() {
         });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui salvar a celula: ${result.error}`);
+      toast.error(`Nao consegui salvar a celula: ${result.error}`);
       return;
     }
 
-    setFeedback(editingCell ? "Celula atualizada." : `${name} criada e pronta para receber pessoas.`);
+    toast.success(editingCell ? "Celula atualizada." : `${name} criada e pronta para receber pessoas.`);
     await refreshCells();
     setOpen(false);
     setEditingCellId("");
@@ -91,21 +101,33 @@ export default function CellsPage() {
   }
 
   async function handleDeleteCell(cellId: string, cellName: string) {
-    if (!window.confirm(`Apagar a celula ${cellName}? Ela sera arquivada e deixara de aparecer nas listas.`)) {
+    const confirmed = await confirm({
+      title: `Apagar a celula ${cellName}?`,
+      description: "Ela sera arquivada e deixara de aparecer nas listas.",
+      confirmLabel: "Apagar",
+      tone: "danger",
+    });
+
+    if (!confirmed) {
       return;
     }
 
     const result = await deleteCell(cellId, !isDemoMode);
-    setFeedback(result.ok ? "Celula apagada." : `Nao consegui apagar a celula: ${result.error}`);
 
-    if (result.ok) {
-      await refreshCells();
+    if (!result.ok) {
+      toast.error(`Nao consegui apagar a celula: ${result.error}`);
+      return;
     }
+
+    toast.success("Celula apagada.");
+    await refreshCells();
   }
 
   return (
-    <AppShell>
+    <AppShell hideMobileNav={open} hidePwaStatus={open}>
       <section className="animate-enter space-y-5">
+        {!open && (
+          <>
         <SectionHeader
           eyebrow="Celulas"
           title="Acompanhamento por celula"
@@ -121,7 +143,11 @@ export default function CellsPage() {
               <button
                 onClick={async () => {
                   const result = await refreshCells();
-                  setFeedback(result.ok ? "Celulas atualizadas." : `Nao consegui carregar celulas: ${result.error}`);
+                  if (result.ok) {
+                    toast.success("Celulas atualizadas.");
+                  } else {
+                    toast.error(`Nao consegui carregar celulas: ${result.error}`);
+                  }
                 }}
                 className="flex h-11 items-center justify-center rounded-2xl bg-emerald-50 px-3 text-xs font-bold text-emerald-800"
               >
@@ -146,12 +172,6 @@ export default function CellsPage() {
           <MetricCard icon={CalendarClock} label="Atencao" value={String(attention)} accent="bg-amber-500" />
           <MetricCard icon={MapPin} label="Bairros" value={String(new Set(visibleCells.map((cell) => cell.neighborhood)).size)} accent="bg-violet-500" />
         </div>
-
-        {feedback && (
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">
-            {feedback}
-          </div>
-        )}
 
         {cellLoadError && (
           <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-800">
@@ -234,13 +254,12 @@ export default function CellsPage() {
           </div>
         )}
 
+          </>
+        )}
+
         {open && (
-          <div className="fixed inset-0 z-50 flex items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-3">
-            <form
-              onSubmit={handleCreateCell}
-              className="mobile-sheet native-scroll app-scrollbar native-form animate-enter"
-            >
-              <div className="mb-4 flex items-center justify-between gap-3">
+          <form onSubmit={handleCreateCell} className="form-screen animate-enter mx-auto w-full max-w-6xl">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 bg-white/95 px-1 py-3 backdrop-blur sm:px-0">
                 <div>
                   <p className="text-xs font-bold uppercase text-emerald-700">{roleLabels[currentUser.role]}</p>
                   <h2 className="text-xl font-semibold text-slate-950">{editingCell ? "Editar celula" : "Nova celula"}</h2>
@@ -251,83 +270,69 @@ export default function CellsPage() {
                     setOpen(false);
                     setEditingCellId("");
                   }}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600"
-                  aria-label="Fechar"
+                  className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 text-sm font-black text-slate-700"
+                  aria-label="Cancelar"
                 >
                   <X size={18} />
+                  <span className="hidden sm:inline">Cancelar</span>
                 </button>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <input
-                  name="name"
-                  required
-                  defaultValue={editingCell?.name ?? ""}
-                  className="field-control sm:col-span-2"
-                  placeholder="Nome da celula"
-                />
-                <input
-                  name="neighborhood"
-                  defaultValue={editingCell?.neighborhood ?? ""}
-                  className="field-control"
-                  placeholder="Bairro"
-                />
-                <input
-                  name="address"
-                  defaultValue={editingCell?.address ?? ""}
-                  className="field-control"
-                  placeholder="Endereco"
-                />
-                <input
-                  name="meetingDay"
-                  defaultValue={editingCell?.meetingDay ?? ""}
-                  className="field-control"
-                  placeholder="Dia da semana"
-                />
-                <input
-                  name="meetingTime"
-                  defaultValue={editingCell?.meetingTime ?? ""}
-                  className="field-control"
-                  placeholder="Horario"
-                />
-                {currentUser.role === "supervisor" ? (
-                  <div className="flex min-h-[3.25rem] items-center rounded-2xl border border-emerald-100 bg-emerald-50 px-3 text-sm font-bold text-emerald-900">
-                    Supervisor: {currentUser.name}
-                  </div>
-                ) : (
-                  <select
-                    name="supervisorId"
-                    defaultValue={editingCell?.supervisorUserId ?? ""}
-                    className="field-control"
-                  >
-                    <option value="">Sem supervisor por enquanto</option>
-                    {supervisors.map((supervisor) => (
-                      <option key={supervisor.id} value={supervisor.id}>
-                        {supervisor.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <select
-                  name="leaderId"
-                  defaultValue={editingCell?.leaderUserId ?? ""}
-                  className="field-control"
-                >
-                  <option value="">Sem lider por enquanto</option>
-                  {leaders.map((leader) => (
-                    <option key={leader.id} value={leader.id}>
-                      {leader.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="form-screen-body min-h-0 flex-1 py-4">
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <section className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                    <p className="mb-1 text-xs font-black uppercase text-emerald-700">Passo 1 de 2</p>
+                    <h3 className="mb-4 text-lg font-black text-slate-950">Identidade da celula</h3>
+                    <div className="space-y-3">
+                      <input name="name" required defaultValue={editingCell?.name ?? ""} className="field-control" placeholder="Nome da celula" />
+                      <input name="neighborhood" defaultValue={editingCell?.neighborhood ?? ""} className="field-control" placeholder="Bairro" />
+                    </div>
+                  </section>
+
+                  <section className="rounded-[24px] bg-emerald-50 p-4 ring-1 ring-emerald-100">
+                    <p className="mb-1 text-xs font-black uppercase text-emerald-700">Passo 2 de 2</p>
+                    <h3 className="mb-4 text-lg font-black text-slate-950">Quando acontece?</h3>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <select name="meetingDay" required defaultValue={editingCell?.meetingDay ?? ""} className="field-control sm:col-span-2">
+                        <option value="">Dia da semana</option>
+                        <option>Segunda</option><option>Terca</option><option>Quarta</option><option>Quinta</option><option>Sexta</option><option>Sabado</option><option>Domingo</option>
+                      </select>
+                      <input name="meetingTime" required defaultValue={editingCell?.meetingTime ?? ""} className="field-control sm:col-span-2" placeholder="Horario, ex: 20h" />
+                    </div>
+                  </section>
+
+                  <details className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-100 lg:col-span-2">
+                    <summary className="cursor-pointer list-none text-sm font-black text-slate-800 marker:hidden">
+                      Endereco e responsabilidades <span className="ml-1 text-xs font-semibold text-slate-400">opcional</span>
+                    </summary>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <input name="address" defaultValue={editingCell?.address ?? ""} className="field-control sm:col-span-2" placeholder="Endereco" />
+                      {currentUser.role === "supervisor" ? (
+                        <div className="flex min-h-[3.5rem] items-center rounded-2xl border border-emerald-100 bg-emerald-50 px-3 text-sm font-bold text-emerald-900">
+                          Supervisor: {currentUser.name}
+                        </div>
+                      ) : (
+                        <select name="supervisorId" defaultValue={editingCell?.supervisorUserId ?? ""} className="field-control">
+                          <option value="">Sem supervisor por enquanto</option>
+                          {supervisors.map((supervisor) => <option key={supervisor.id} value={supervisor.id}>{supervisor.name}</option>)}
+                        </select>
+                      )}
+                      <select name="leaderId" defaultValue={editingCell?.leaderUserId ?? ""} className="field-control">
+                        <option value="">Sem lider por enquanto</option>
+                        {leaders.map((leader) => <option key={leader.id} value={leader.id}>{leader.name}</option>)}
+                      </select>
+                    </div>
+                  </details>
+                </div>
               </div>
 
-              <button className="primary-action mt-4">
-                <Save size={18} />
-                {editingCell ? "Salvar alteracoes" : "Criar celula"}
-              </button>
-            </form>
-          </div>
+              <div className="form-screen-footer shrink-0 border-t border-slate-200/80 bg-white/95 py-3 backdrop-blur">
+                <button className="primary-action min-h-14">
+                  <Save size={18} />
+                  {editingCell ? "Salvar alteracoes" : "Criar celula"}
+                </button>
+              </div>
+          </form>
         )}
       </section>
     </AppShell>

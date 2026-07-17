@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, BarChart3, CheckCircle2, Church, Clipboard, Download, FileText, Plus, Sparkles, UserRoundPlus, Users } from "lucide-react";
+import { AlertTriangle, BarChart3, Clipboard, Download, FileText, Plus, Sparkles, TrendingUp, UserRoundPlus } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { MetricCard } from "@/components/metric-card";
@@ -12,11 +12,50 @@ import { useCellReports, useCells, useConsolidationReports, useLocalPeople } fro
 import { buildReportSummary, downloadReportHtml } from "@/lib/report-export";
 import { getCellStats, getOverallStats } from "@/lib/reports";
 
+const RECENT_REPORT_DAYS = 14;
+
+function reportTime(value: string) {
+  if (!value) {
+    return 0;
+  }
+
+  if (value.includes("/")) {
+    const [day, month, year] = value.split("/").map(Number);
+    return new Date(year, month - 1, day).getTime();
+  }
+
+  return new Date(`${value.slice(0, 10)}T00:00:00`).getTime();
+}
+
+function reportDateLabel(value: string) {
+  if (!value) {
+    return "Sem data";
+  }
+
+  if (value.includes("/")) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("pt-BR").format(new Date(`${value.slice(0, 10)}T00:00:00`));
+}
+
+function daysSinceReport(value: string) {
+  const time = reportTime(value);
+
+  if (!time) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const today = new Date();
+  const current = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  return Math.floor((current - time) / (24 * 60 * 60 * 1000));
+}
+
 export default function ReportsPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { people } = useLocalPeople();
   const { cells } = useCells();
-  const { reports } = useCellReports();
+  const { reports, reportLoadError } = useCellReports();
   const { reports: consolidationReports } = useConsolidationReports(currentUser.churchId);
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
@@ -30,6 +69,25 @@ export default function ReportsPage() {
     }),
     { visitors: 0, decisions: 0 },
   );
+  const latestReportsByCell = visibleCells
+    .map((cell) => {
+      const latestReport =
+        visibleReports
+          .filter((report) => report.cellId === cell.id)
+          .sort((left, right) => reportTime(right.meetingDate) - reportTime(left.meetingDate))[0] ?? null;
+
+      return { cell, report: latestReport };
+    })
+    .sort((left, right) => (right.report ? reportTime(right.report.meetingDate) : 0) - (left.report ? reportTime(left.report.meetingDate) : 0));
+  const cellsWithRecentReport = latestReportsByCell.filter(
+    ({ report }) => report && daysSinceReport(report.meetingDate) <= RECENT_REPORT_DAYS,
+  ).length;
+  const cellsWithoutRecentReport = latestReportsByCell.filter(
+    ({ report }) => !report || daysSinceReport(report.meetingDate) > RECENT_REPORT_DAYS,
+  );
+  const reportsNeedingAttention = latestReportsByCell.filter(
+    ({ report }) => report && Boolean(report.needs || report.prayerRequests || report.supervisorVisitNotes),
+  ).length;
 
   function handleDownload() {
     downloadReportHtml({
@@ -58,7 +116,7 @@ export default function ReportsPage() {
       <section className="animate-enter space-y-5">
         <SectionHeader
           eyebrow="Relatorios"
-          title="Saude das celulas"
+          title="Painel de acompanhamento das celulas"
           action={
             <Link
               href="/relatorios/novo"
@@ -70,21 +128,54 @@ export default function ReportsPage() {
           }
         />
 
+        <section className="rounded-[28px] bg-slate-950 p-5 text-white shadow-xl shadow-slate-950/10">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-200">Visao da lideranca</p>
+              <h2 className="mt-2 text-2xl font-bold leading-tight">Quem enviou, quem esta pendente e onde a supervisao precisa agir</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                O relatorio da celula agora foca no encontro, no cuidado e nos proximos passos. Tudo que e culto fica concentrado na consolidacao.
+              </p>
+            </div>
+            <div className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-semibold text-slate-100">
+              {cellsWithoutRecentReport.length > 0
+                ? `${cellsWithoutRecentReport.length} celula(s) sem envio recente`
+                : "Todas as celulas visiveis possuem envio recente"}
+            </div>
+          </div>
+        </section>
+
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-6">
-          <MetricCard icon={Church} label="Celulas" value={String(overall.cells)} accent="bg-emerald-500" />
-          <MetricCard icon={Users} label="Pessoas" value={String(overall.people)} accent="bg-sky-500" />
-          <MetricCard icon={CheckCircle2} label="No culto" value={String(overall.servicePresent)} accent="bg-violet-500" />
-          <MetricCard icon={AlertTriangle} label="Atencao" value={String(overall.attention)} accent="bg-amber-500" />
-          <MetricCard icon={UserRoundPlus} label="Visitantes" value={String(consolidationTotals.visitors)} accent="bg-emerald-500" />
-          <MetricCard icon={Sparkles} label="Decisoes" value={String(consolidationTotals.decisions)} accent="bg-orange-500" />
+          <MetricCard icon={BarChart3} label="Celulas" value={String(overall.cells)} accent="bg-emerald-500" />
+          <MetricCard icon={FileText} label="Envio recente" value={String(cellsWithRecentReport)} accent="bg-sky-500" />
+          <MetricCard icon={AlertTriangle} label="Sem envio" value={String(cellsWithoutRecentReport.length)} accent="bg-amber-500" />
+          <MetricCard icon={Sparkles} label="Pedir cuidado" value={String(reportsNeedingAttention)} accent="bg-orange-500" />
+          <MetricCard icon={UserRoundPlus} label="Visitantes culto" value={String(consolidationTotals.visitors)} accent="bg-emerald-500" />
+          <MetricCard icon={Sparkles} label="Decisoes culto" value={String(consolidationTotals.decisions)} accent="bg-violet-500" />
         </div>
+
+        <Link
+          href="/relatorios/tendencias"
+          className="flex items-center justify-between rounded-lg border border-white/80 bg-white/90 p-4 text-sm font-bold text-slate-700 shadow-sm"
+        >
+          <span className="flex items-center gap-2">
+            <TrendingUp size={18} className="text-emerald-800" />
+            Ver tendencias — crescimento, saude das celulas e funil de discipulado
+          </span>
+        </Link>
+
+        {reportLoadError && (
+          <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+            Os relatorios exibidos podem estar incompletos neste aparelho. Nao foi possivel atualizar do servidor: {reportLoadError}
+          </section>
+        )}
 
         <section className="rounded-lg border border-emerald-100 bg-emerald-50 p-4 shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="font-semibold text-emerald-950">Relatorio pronto para compartilhar</p>
               <p className="mt-1 text-sm leading-5 text-emerald-800">
-                Baixe um HTML bonito para anexar, salvar ou imprimir como PDF.
+                Gere um resumo claro para pastor, supervisor ou reuniao de lideranca.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex">
@@ -107,7 +198,7 @@ export default function ReportsPage() {
         </section>
 
         <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
-          <SectionHeader eyebrow="Consolidado" title="Indicadores principais" />
+          <SectionHeader eyebrow="Consolidado" title="Leitura geral da semana" />
           <div className="space-y-4">
             <div>
               <div className="mb-2 flex items-center justify-between text-sm">
@@ -128,57 +219,135 @@ export default function ReportsPage() {
           </div>
         </section>
 
+        {cellsWithoutRecentReport.length > 0 && (
+          <section className="rounded-lg border border-amber-100 bg-amber-50 p-5 shadow-sm">
+            <SectionHeader eyebrow="Pendencias" title="Celulas sem envio recente" />
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {cellsWithoutRecentReport.map(({ cell, report }) => (
+                <article key={cell.id} className="rounded-2xl bg-white p-4 shadow-sm">
+                  <p className="font-bold text-slate-950">{cell.name}</p>
+                  <p className="mt-1 text-sm text-slate-500">Lider: {cell.leaderName}</p>
+                  <p className="mt-3 text-sm font-semibold text-amber-900">
+                    {report ? `Ultimo envio em ${reportDateLabel(report.meetingDate)}.` : "Ainda sem relatorio registrado."}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
-          <SectionHeader eyebrow="Recentes" title="Relatorios enviados" />
+          <SectionHeader eyebrow="Leitura do supervisor" title="Ultimo relatorio por celula" />
           <div className="space-y-3">
-            {visibleReports.slice(0, 5).map((report) => (
-              <article key={report.id} className="rounded-lg bg-slate-50 p-4">
-                <div className="flex items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-800">
-                    <FileText size={18} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-slate-950">{report.cellName}</p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {report.meetingDate} - Lider: {report.leaderName}
+            {latestReportsByCell.map(({ cell, report }) => {
+              const stats = getCellStats(cell, visiblePeople);
+              const reportAge = report ? daysSinceReport(report.meetingDate) : Number.POSITIVE_INFINITY;
+              const statusTone =
+                !report
+                  ? "bg-slate-100 text-slate-500"
+                  : reportAge <= RECENT_REPORT_DAYS
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-amber-100 text-amber-900";
+              const statusLabel =
+                !report
+                  ? "Sem relatorio"
+                  : reportAge <= RECENT_REPORT_DAYS
+                    ? `Enviado ha ${reportAge} dia(s)`
+                    : `Ultimo envio ha ${reportAge} dia(s)`;
+
+              return (
+                <article key={cell.id} className="rounded-[24px] bg-slate-50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="font-semibold text-slate-950">{cell.name}</p>
+                      <p className="mt-1 text-sm text-slate-500">Lider: {cell.leaderName}</p>
+                      {report && (
+                        <p className="mt-2 text-xs font-bold uppercase tracking-[0.12em] text-emerald-700">
+                          Reuniao em {reportDateLabel(report.meetingDate)}
+                        </p>
+                      )}
+                    </div>
+                    <span className={`rounded-full px-3 py-2 text-xs font-black ${statusTone}`}>{statusLabel}</span>
+                  </div>
+
+                  {report ? (
+                    <div className="space-y-3">
+                      <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-2xl bg-white p-3">
+                          <p className="text-2xl font-black text-slate-950">{report.presentCount}</p>
+                          <p className="text-[11px] font-bold uppercase text-slate-400">presentes</p>
+                        </div>
+                        <div className="rounded-2xl bg-white p-3">
+                          <p className="text-2xl font-black text-slate-950">{report.visitorsCount}</p>
+                          <p className="text-[11px] font-bold uppercase text-slate-400">visitantes</p>
+                        </div>
+                        <div className="rounded-2xl bg-white p-3">
+                          <p className="text-2xl font-black text-slate-950">{report.decisionsCount}</p>
+                          <p className="text-[11px] font-bold uppercase text-slate-400">decisoes</p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl bg-white p-4">
+                        <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Destaques</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                          {report.highlights || "Sem destaques registrados neste envio."}
                         </p>
                       </div>
-                      <span className="rounded-lg bg-white px-2 py-1 text-xs font-bold text-slate-600">
-                        {report.presentCount} presentes
-                      </span>
+
+                      {(report.needs || report.prayerRequests || report.supervisorVisited || report.supervisorVisitNotes) && (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          {report.needs && (
+                            <div className="rounded-2xl bg-amber-50 p-4">
+                              <p className="text-xs font-black uppercase tracking-[0.12em] text-amber-700">Acompanhar</p>
+                              <p className="mt-2 text-sm leading-6 text-amber-950">{report.needs}</p>
+                            </div>
+                          )}
+                          {report.prayerRequests && (
+                            <div className="rounded-2xl bg-sky-50 p-4">
+                              <p className="text-xs font-black uppercase tracking-[0.12em] text-sky-700">Oracao</p>
+                              <p className="mt-2 text-sm leading-6 text-sky-950">{report.prayerRequests}</p>
+                            </div>
+                          )}
+                          {(report.supervisorVisited || report.supervisorVisitNotes) && (
+                            <div className="rounded-2xl bg-emerald-50 p-4 md:col-span-2">
+                              <p className="text-xs font-black uppercase tracking-[0.12em] text-emerald-700">
+                                {report.supervisorVisited ? "Supervisao presente" : "Observacao da supervisao"}
+                              </p>
+                              <p className="mt-2 text-sm leading-6 text-emerald-950">
+                                {report.supervisorVisitNotes || "A reuniao registrou presenca da supervisao sem observacao adicional."}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+                        <div className="rounded-2xl bg-white p-3">
+                          <p className="text-lg font-black text-slate-950">{stats.total}</p>
+                          <p className="text-[11px] font-bold uppercase text-slate-400">base atual</p>
+                        </div>
+                        <div className="rounded-2xl bg-white p-3">
+                          <p className="text-lg font-black text-slate-950">{stats.attention}</p>
+                          <p className="text-[11px] font-bold uppercase text-slate-400">alertas</p>
+                        </div>
+                        <div className="rounded-2xl bg-white p-3">
+                          <p className="text-lg font-black text-slate-950">{stats.averageProgress}%</p>
+                          <p className="text-[11px] font-bold uppercase text-slate-400">discipulado</p>
+                        </div>
+                        <div className="rounded-2xl bg-white p-3">
+                          <p className="text-lg font-black text-slate-950">{stats.present}</p>
+                          <p className="text-[11px] font-bold uppercase text-slate-400">base presentes</p>
+                        </div>
+                      </div>
                     </div>
-                    <p className="mt-3 text-sm leading-5 text-slate-600">{report.highlights}</p>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                      <div className="rounded-lg bg-white p-2">
-                        <p className="text-base font-semibold">{report.visitorsCount}</p>
-                        <p className="text-[11px] font-medium text-slate-400">visitantes</p>
-                      </div>
-                      <div className="rounded-lg bg-white p-2">
-                        <p className="text-base font-semibold">{report.serviceCount}</p>
-                        <p className="text-[11px] font-medium text-slate-400">culto</p>
-                      </div>
-                      <div className="rounded-lg bg-white p-2">
-                        <p className="text-base font-semibold">{report.decisionsCount}</p>
-                        <p className="text-[11px] font-medium text-slate-400">decisoes</p>
-                      </div>
+                  ) : (
+                    <div className="mt-4 rounded-2xl bg-white p-4 text-sm font-semibold text-slate-500">
+                      Esta celula ainda nao enviou relatorio para a supervisao.
                     </div>
-                    {(report.needs || report.prayerRequests) && (
-                      <div className="mt-3 rounded-lg bg-white p-3 text-sm leading-5 text-slate-500">
-                        {report.needs && <p><strong className="text-slate-700">Acompanhar:</strong> {report.needs}</p>}
-                        {report.prayerRequests && <p className="mt-1"><strong className="text-slate-700">Oracao:</strong> {report.prayerRequests}</p>}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </article>
-            ))}
-            {visibleReports.length === 0 && (
-              <p className="rounded-lg bg-slate-50 p-4 text-sm font-medium text-slate-500">
-                Nenhum relatorio enviado para as celulas visiveis neste perfil.
-              </p>
-            )}
+                  )}
+                </article>
+              );
+            })}
           </div>
         </section>
 
@@ -265,44 +434,6 @@ export default function ReportsPage() {
                 Nenhuma consolidacao de culto enviada ainda.
               </p>
             )}
-          </div>
-        </section>
-
-        <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
-          <SectionHeader eyebrow="Por celula" title="Relatorio para supervisao" />
-          <div className="space-y-3">
-            {visibleCells.map((cell) => {
-              const stats = getCellStats(cell, visiblePeople);
-              return (
-                <article key={cell.id} className="rounded-lg bg-slate-50 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-slate-950">{cell.name}</p>
-                      <p className="mt-1 text-sm text-slate-500">Lider: {cell.leaderName}</p>
-                    </div>
-                    <BarChart3 size={20} className="text-emerald-700" />
-                  </div>
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
-                    <div>
-                      <p className="text-lg font-semibold">{stats.total}</p>
-                      <p className="text-[11px] font-medium text-slate-400">pessoas</p>
-                    </div>
-                    <div>
-                      <p className="text-lg font-semibold">{stats.present}</p>
-                      <p className="text-[11px] font-medium text-slate-400">presentes</p>
-                    </div>
-                    <div>
-                      <p className="text-lg font-semibold">{stats.servicePresent}</p>
-                      <p className="text-[11px] font-medium text-slate-400">culto</p>
-                    </div>
-                    <div>
-                      <p className="text-lg font-semibold">{stats.attention}</p>
-                      <p className="text-[11px] font-medium text-slate-400">alertas</p>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
           </div>
         </section>
       </section>

@@ -16,7 +16,6 @@ import {
   useCareTasks,
   useCellReports,
   useCells,
-  useCompletedCare,
   useDiscipleship,
   useLocalPeople,
   useNotificationReads,
@@ -31,7 +30,6 @@ export function usePastoralNotifications() {
   const { people } = useLocalPeople();
   const { cells } = useCells();
   const { tasks } = useCareTasks();
-  const { completedSet } = useCompletedCare();
   const { reports } = useCellReports();
   const { visits } = useSupervisorVisits();
   const { reminders } = usePastoralReminders();
@@ -44,7 +42,7 @@ export function usePastoralNotifications() {
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visibleCellIds = new Set(visibleCells.map((cell) => cell.id));
   const visiblePeopleIds = new Set(visiblePeople.map((person) => person.id));
-  const visibleTasks = getScopedCareTasks(currentUser, tasks, people, isDemoMode).filter((task) => !completedSet.has(task.id));
+  const visibleTasks = getScopedCareTasks(currentUser, tasks, people, isDemoMode);
   const visibleReports = reports.filter((report) => visibleCellIds.has(report.cellId));
   const visibleVisits = getScopedSupervisorVisits(currentUser, visits, cells, isDemoMode);
   const visibleReminders = getScopedPastoralReminders(currentUser, reminders, cells, people, isDemoMode);

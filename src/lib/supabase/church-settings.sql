@@ -67,6 +67,19 @@ with check (
   )
 );
 
+drop policy if exists "churches_select_same_church" on public.churches;
+create policy "churches_select_same_church"
+on public.churches
+for select
+using (
+  exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = churches.id
+  )
+);
+
 drop policy if exists "churches_update_admin_or_pastor" on public.churches;
 drop policy if exists "churches_update_admin" on public.churches;
 create policy "churches_update_admin_or_pastor"

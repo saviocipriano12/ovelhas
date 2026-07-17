@@ -5,6 +5,7 @@ import { CheckCircle2, Edit3, Filter, MapPin, MessageCircle, Route, Save, Search
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { getScopedCells } from "@/lib/access-control";
 import type { Cell, ConsolidationVisitor } from "@/lib/data";
 import { useCells, useConsolidationReports, useLocalPeople } from "@/lib/local-store";
@@ -95,7 +96,7 @@ export default function ConsolidationContactsPage() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "pending" | ConsolidationVisitor["decision"]>("pending");
   const [selectedVisitor, setSelectedVisitor] = useState<VisitorContact | null>(null);
-  const [feedback, setFeedback] = useState("");
+  const toast = useToast();
   const [saving, setSaving] = useState(false);
 
   const contacts = useMemo<VisitorContact[]>(
@@ -151,7 +152,12 @@ export default function ConsolidationContactsPage() {
     const selectedCell = visibleCells.find((cell) => cell.id === cellId) ?? suggestCell(visibleCells, neighborhood, address);
 
     if (!name || !phone) {
-      setFeedback("Informe nome e WhatsApp antes de salvar.");
+      toast.error("Informe nome e WhatsApp antes de salvar.");
+      return;
+    }
+
+    if (!selectedVisitor.personId && !selectedCell) {
+      toast.error("Cadastre uma celula antes de direcionar este contato para Pessoas.");
       return;
     }
 
@@ -176,7 +182,7 @@ export default function ConsolidationContactsPage() {
 
       if (!personResult.ok || !personResult.person) {
         setSaving(false);
-        setFeedback(`Nao consegui encaminhar para Pessoas: ${personResult.error}`);
+        toast.error(`Nao consegui encaminhar para Pessoas: ${personResult.error}`);
         return;
       }
 
@@ -201,18 +207,20 @@ export default function ConsolidationContactsPage() {
     setSaving(false);
 
     if (!updateResult.ok) {
-      setFeedback(`Nao consegui salvar contato: ${updateResult.error}`);
+      toast.error(`Nao consegui salvar contato: ${updateResult.error}`);
       return;
     }
 
     await Promise.all([refreshReports(), refreshPeople()]);
     setSelectedVisitor(null);
-    setFeedback(selectedCell ? `${name} foi direcionado para ${selectedCell.name}.` : `${name} foi atualizado.`);
+    toast.success(selectedCell ? `${name} foi direcionado para ${selectedCell.name}.` : `${name} foi atualizado.`);
   }
 
   return (
-    <AppShell>
+    <AppShell hideMobileNav={Boolean(selectedVisitor)} hidePwaStatus={Boolean(selectedVisitor)}>
       <section className="animate-enter space-y-4">
+        {!selectedVisitor && (
+          <>
         <SectionHeader
           eyebrow="Consolidacao"
           title="Contatos e encaminhamentos"
@@ -247,12 +255,6 @@ export default function ConsolidationContactsPage() {
             </div>
           </div>
         </section>
-
-        {feedback && (
-          <p className="rounded-3xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-bold text-emerald-900">
-            {feedback}
-          </p>
-        )}
 
         {reportLoadError && (
           <p className="rounded-3xl border border-rose-100 bg-rose-50 p-4 text-sm font-bold text-rose-800">
@@ -380,10 +382,12 @@ export default function ConsolidationContactsPage() {
           </section>
         )}
 
+          </>
+        )}
+
         {selectedVisitor && (
-          <div className="fixed inset-0 z-[999] flex items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-3">
-            <form onSubmit={saveContact} className="mobile-sheet native-scroll app-scrollbar animate-enter">
-              <div className="sticky top-0 z-10 -mx-1 mb-4 flex items-center justify-between gap-3 rounded-b-2xl bg-white/95 px-1 pb-3 pt-2 backdrop-blur">
+          <form onSubmit={saveContact} className="form-screen animate-enter mx-auto w-full max-w-6xl">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 bg-white/95 px-1 py-3 backdrop-blur sm:px-0">
                 <div>
                   <p className="text-xs font-black uppercase text-emerald-700">Encaminhamento</p>
                   <h2 className="text-xl font-black text-slate-950">Editar contato</h2>
@@ -391,54 +395,65 @@ export default function ConsolidationContactsPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedVisitor(null)}
-                  className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-600"
-                  aria-label="Fechar"
+                  className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 text-sm font-black text-slate-700"
+                  aria-label="Cancelar"
                 >
                   <X size={18} />
+                  <span className="hidden sm:inline">Cancelar</span>
                 </button>
               </div>
 
-              <div className="space-y-3">
-                <input name="name" defaultValue={selectedVisitor.name} required className="field-control" placeholder="Nome completo" />
-                <input name="phone" defaultValue={selectedVisitor.phone} required inputMode="tel" className="field-control" placeholder="WhatsApp com DDD" />
-                <input name="email" defaultValue={selectedVisitor.email} type="email" className="field-control" placeholder="Email opcional" />
-                <input name="age" defaultValue={selectedVisitor.age} type="number" min="0" className="field-control" placeholder="Idade" />
-                <input name="neighborhood" defaultValue={selectedVisitor.neighborhood} className="field-control" placeholder="Bairro" />
-                <input name="address" defaultValue={selectedVisitor.address} className="field-control" placeholder="Endereco completo" />
-                <select name="decision" defaultValue={selectedVisitor.decision} className="field-control">
-                  <option value="visitante">Visitante</option>
-                  <option value="aceitou_jesus">Aceitou Jesus</option>
-                  <option value="batismo">Decisao pelo batismo</option>
-                  <option value="reconciliacao">Reconciliacao</option>
-                </select>
-                <select name="cellId" defaultValue={selectedVisitor.suggestedCellId} className="field-control">
-                  <option value="">Escolher celula</option>
-                  {visibleCells.map((cell) => (
-                    <option key={cell.id} value={cell.id}>
-                      {cell.name} {cell.neighborhood ? `- ${cell.neighborhood}` : ""}
-                    </option>
-                  ))}
-                </select>
-                <textarea
-                  name="notes"
-                  defaultValue={selectedVisitor.notes}
-                  rows={3}
-                  className="field-control min-h-28 resize-none py-3"
-                  placeholder="Observacoes para o retorno"
-                />
+              <div className="form-screen-body min-h-0 flex-1 py-4">
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <section className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                    <p className="mb-1 text-xs font-black uppercase text-emerald-700">Contato</p>
+                    <h3 className="mb-4 text-lg font-black text-slate-950">Quem vamos acompanhar?</h3>
+                    <div className="space-y-3">
+                      <input name="name" defaultValue={selectedVisitor.name} required className="field-control" placeholder="Nome completo" />
+                      <input name="phone" defaultValue={selectedVisitor.phone} required inputMode="tel" className="field-control" placeholder="WhatsApp com DDD" />
+                      <select name="decision" defaultValue={selectedVisitor.decision} className="field-control">
+                        <option value="visitante">Visitante</option><option value="aceitou_jesus">Aceitou Jesus</option><option value="batismo">Decisao pelo batismo</option><option value="reconciliacao">Reconciliacao</option>
+                      </select>
+                    </div>
+                  </section>
+
+                  <section className="rounded-[24px] bg-emerald-50 p-4 ring-1 ring-emerald-100">
+                    <p className="mb-1 text-xs font-black uppercase text-emerald-700">Encaminhamento</p>
+                    <h3 className="mb-4 text-lg font-black text-slate-950">Para onde essa pessoa vai?</h3>
+                    <select name="cellId" defaultValue={selectedVisitor.suggestedCellId} className="field-control">
+                      <option value="">Escolher celula</option>
+                      {visibleCells.map((cell) => (
+                        <option key={cell.id} value={cell.id}>{cell.name} {cell.neighborhood ? `- ${cell.neighborhood}` : ""}</option>
+                      ))}
+                    </select>
+                    <div className="mt-4 rounded-2xl bg-white/80 p-3 text-sm font-bold text-emerald-950">
+                      <CheckCircle2 className="mr-2 inline" size={15} />
+                      Ao salvar, o Ovelhas cria ou atualiza o cadastro e direciona para o lider da celula.
+                    </div>
+                  </section>
+
+                  <details className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-100 lg:col-span-2">
+                    <summary className="cursor-pointer list-none text-sm font-black text-slate-800 marker:hidden">
+                      Complementar cadastro <span className="ml-1 text-xs font-semibold text-slate-400">opcional</span>
+                    </summary>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <input name="email" defaultValue={selectedVisitor.email} type="email" className="field-control" placeholder="Email opcional" />
+                      <input name="age" defaultValue={selectedVisitor.age} type="number" min="0" className="field-control" placeholder="Idade" />
+                      <input name="neighborhood" defaultValue={selectedVisitor.neighborhood} className="field-control" placeholder="Bairro" />
+                      <input name="address" defaultValue={selectedVisitor.address} className="field-control" placeholder="Endereco completo" />
+                      <textarea name="notes" defaultValue={selectedVisitor.notes} rows={3} className="field-control min-h-28 resize-none py-3 sm:col-span-2" placeholder="Observacoes para o retorno" />
+                    </div>
+                  </details>
+                </div>
               </div>
 
-              <div className="mt-4 rounded-2xl bg-emerald-50 p-3 text-sm font-bold text-emerald-950">
-                <CheckCircle2 className="mr-2 inline" size={15} />
-                Ao salvar, se ainda nao existir pessoa vinculada, o Ovelhas cria o cadastro e direciona para o lider da celula.
+              <div className="form-screen-footer shrink-0 border-t border-slate-200/80 bg-white/95 py-3 backdrop-blur">
+                <button disabled={saving} className="primary-action min-h-14 disabled:opacity-60">
+                  <Save size={17} />
+                  {saving ? "Salvando..." : "Salvar e direcionar"}
+                </button>
               </div>
-
-              <button disabled={saving} className="primary-action mt-4 disabled:opacity-60">
-                <Save size={17} />
-                {saving ? "Salvando..." : "Salvar e direcionar"}
-              </button>
-            </form>
-          </div>
+          </form>
         )}
       </section>
     </AppShell>
