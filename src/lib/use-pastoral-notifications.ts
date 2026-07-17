@@ -35,7 +35,7 @@ export function usePastoralNotifications() {
   const { reminders } = usePastoralReminders();
   const { requests } = usePrayerRequests();
   const { events } = useActivityEvents();
-  const { accesses, progress } = useDiscipleship();
+  const { accesses, progress, tracks: discipleshipTracks } = useDiscipleship();
   const reads = useNotificationReads(currentUser.id);
 
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
@@ -64,6 +64,7 @@ export function usePastoralNotifications() {
         events: visibleEvents,
         accesses: visibleAccesses,
         progress: visibleProgress,
+        tracks: discipleshipTracks,
       }),
     [
       visibleAccesses,
@@ -76,6 +77,7 @@ export function usePastoralNotifications() {
       visibleReports,
       visibleTasks,
       visibleVisits,
+      discipleshipTracks,
     ],
   );
 

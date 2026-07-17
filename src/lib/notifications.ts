@@ -3,6 +3,7 @@ import type {
   CareTask,
   Cell,
   CellReport,
+  DiscipleshipTrack,
   PastoralReminder,
   Person,
   PersonTrackAccess,
@@ -101,6 +102,7 @@ export function getPastoralNotifications(input: {
   events: ActivityEvent[];
   accesses: PersonTrackAccess[];
   progress: VideoProgressRecord[];
+  tracks: DiscipleshipTrack[];
 }) {
   const notifications: PastoralNotification[] = [];
   const sevenDaysAgo = daysAgo(7).getTime();
@@ -206,6 +208,27 @@ export function getPastoralNotifications(input: {
 
   input.accesses.forEach((access) => {
     const person = input.people.find((item) => item.id === access.personId);
+    if (!person) return;
+
+    if (access.status === "completed") {
+      const completedRecently = access.completedAt ? new Date(access.completedAt).getTime() >= daysAgo(3).getTime() : false;
+      if (completedRecently) {
+        const track = input.tracks.find((item) => item.id === access.trackId);
+        notifications.push({
+          id: `video-completed-${access.personId}-${access.trackId}`,
+          title: `${person.name} concluiu a trilha`,
+          description: track ? `Terminou "${track.title}". Considere emitir o certificado.` : "Concluiu a trilha de discipulado.",
+          type: "video",
+          priority: "Media",
+          href: `/pessoas/${person.id}`,
+          createdAt: access.completedAt ?? new Date().toISOString(),
+          personId: person.id,
+          cellId: person.cellId,
+        });
+      }
+      return;
+    }
+
     const personProgress = input.progress.filter((item) => item.personId === access.personId);
     const hasProgress = personProgress.length > 0;
     const lastProgress = personProgress
@@ -215,7 +238,7 @@ export function getPastoralNotifications(input: {
       .at(-1);
     const isStopped = lastProgress ? new Date(lastProgress).getTime() < sevenDaysAgo : false;
 
-    if (person && (!hasProgress || isStopped)) {
+    if (!hasProgress || isStopped) {
       notifications.push({
         id: `video-stopped-${access.personId}-${access.trackId}`,
         title: `${person.name} precisa retomar a trilha`,

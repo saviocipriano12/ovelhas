@@ -59,6 +59,7 @@ const menuItems: { href: string; title: string; description: string; icon: Lucid
   { href: "/configuracao", title: "Bootstrap do primeiro acesso", description: "Uso unico: criar a igreja e o primeiro administrador. Nao e a tela de ajustes.", icon: Building2 },
   { href: "/configuracoes", title: "Configuracoes", description: "Marca, mensagens, LGPD, auditoria e backup.", icon: Settings },
   { href: "/assinatura", title: "Assinatura", description: "Plano da igreja, uso e pagamento.", icon: CreditCard },
+  { href: "/plataforma", title: "Plataforma", description: "Admin geral: igrejas, financeiro, suporte e auditoria.", icon: Building2 },
 ];
 
 export default function MorePage() {

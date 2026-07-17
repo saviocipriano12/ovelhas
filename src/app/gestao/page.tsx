@@ -171,11 +171,14 @@ export default function ManagementPage() {
       return;
     }
 
-    const confirmation = window.prompt(
-      `Exclusao definitiva de ${userName}.\n\nIsso remove o login do Supabase e libera o email para novo cadastro.\nDigite EXCLUIR para confirmar.`,
-    );
+    const confirmed = await confirm({
+      title: `Excluir ${userName} definitivamente?`,
+      description: "Isso remove o login do Supabase e libera o email para um novo cadastro. Nao pode ser desfeito.",
+      confirmLabel: "Excluir definitivamente",
+      tone: "danger",
+    });
 
-    if (confirmation !== "EXCLUIR") {
+    if (!confirmed) {
       toast.warning("Exclusao cancelada.");
       return;
     }

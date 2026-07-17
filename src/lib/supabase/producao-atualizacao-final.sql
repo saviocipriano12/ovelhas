@@ -1267,3 +1267,263 @@ end;
 $$;
 
 grant execute on function public.platform_revoke_access(uuid) to authenticated;
+
+-- Complemento 2026-07-17 (4): inteligencia do Lar de Paz (relatorio de visita, status, promocao a celula).
+
+alter table public.peace_houses
+  add column if not exists status text not null default 'em_acompanhamento'
+    check (status in ('em_acompanhamento', 'pronta_para_celula', 'virou_celula')),
+  add column if not exists promoted_cell_id uuid references public.cells(id) on delete set null;
+
+create table if not exists public.peace_visits (
+  id uuid primary key default gen_random_uuid(),
+  church_id uuid not null references public.churches(id) on delete cascade,
+  house_id uuid not null references public.peace_houses(id) on delete cascade,
+  visited_at date not null default current_date,
+  accepted_jesus boolean,
+  wants_cell boolean,
+  notes text,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.peace_visits enable row level security;
+
+drop policy if exists "peace_visits_select_by_responsibility" on public.peace_visits;
+create policy "peace_visits_select_by_responsibility"
+on public.peace_visits
+for select
+using (
+  created_by = auth.uid()
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = peace_visits.church_id
+    and p.role in ('admin', 'pastor')
+  )
+  or exists (
+    select 1
+    from public.peace_houses h
+    join public.cells c on c.id = h.cell_id
+    join public.profiles p on p.id = auth.uid()
+    where h.id = peace_visits.house_id
+    and (
+      (p.role = 'supervisor' and c.supervisor_id = p.id)
+      or (p.role = 'leader' and c.leader_id = p.id)
+    )
+  )
+);
+
+drop policy if exists "peace_visits_insert_by_leadership" on public.peace_visits;
+create policy "peace_visits_insert_by_leadership"
+on public.peace_visits
+for insert
+with check (
+  exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = peace_visits.church_id
+    and p.role in ('admin', 'pastor', 'supervisor', 'leader')
+  )
+);
+
+grant select, insert on public.peace_visits to authenticated;
+
+create or replace function public.add_peace_visit(
+  target_house_id uuid,
+  accepted_jesus boolean,
+  wants_cell boolean,
+  visit_notes text default null,
+  visit_date date default current_date
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  new_visit_id uuid;
+  target_church_id uuid;
+  target_cell_id uuid;
+  house_name text;
+  house_status text;
+begin
+  select church_id, cell_id, full_name, status
+  into target_church_id, target_cell_id, house_name, house_status
+  from public.peace_houses
+  where id = target_house_id;
+
+  if target_church_id is null then
+    raise exception 'Casa nao encontrada.';
+  end if;
+
+  insert into public.peace_visits (church_id, house_id, visited_at, accepted_jesus, wants_cell, notes, created_by)
+  values (
+    target_church_id,
+    target_house_id,
+    coalesce(visit_date, current_date),
+    accepted_jesus,
+    wants_cell,
+    nullif(trim(coalesce(visit_notes, '')), ''),
+    auth.uid()
+  )
+  returning id into new_visit_id;
+
+  if wants_cell and house_status <> 'virou_celula' then
+    update public.peace_houses
+    set status = 'pronta_para_celula', updated_at = now()
+    where id = target_house_id;
+
+    insert into public.pastoral_reminders (
+      church_id, assigned_to, title, description, reminder_type, due_at, cell_id, created_by
+    )
+    values (
+      target_church_id,
+      null,
+      'Lar de Paz: ' || house_name || ' quer uma celula',
+      'A casa registrou interesse em iniciar uma celula. Avalie e promova quando estiver pronta.',
+      'lar_de_paz',
+      now() + interval '3 days',
+      target_cell_id,
+      auth.uid()
+    );
+  end if;
+
+  return new_visit_id;
+end;
+$$;
+
+grant execute on function public.add_peace_visit(uuid, boolean, boolean, text, date) to authenticated;
+
+create or replace function public.list_peace_visits(target_house_id uuid)
+returns table (
+  id uuid,
+  visited_at date,
+  accepted_jesus boolean,
+  wants_cell boolean,
+  notes text,
+  created_by_name text,
+  created_at timestamptz
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select v.id, v.visited_at, v.accepted_jesus, v.wants_cell, v.notes, p.name, v.created_at
+  from public.peace_visits v
+  left join public.profiles p on p.id = v.created_by
+  where v.house_id = target_house_id
+  order by v.visited_at desc, v.created_at desc;
+$$;
+
+grant execute on function public.list_peace_visits(uuid) to authenticated;
+
+create or replace function public.promote_peace_house_to_cell(
+  target_house_id uuid,
+  cell_name text,
+  leader_id uuid default null,
+  supervisor_id uuid default null,
+  meeting_day text default null,
+  meeting_time text default null
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  house record;
+  new_cell_id uuid;
+begin
+  select * into house from public.peace_houses where id = target_house_id;
+
+  if house.id is null then
+    raise exception 'Casa nao encontrada.';
+  end if;
+
+  if nullif(trim(coalesce(cell_name, '')), '') is null then
+    raise exception 'Informe o nome da celula.';
+  end if;
+
+  insert into public.cells (church_id, name, leader_id, supervisor_id, meeting_day, meeting_time, address, neighborhood, active)
+  values (
+    house.church_id,
+    trim(cell_name),
+    leader_id,
+    supervisor_id,
+    nullif(trim(coalesce(meeting_day, '')), ''),
+    nullif(trim(coalesce(meeting_time, '')), ''),
+    house.address,
+    house.neighborhood,
+    true
+  )
+  returning id into new_cell_id;
+
+  update public.peace_houses
+  set status = 'virou_celula', promoted_cell_id = new_cell_id, updated_at = now()
+  where id = target_house_id;
+
+  return new_cell_id;
+end;
+$$;
+
+grant execute on function public.promote_peace_house_to_cell(uuid, text, uuid, uuid, text, text) to authenticated;
+
+-- Complemento 2026-07-17 (5): permitir editar e excluir casas/duplas do Lar de Paz (tela unificada).
+
+drop policy if exists "peace_houses_delete_by_responsibility" on public.peace_houses;
+create policy "peace_houses_delete_by_responsibility"
+on public.peace_houses
+for delete
+using (
+  created_by = auth.uid()
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = peace_houses.church_id
+    and p.role in ('admin', 'pastor')
+  )
+  or exists (
+    select 1
+    from public.cells c
+    join public.profiles p on p.id = auth.uid()
+    where c.id = peace_houses.cell_id
+    and (
+      (p.role = 'supervisor' and c.supervisor_id = p.id)
+      or (p.role = 'leader' and c.leader_id = p.id)
+    )
+  )
+);
+
+grant delete on public.peace_houses to authenticated;
+
+drop policy if exists "peace_pairs_delete_by_responsibility" on public.peace_pairs;
+create policy "peace_pairs_delete_by_responsibility"
+on public.peace_pairs
+for delete
+using (
+  created_by = auth.uid()
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.church_id = peace_pairs.church_id
+    and p.role in ('admin', 'pastor')
+  )
+  or exists (
+    select 1
+    from public.cells c
+    join public.profiles p on p.id = auth.uid()
+    where c.id = peace_pairs.cell_id
+    and (
+      (p.role = 'supervisor' and c.supervisor_id = p.id)
+      or (p.role = 'leader' and c.leader_id = p.id)
+    )
+  )
+);
+
+grant delete on public.peace_pairs to authenticated;

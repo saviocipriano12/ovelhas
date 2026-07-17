@@ -22,6 +22,7 @@ import type {
   PastoralReminder,
   PeaceHouse,
   PeacePair,
+  PeaceVisit,
   Person,
   PersonTrackAccess,
   PrayerRequest,
@@ -1921,6 +1922,31 @@ export function useDiscipleship() {
       return [localProgress, ...others];
     });
 
+    if (status === "completed") {
+      const video = videos.find((item) => item.id === input.videoId);
+      const access = video ? accesses.find((item) => item.personId === input.personId && item.trackId === video.trackId) : undefined;
+
+      if (video && access && access.status !== "completed") {
+        const trackVideos = videos.filter((item) => item.trackId === video.trackId && item.active);
+        const updatedProgress = [localProgress, ...progress.filter((item) => !(item.personId === input.personId && item.videoId === input.videoId))];
+        const allCompleted = trackVideos.every((trackVideo) =>
+          updatedProgress.some(
+            (item) => item.personId === input.personId && item.videoId === trackVideo.id && item.status === "completed",
+          ),
+        );
+
+        if (allCompleted) {
+          if (input.persistToSupabase) {
+            await supabase.from("person_track_access").update({ status: "completed", completed_at: now }).eq("id", access.id);
+          }
+
+          setAccesses((current) =>
+            current.map((item) => (item.id === access.id ? { ...item, status: "completed", completedAt: now } : item)),
+          );
+        }
+      }
+    }
+
     return { ok: true, progress: localProgress };
   }
 
@@ -2782,7 +2808,46 @@ export function usePeacePairs() {
     return { ok: true };
   }
 
-  return { pairs, addPeacePair, updatePeacePairLink };
+  async function updatePeacePairDetails(input: {
+    pairId: string;
+    cellId: string;
+    name: string;
+    phone: string;
+    persistToSupabase?: boolean;
+  }) {
+    if (input.persistToSupabase) {
+      const { error } = await supabase
+        .from("peace_pairs")
+        .update({ cell_id: input.cellId, name: input.name, phone: input.phone || null })
+        .eq("id", input.pairId);
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setPairs((current) =>
+      current.map((pair) =>
+        pair.id === input.pairId ? { ...pair, cellId: input.cellId, name: input.name, phone: input.phone } : pair,
+      ),
+    );
+
+    return { ok: true };
+  }
+
+  async function deletePeacePair(input: { pairId: string; persistToSupabase?: boolean }) {
+    if (input.persistToSupabase) {
+      const { error } = await supabase.from("peace_pairs").delete().eq("id", input.pairId);
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setPairs((current) => current.filter((pair) => pair.id !== input.pairId));
+    return { ok: true };
+  }
+
+  return { pairs, addPeacePair, updatePeacePairLink, updatePeacePairDetails, deletePeacePair };
 }
 
 export function usePeaceHouses() {
@@ -2806,7 +2871,7 @@ export function usePeaceHouses() {
       const { data, error } = await supabase
         .from("peace_houses")
         .select(
-          "id, church_id, cell_id, full_name, age, sex, phone, address, house_number, neighborhood, city, has_pair, pair_id, created_by, created_at",
+          "id, church_id, cell_id, full_name, age, sex, phone, address, house_number, neighborhood, city, has_pair, pair_id, status, promoted_cell_id, created_by, created_at",
         )
         .order("created_at", { ascending: false });
 
@@ -2861,6 +2926,7 @@ export function usePeaceHouses() {
       city: input.city,
       hasPair: Boolean(input.pairId),
       pairId: input.pairId,
+      status: "em_acompanhamento",
       createdBy: input.createdBy,
       createdAt: new Date().toISOString(),
     };
@@ -2971,7 +3037,174 @@ export function usePeaceHouses() {
     return { ok: true };
   }
 
-  return { houses, addPeaceHouse, updatePeaceHouseLink };
+  async function addVisit(input: {
+    houseId: string;
+    acceptedJesus: boolean | null;
+    wantsCell: boolean | null;
+    notes?: string;
+    visitedAt?: string;
+  }) {
+    const { data, error } = await supabase.rpc("add_peace_visit", {
+      target_house_id: input.houseId,
+      accepted_jesus: input.acceptedJesus,
+      wants_cell: input.wantsCell,
+      visit_notes: input.notes || null,
+      visit_date: input.visitedAt || null,
+    });
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (input.wantsCell) {
+      setHouses((current) =>
+        current.map((house) =>
+          house.id === input.houseId && house.status !== "virou_celula"
+            ? { ...house, status: "pronta_para_celula" as const }
+            : house,
+        ),
+      );
+    }
+
+    return { ok: true, visitId: data as string };
+  }
+
+  async function loadVisits(houseId: string): Promise<PeaceVisit[]> {
+    const { data, error } = await supabase.rpc("list_peace_visits", { target_house_id: houseId });
+    if (error || !data) {
+      return [];
+    }
+
+    return (
+      data as {
+        id: string;
+        visited_at: string;
+        accepted_jesus: boolean | null;
+        wants_cell: boolean | null;
+        notes: string | null;
+        created_by_name: string | null;
+        created_at: string;
+      }[]
+    ).map((row) => ({
+      id: row.id,
+      houseId,
+      visitedAt: row.visited_at,
+      acceptedJesus: row.accepted_jesus,
+      wantsCell: row.wants_cell,
+      notes: row.notes ?? undefined,
+      createdByName: row.created_by_name ?? undefined,
+      createdAt: row.created_at,
+    }));
+  }
+
+  async function promoteToCell(input: {
+    houseId: string;
+    cellName: string;
+    leaderId?: string;
+    supervisorId?: string;
+    meetingDay?: string;
+    meetingTime?: string;
+  }) {
+    const { data, error } = await supabase.rpc("promote_peace_house_to_cell", {
+      target_house_id: input.houseId,
+      cell_name: input.cellName,
+      leader_id: input.leaderId || null,
+      supervisor_id: input.supervisorId || null,
+      meeting_day: input.meetingDay || null,
+      meeting_time: input.meetingTime || null,
+    });
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    setHouses((current) =>
+      current.map((house) =>
+        house.id === input.houseId ? { ...house, status: "virou_celula" as const, promotedCellId: data as string } : house,
+      ),
+    );
+
+    return { ok: true, cellId: data as string };
+  }
+
+  async function updatePeaceHouseDetails(input: {
+    houseId: string;
+    cellId?: string;
+    fullName: string;
+    age?: number;
+    sex?: PeaceHouse["sex"];
+    phone: string;
+    address: string;
+    houseNumber: string;
+    neighborhood: string;
+    city: string;
+    persistToSupabase?: boolean;
+  }) {
+    if (input.persistToSupabase) {
+      const { error } = await supabase
+        .from("peace_houses")
+        .update({
+          cell_id: input.cellId || null,
+          full_name: input.fullName,
+          age: input.age ?? null,
+          sex: input.sex || null,
+          phone: input.phone || null,
+          address: input.address,
+          house_number: input.houseNumber || null,
+          neighborhood: input.neighborhood || null,
+          city: input.city || null,
+        })
+        .eq("id", input.houseId);
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setHouses((current) =>
+      current.map((house) =>
+        house.id === input.houseId
+          ? {
+              ...house,
+              cellId: input.cellId,
+              fullName: input.fullName,
+              age: input.age,
+              sex: input.sex,
+              phone: input.phone,
+              address: input.address,
+              houseNumber: input.houseNumber,
+              neighborhood: input.neighborhood,
+              city: input.city,
+            }
+          : house,
+      ),
+    );
+
+    return { ok: true };
+  }
+
+  async function deletePeaceHouse(input: { houseId: string; persistToSupabase?: boolean }) {
+    if (input.persistToSupabase) {
+      const { error } = await supabase.from("peace_houses").delete().eq("id", input.houseId);
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setHouses((current) => current.filter((house) => house.id !== input.houseId));
+    return { ok: true };
+  }
+
+  return {
+    houses,
+    addPeaceHouse,
+    updatePeaceHouseLink,
+    updatePeaceHouseDetails,
+    deletePeaceHouse,
+    addVisit,
+    loadVisits,
+    promoteToCell,
+  };
 }
 
 export function useChurchSubscription(churchId: string) {

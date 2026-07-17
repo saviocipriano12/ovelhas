@@ -206,6 +206,8 @@ export type PeacePair = {
   createdAt: string;
 };
 
+export type PeaceHouseStatus = "em_acompanhamento" | "pronta_para_celula" | "virou_celula";
+
 export type PeaceHouse = {
   id: string;
   churchId: string;
@@ -220,7 +222,20 @@ export type PeaceHouse = {
   city: string;
   hasPair: boolean;
   pairId?: string;
+  status: PeaceHouseStatus;
+  promotedCellId?: string;
   createdBy: string;
+  createdAt: string;
+};
+
+export type PeaceVisit = {
+  id: string;
+  houseId: string;
+  visitedAt: string;
+  acceptedJesus: boolean | null;
+  wantsCell: boolean | null;
+  notes?: string;
+  createdByName?: string;
   createdAt: string;
 };
 

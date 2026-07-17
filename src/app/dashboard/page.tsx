@@ -7,11 +7,13 @@ import { useAuth } from "@/components/auth-provider";
 import { CareTaskCard } from "@/components/care-task-card";
 import { ChurchNoticeCard } from "@/components/church-notice-card";
 import { MetricCard } from "@/components/metric-card";
+import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
 import { getScopedActivityEvents, getScopedCareTasks, getScopedCells, getScopedPeople } from "@/lib/access-control";
 import { getNextMeetingDate } from "@/lib/cell-schedule";
 import { isChurchNotice } from "@/lib/church-notices";
+import { computeDiscipleshipProgress } from "@/lib/discipleship";
 import { useActivityEvents, useCareTasks, useCells, useDiscipleship, useLocalPeople } from "@/lib/local-store";
 
 export default function DashboardPage() {
@@ -20,7 +22,7 @@ export default function DashboardPage() {
   const { cells } = useCells();
   const { tasks } = useCareTasks();
   const { events } = useActivityEvents();
-  const { tracks } = useDiscipleship();
+  const { tracks, accesses, videos, progress: videoProgress } = useDiscipleship();
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visibleCareTasks = getScopedCareTasks(currentUser, tasks, people, isDemoMode);
@@ -29,8 +31,11 @@ export default function DashboardPage() {
     .slice(0, 3);
   const present = visiblePeople.filter((person) => person.cellAbsences === 0).length;
   const servicePresent = visiblePeople.filter((person) => person.servicePresent).length;
-  const averageProgress = visiblePeople.length
-    ? Math.round(visiblePeople.reduce((sum, person) => sum + person.progress, 0) / visiblePeople.length)
+  const discipleshipProgress = visiblePeople
+    .map((person) => ({ person, progress: computeDiscipleshipProgress(person.id, accesses, videos, videoProgress) }))
+    .filter((item): item is { person: (typeof visiblePeople)[number]; progress: number } => item.progress !== null);
+  const averageProgress = discipleshipProgress.length
+    ? Math.round(discipleshipProgress.reduce((sum, item) => sum + item.progress, 0) / discipleshipProgress.length)
     : 0;
   const activeTrack = tracks.find((track) => track.active);
   const activeTrackLabel = activeTrack ? activeTrack.title : "Nenhuma trilha ativa";
@@ -48,6 +53,8 @@ export default function DashboardPage() {
   return (
     <AppShell>
       <section className="animate-enter space-y-5">
+        <OnboardingChecklist />
+
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <MetricCard icon={LayoutGrid} label="Celulas" value={String(visibleCells.length)} accent="bg-emerald-500" />
           <MetricCard icon={Users} label="Pessoas" value={String(visiblePeople.length)} accent="bg-sky-500" />
@@ -145,15 +152,20 @@ export default function DashboardPage() {
           <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
             <SectionHeader eyebrow="Discipulado" title={`Progresso medio: ${averageProgress}%`} />
             <div className="space-y-4">
-              {visiblePeople.map((person) => (
-                <div key={person.id}>
+              {discipleshipProgress.map(({ person, progress }) => (
+                <Link key={person.id} href={`/pessoas/${person.id}`} className="block">
                   <div className="mb-2 flex items-center justify-between gap-3 text-sm">
                     <span className="truncate font-medium text-slate-700">{person.name}</span>
-                    <span className="font-semibold text-emerald-700">{person.progress}%</span>
+                    <span className="font-semibold text-emerald-700">{progress}%</span>
                   </div>
-                  <ProgressBar value={person.progress} />
-                </div>
+                  <ProgressBar value={progress} />
+                </Link>
               ))}
+              {discipleshipProgress.length === 0 && (
+                <p className="rounded-lg bg-slate-50 p-4 text-sm font-medium text-slate-500">
+                  Nenhuma pessoa com trilha de discipulado liberada ainda.
+                </p>
+              )}
             </div>
           </section>
         </div>

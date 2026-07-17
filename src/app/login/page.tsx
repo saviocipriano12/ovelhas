@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Eye, EyeOff, Loader2, LogIn, MailCheck, ShieldCheck } from "lucide-react";
@@ -209,9 +208,6 @@ export default function LoginPage() {
               Para entrar como membro, lider ou supervisor, use o convite criado pela lideranca. Assim o acesso ja nasce vinculado a igreja e a celula correta.
             </p>
           </div>
-          <Link href="/convites" className="mt-3 hidden text-sm font-bold text-emerald-800">
-            Convites
-          </Link>
         </div>
       </div>
     </main>

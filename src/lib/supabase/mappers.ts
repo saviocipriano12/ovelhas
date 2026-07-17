@@ -60,6 +60,8 @@ type SupabasePeaceHouse = {
   city: string | null;
   has_pair: boolean;
   pair_id: string | null;
+  status: string | null;
+  promoted_cell_id: string | null;
   created_by: string | null;
   created_at: string;
 };
@@ -173,6 +175,8 @@ export function mapSupabasePeaceHouse(house: SupabasePeaceHouse): PeaceHouse {
     city: house.city ?? "",
     hasPair: house.has_pair,
     pairId: house.pair_id ?? undefined,
+    status: house.status === "pronta_para_celula" || house.status === "virou_celula" ? house.status : "em_acompanhamento",
+    promotedCellId: house.promoted_cell_id ?? undefined,
     createdBy: house.created_by ?? "",
     createdAt: house.created_at,
   };

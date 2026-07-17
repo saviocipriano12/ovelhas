@@ -1,13 +1,20 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
-import { Copy, Filter, MessageCircle, Plus, Share2, UserPlus, X } from "lucide-react";
+import { ChangeEvent, FormEvent, useMemo, useState } from "react";
+import { Copy, Filter, MessageCircle, Plus, Share2, Upload, UserPlus, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { PersonCard } from "@/components/person-card";
 import { SectionHeader } from "@/components/section-header";
 import { useToast } from "@/components/toast-provider";
 import { canManagePeople, getScopedCells, getScopedPeople } from "@/lib/access-control";
+import {
+  guessColumnMapping,
+  normalizeImportedDate,
+  parseCsv,
+  PERSON_IMPORT_FIELDS,
+  type PersonImportField,
+} from "@/lib/csv-import";
 import { useCells, useInvites, useLocalPeople } from "@/lib/local-store";
 import { whatsappLink } from "@/lib/whatsapp";
 
@@ -30,6 +37,13 @@ export default function PeoplePage() {
   const [open, setOpen] = useState(false);
   const [lastInviteLink, setLastInviteLink] = useState("");
   const [lastInviteName, setLastInviteName] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
+  const [importHeaders, setImportHeaders] = useState<string[]>([]);
+  const [importRows, setImportRows] = useState<string[][]>([]);
+  const [importMapping, setImportMapping] = useState<Partial<Record<PersonImportField, number>>>({});
+  const [importCellId, setImportCellId] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importSummary, setImportSummary] = useState<{ ok: number; failed: number } | null>(null);
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
 
   const filteredPeople = useMemo(() => {
@@ -171,6 +185,100 @@ export default function PeoplePage() {
     toast.success(`Convite de ${person.name} pronto para enviar, sem duplicar cadastro.`);
   }
 
+  function handleCsvFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result || "");
+      const rows = parseCsv(text);
+      if (rows.length < 2) {
+        toast.error("O arquivo precisa ter uma linha de cabecalho e pelo menos uma pessoa.");
+        return;
+      }
+
+      const [headerRow, ...dataRows] = rows;
+      setImportHeaders(headerRow);
+      setImportRows(dataRows);
+      setImportMapping(guessColumnMapping(headerRow));
+      setImportCellId(visibleCells[0]?.id ?? "");
+      setImportSummary(null);
+      setImportOpen(true);
+    };
+    reader.readAsText(file, "utf-8");
+  }
+
+  async function confirmCsvImport() {
+    const selectedCell = visibleCells.find((cell) => cell.id === importCellId);
+    if (!selectedCell) {
+      toast.error("Escolha a celula que vai receber as pessoas importadas.");
+      return;
+    }
+
+    const nameColumn = importMapping.name;
+    if (nameColumn === undefined) {
+      toast.error("Escolha qual coluna do arquivo tem o nome da pessoa.");
+      return;
+    }
+
+    setImporting(true);
+    let ok = 0;
+    let failed = 0;
+
+    for (const row of importRows) {
+      const name = row[nameColumn]?.trim();
+      if (!name) {
+        failed++;
+        continue;
+      }
+
+      const birthDateRaw = importMapping.birthDate !== undefined ? row[importMapping.birthDate] ?? "" : "";
+
+      const result = await addPerson({
+        name,
+        phone: importMapping.phone !== undefined ? (row[importMapping.phone] ?? "").trim() : "",
+        stage: "Visitante",
+        neighborhood: importMapping.neighborhood !== undefined ? (row[importMapping.neighborhood] ?? "").trim() : "",
+        email: importMapping.email !== undefined ? (row[importMapping.email] ?? "").trim() : undefined,
+        birthDate: normalizeImportedDate(birthDateRaw),
+        address: importMapping.address !== undefined ? (row[importMapping.address] ?? "").trim() : undefined,
+        createdByUserId: currentUser.id,
+        leaderUserId: selectedCell.leaderUserId || (currentUser.role === "leader" ? currentUser.id : undefined),
+        churchId: currentUser.churchId,
+        cellId: selectedCell.id,
+        cellName: selectedCell.name,
+        persistToSupabase: !isDemoMode,
+      });
+
+      if (result.ok) {
+        ok++;
+      } else {
+        failed++;
+      }
+    }
+
+    setImporting(false);
+    setImportSummary({ ok, failed });
+    await Promise.all([refreshPeople(), refreshCells()]);
+
+    if (ok > 0) {
+      toast.success(`${ok} pessoa(s) importada(s) para ${selectedCell.name}.`);
+    }
+    if (failed > 0) {
+      toast.warning(`${failed} linha(s) nao puderam ser importadas.`);
+    }
+  }
+
+  function closeImport() {
+    setImportOpen(false);
+    setImportHeaders([]);
+    setImportRows([]);
+    setImportMapping({});
+    setImportSummary(null);
+  }
+
   return (
     <AppShell hideMobileNav={open} hidePwaStatus={open}>
       <section className="animate-enter space-y-4">
@@ -181,25 +289,34 @@ export default function PeoplePage() {
           title="Pessoas acompanhadas"
           action={
             canManagePeople(currentUser) ? (
-              <button
-                onClick={() => {
-                  if (isLoadingCells) {
-                    toast.warning("Aguarde as celulas carregarem antes de cadastrar pessoas.");
-                    return;
-                  }
+              <div className="flex gap-2">
+                <label
+                  className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg bg-white text-slate-600 shadow-sm"
+                  aria-label="Importar pessoas por CSV"
+                >
+                  <Upload size={17} />
+                  <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvFile} />
+                </label>
+                <button
+                  onClick={() => {
+                    if (isLoadingCells) {
+                      toast.warning("Aguarde as celulas carregarem antes de cadastrar pessoas.");
+                      return;
+                    }
 
-                  if (visibleCells.length === 0) {
-                    toast.error("Crie ou atribua uma celula antes de cadastrar pessoas.");
-                    return;
-                  }
+                    if (visibleCells.length === 0) {
+                      toast.error("Crie ou atribua uma celula antes de cadastrar pessoas.");
+                      return;
+                    }
 
-                  setOpen(true);
-                }}
-                className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-900 text-white shadow-sm"
-                aria-label="Adicionar pessoa"
-              >
-                <Plus size={18} />
-              </button>
+                    setOpen(true);
+                  }}
+                  className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-900 text-white shadow-sm"
+                  aria-label="Adicionar pessoa"
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
             ) : null
           }
         />
@@ -419,6 +536,105 @@ export default function PeoplePage() {
                 </div>
               </div>
           </form>
+        )}
+
+        {importOpen && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-t-[28px] bg-white p-5 shadow-2xl sm:rounded-[28px]">
+              <div className="flex items-start justify-between gap-3">
+                <SectionHeader eyebrow="Importar" title="Cadastrar pessoas por CSV" />
+                <button onClick={closeImport} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500" aria-label="Fechar">
+                  <X size={16} />
+                </button>
+              </div>
+
+              {importSummary ? (
+                <div className="mt-4 space-y-3">
+                  <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">
+                    {importSummary.ok} pessoa(s) importada(s) com sucesso.
+                    {importSummary.failed > 0 && ` ${importSummary.failed} linha(s) falharam (nome vazio ou erro ao salvar).`}
+                  </div>
+                  <button onClick={closeImport} className="primary-action w-full">
+                    Concluir
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <p className="mb-1 text-xs font-bold uppercase text-slate-400">Celula que vai receber essas pessoas</p>
+                    <select value={importCellId} onChange={(event) => setImportCellId(event.target.value)} className="field-control">
+                      <option value="" disabled>
+                        Escolha a celula
+                      </option>
+                      {visibleCells.map((cell) => (
+                        <option key={cell.id} value={cell.id}>
+                          {cell.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <p className="mb-2 text-xs font-bold uppercase text-slate-400">
+                      Confirme qual coluna do arquivo corresponde a cada campo ({importRows.length} pessoa(s) encontradas)
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {PERSON_IMPORT_FIELDS.map(({ field, label, required }) => (
+                        <label key={field} className="block">
+                          <span className="mb-1 block text-xs font-semibold text-slate-500">
+                            {label}
+                            {required && " *"}
+                          </span>
+                          <select
+                            value={importMapping[field] ?? ""}
+                            onChange={(event) =>
+                              setImportMapping((current) => ({
+                                ...current,
+                                [field]: event.target.value === "" ? undefined : Number(event.target.value),
+                              }))
+                            }
+                            className="field-control"
+                          >
+                            <option value="">Nao importar</option>
+                            {importHeaders.map((header, index) => (
+                              <option key={header + index} value={index}>
+                                {header}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {importRows.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-xs font-bold uppercase text-slate-400">Previa (primeiras linhas)</p>
+                      <div className="overflow-x-auto rounded-lg border border-slate-100">
+                        <table className="w-full text-left text-xs">
+                          <tbody>
+                            {importRows.slice(0, 3).map((row, rowIndex) => (
+                              <tr key={rowIndex} className="border-b border-slate-100 last:border-0">
+                                {row.map((cell, cellIndex) => (
+                                  <td key={cellIndex} className="p-2 text-slate-600">
+                                    {cell || "-"}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  <button onClick={confirmCsvImport} disabled={importing} className="primary-action w-full disabled:opacity-60">
+                    {importing ? "Importando..." : `Importar ${importRows.length} pessoa(s)`}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </section>
     </AppShell>
