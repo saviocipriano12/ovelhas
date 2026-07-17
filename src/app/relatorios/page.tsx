@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, BarChart3, Clipboard, Download, FileText, Plus, Sparkles, UserRoundPlus } from "lucide-react";
+import { AlertTriangle, BarChart3, Clipboard, Download, FileText, Plus, Sparkles, TrendingUp, UserRoundPlus } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { MetricCard } from "@/components/metric-card";
@@ -153,6 +153,16 @@ export default function ReportsPage() {
           <MetricCard icon={UserRoundPlus} label="Visitantes culto" value={String(consolidationTotals.visitors)} accent="bg-emerald-500" />
           <MetricCard icon={Sparkles} label="Decisoes culto" value={String(consolidationTotals.decisions)} accent="bg-violet-500" />
         </div>
+
+        <Link
+          href="/relatorios/tendencias"
+          className="flex items-center justify-between rounded-lg border border-white/80 bg-white/90 p-4 text-sm font-bold text-slate-700 shadow-sm"
+        >
+          <span className="flex items-center gap-2">
+            <TrendingUp size={18} className="text-emerald-800" />
+            Ver tendencias — crescimento, saude das celulas e funil de discipulado
+          </span>
+        </Link>
 
         {reportLoadError && (
           <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">

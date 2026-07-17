@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/components/auth-provider";
+import { ConfirmProvider } from "@/components/confirm-dialog";
+import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { PwaRegister } from "@/components/pwa-register";
+import { ToastProvider } from "@/components/toast-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -38,8 +41,13 @@ export default function RootLayout({
     <html lang="pt-BR" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
         <AuthProvider>
-          <PwaRegister />
-          {children}
+          <ToastProvider>
+            <ConfirmProvider>
+              <PwaRegister />
+              <ImpersonationBanner />
+              {children}
+            </ConfirmProvider>
+          </ToastProvider>
         </AuthProvider>
       </body>
     </html>

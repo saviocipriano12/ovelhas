@@ -42,6 +42,12 @@ export default function PublicCheckInPage() {
       return;
     }
 
+    if (parsed.date && parsed.date !== new Date().toISOString().slice(0, 10)) {
+      setError("Este QR de check-in expirou. Peca um novo ao lider para o encontro de hoje.");
+      setLoading(false);
+      return;
+    }
+
     const personName = memberPerson?.name ?? name.trim();
     if (!personName) {
       setError("Informe seu nome para confirmar presenca.");

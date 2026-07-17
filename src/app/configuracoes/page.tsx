@@ -1,8 +1,10 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo } from "react";
+import Link from "next/link";
 import {
   ClipboardCheck,
+  CreditCard,
   Download,
   FileText,
   MessageSquareText,
@@ -13,15 +15,29 @@ import {
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { getScopedActivityEvents, getScopedCells, getScopedPeople } from "@/lib/access-control";
 import { roleLabels } from "@/lib/data";
 import {
   useActivityEvents,
   useCells,
   useChurchSettings,
+  useChurchSubscription,
   useLocalPeople,
   usePrayerRequests,
 } from "@/lib/local-store";
+import { SUBSCRIPTION_PLANS, isSubscriptionBlocked, type SubscriptionTier } from "@/lib/subscription-plans";
+
+const SUBSCRIPTION_STATUS_LABELS: Record<string, string> = {
+  trialing: "Em teste gratis",
+  active: "Ativa",
+  past_due: "Pagamento atrasado",
+  canceled: "Cancelada",
+  incomplete: "Aguardando pagamento",
+  incomplete_expired: "Expirada sem pagamento",
+  unpaid: "Nao paga",
+  lifetime: "Cortesia (acesso vitalicio)",
+};
 
 function downloadFile(filename: string, content: string, type: string) {
   const blob = new Blob([content], { type });
@@ -40,11 +56,12 @@ function csvEscape(value: unknown) {
 export default function SettingsPage() {
   const { currentUser, isDemoMode } = useAuth();
   const { settings, updateSettings } = useChurchSettings(currentUser.churchId);
+  const { subscription } = useChurchSubscription(currentUser.churchId);
   const { people } = useLocalPeople();
   const { cells } = useCells();
   const { events } = useActivityEvents();
   const { requests } = usePrayerRequests();
-  const [feedback, setFeedback] = useState("");
+  const toast = useToast();
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visibleEvents = getScopedActivityEvents(currentUser, events, cells, people, isDemoMode);
@@ -65,7 +82,7 @@ export default function SettingsPage() {
     event.preventDefault();
 
     if (!canManage) {
-      setFeedback("Apenas administrador ou pastor podem alterar configuracoes da igreja.");
+      toast.error("Apenas administrador ou pastor podem alterar configuracoes da igreja.");
       return;
     }
 
@@ -85,11 +102,11 @@ export default function SettingsPage() {
     });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui salvar: ${result.error}`);
+      toast.error(`Nao consegui salvar: ${result.error}`);
       return;
     }
 
-    setFeedback("Configuracoes salvas.");
+    toast.success("Configuracoes salvas.");
   }
 
   function exportJson() {
@@ -138,8 +155,6 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {feedback && <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{feedback}</div>}
-
         <section className="rounded-[24px] border border-emerald-100 bg-emerald-50 p-4 shadow-sm">
           <div className="flex items-start gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-800">
@@ -157,6 +172,30 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
+
+        {canManage && !isDemoMode && (
+          <Link
+            href="/assinatura"
+            className="flex items-center gap-3 rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-sm transition hover:border-emerald-200"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800">
+              <CreditCard size={18} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-black uppercase text-slate-400">Assinatura</p>
+              <p className="mt-1 text-base font-black text-slate-950">
+                {subscription
+                  ? SUBSCRIPTION_STATUS_LABELS[subscription.status] ?? subscription.status
+                  : "Sem assinatura"}
+                {subscription?.tier ? ` - Plano ${SUBSCRIPTION_PLANS[subscription.tier as SubscriptionTier].label}` : ""}
+              </p>
+              {isSubscriptionBlocked(subscription?.status) && (
+                <p className="mt-1 text-xs font-bold text-rose-700">Acesso bloqueado - regularize para liberar a igreja.</p>
+              )}
+            </div>
+            <span className="shrink-0 text-xs font-black text-emerald-800">Gerenciar</span>
+          </Link>
+        )}
 
         <form onSubmit={handleSubmit} className="rounded-[24px] border border-white/80 bg-white/90 p-4 shadow-sm sm:p-5">
           <SectionHeader eyebrow="Identidade" title="Marca e dados da igreja" />

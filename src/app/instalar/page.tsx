@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BellRing, CheckCircle2, Copy, Download, ExternalLink, Share2, Smartphone, Store } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import {
   notificationsEnabled,
   notificationsSupported,
@@ -18,7 +19,7 @@ type BeforeInstallPromptEvent = Event & {
 
 export default function InstallPage() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [feedback, setFeedback] = useState("");
+  const toast = useToast();
   const [notificationActive, setNotificationActive] = useState(() => notificationsEnabled());
   const appUrl = useMemo(() => (typeof window === "undefined" ? "https://ovelhas.vercel.app" : window.location.origin), []);
 
@@ -34,28 +35,35 @@ export default function InstallPage() {
 
   async function installPwa() {
     if (!installPrompt) {
-      setFeedback("Se o botao de instalar nao apareceu, abra pelo Chrome no Android e use Adicionar a tela inicial.");
+      toast.warning("Se o botao de instalar nao apareceu, abra pelo Chrome no Android e use Adicionar a tela inicial.");
       return;
     }
 
     await installPrompt.prompt();
     const choice = await installPrompt.userChoice;
     setInstallPrompt(null);
-    setFeedback(choice.outcome === "accepted" ? "Ovelhas instalado neste aparelho." : "Instalacao cancelada.");
+
+    if (choice.outcome === "accepted") {
+      toast.success("Ovelhas instalado neste aparelho.");
+    } else {
+      toast.warning("Instalacao cancelada.");
+    }
   }
 
   async function enableNotifications() {
     const result = await requestDeviceNotificationPermission();
     setNotificationActive(result.ok);
-    setFeedback(result.ok ? "Notificacoes ativadas neste aparelho." : "Nao foi possivel ativar notificacoes neste aparelho.");
 
     if (result.ok) {
+      toast.success("Notificacoes ativadas neste aparelho.");
       await sendDeviceNotification({
         id: `install-test-${Date.now()}`,
         title: "Ovelhas ativado",
         body: "Os avisos importantes de cuidado pastoral podem aparecer aqui.",
         url: "/notificacoes",
       });
+    } else {
+      toast.error("Nao foi possivel ativar notificacoes neste aparelho.");
     }
   }
 
@@ -70,12 +78,12 @@ export default function InstallPage() {
     }
 
     await navigator.clipboard?.writeText(appUrl);
-    setFeedback("Link do app copiado.");
+    toast.success("Link do app copiado.");
   }
 
   async function copyUrl() {
     await navigator.clipboard?.writeText(appUrl);
-    setFeedback("Link copiado.");
+    toast.success("Link copiado.");
   }
 
   return (
@@ -114,8 +122,6 @@ export default function InstallPage() {
             <span className="mt-1 block text-sm leading-5 text-slate-500">Enviar o link para lideres e membros.</span>
           </button>
         </div>
-
-        {feedback && <p className="rounded-lg bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{feedback}</p>}
 
         <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
           <SectionHeader eyebrow="Link oficial" title="Acesso publico" />

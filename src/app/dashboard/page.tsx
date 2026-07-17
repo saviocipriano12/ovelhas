@@ -10,8 +10,9 @@ import { MetricCard } from "@/components/metric-card";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
 import { getScopedActivityEvents, getScopedCareTasks, getScopedCells, getScopedPeople } from "@/lib/access-control";
+import { getNextMeetingDate } from "@/lib/cell-schedule";
 import { isChurchNotice } from "@/lib/church-notices";
-import { useActivityEvents, useCareTasks, useCells, useLocalPeople } from "@/lib/local-store";
+import { useActivityEvents, useCareTasks, useCells, useDiscipleship, useLocalPeople } from "@/lib/local-store";
 
 export default function DashboardPage() {
   const { currentUser, isDemoMode } = useAuth();
@@ -19,6 +20,7 @@ export default function DashboardPage() {
   const { cells } = useCells();
   const { tasks } = useCareTasks();
   const { events } = useActivityEvents();
+  const { tracks } = useDiscipleship();
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visibleCareTasks = getScopedCareTasks(currentUser, tasks, people, isDemoMode);
@@ -30,6 +32,18 @@ export default function DashboardPage() {
   const averageProgress = visiblePeople.length
     ? Math.round(visiblePeople.reduce((sum, person) => sum + person.progress, 0) / visiblePeople.length)
     : 0;
+  const activeTrack = tracks.find((track) => track.active);
+  const activeTrackLabel = activeTrack ? activeTrack.title : "Nenhuma trilha ativa";
+  const primaryCell = visibleCells[0];
+  const nextMeetingLabel = primaryCell
+    ? `${primaryCell.meetingDay}, ${primaryCell.meetingTime}`
+    : "Sem celula atribuida";
+  const nextMeetingDate = primaryCell
+    ? new Date(`${getNextMeetingDate(primaryCell.meetingDay)}T12:00:00`).toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+      })
+    : null;
 
   return (
     <AppShell>
@@ -59,11 +73,12 @@ export default function DashboardPage() {
             </div>
             <div className="rounded-lg bg-white/10 p-3">
               <p className="text-xs text-slate-300">Trilha ativa</p>
-              <p className="mt-1 text-lg font-semibold">Primeiros Passos</p>
+              <p className="mt-1 truncate text-lg font-semibold">{activeTrackLabel}</p>
             </div>
             <div className="rounded-lg bg-white/10 p-3">
               <p className="text-xs text-slate-300">Proxima celula</p>
-              <p className="mt-1 text-lg font-semibold">Terca, 20h</p>
+              <p className="mt-1 truncate text-lg font-semibold">{nextMeetingLabel}</p>
+              {nextMeetingDate && <p className="mt-0.5 text-xs text-slate-300">{nextMeetingDate}</p>}
             </div>
           </div>
           <Link

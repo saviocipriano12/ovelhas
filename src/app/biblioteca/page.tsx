@@ -1,10 +1,12 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import jsPDF from "jspdf";
 import { Award, BookOpen, Download, FilePlus2, FileText, Link as LinkIcon, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { getScopedPeople } from "@/lib/access-control";
 import type { CertificateRecord, LibraryMaterial } from "@/lib/data";
 import { roleLabels } from "@/lib/data";
@@ -16,34 +18,51 @@ import {
 } from "@/lib/local-store";
 
 function downloadCertificate(certificate: CertificateRecord, personName: string, churchName = "Ovelhas") {
-  const html = `<!doctype html>
-<html lang="pt-BR">
-<meta charset="utf-8" />
-<title>Certificado - ${personName}</title>
-<body style="margin:0;font-family:Arial,sans-serif;background:#f7f8f3;color:#0f172a;">
-  <main style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px;">
-    <section style="width:900px;max-width:100%;background:white;border:12px solid #064e3b;padding:56px;text-align:center;box-shadow:0 24px 70px rgba(15,23,42,.12);">
-      <p style="color:#047857;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">${churchName}</p>
-      <h1 style="font-size:52px;margin:18px 0 8px;">Certificado</h1>
-      <p style="font-size:18px;color:#64748b;">Certificamos que</p>
-      <h2 style="font-size:42px;margin:18px 0;color:#064e3b;">${personName}</h2>
-      <p style="font-size:20px;line-height:1.6;color:#334155;">concluiu a trilha <strong>${certificate.title}</strong> no Ovelhas.</p>
-      <div style="margin-top:48px;display:flex;justify-content:space-between;gap:24px;color:#475569;">
-        <div><strong>${new Intl.DateTimeFormat("pt-BR").format(new Date(certificate.issuedAt))}</strong><br/>Data</div>
-        <div><strong>${certificate.issuedByName}</strong><br/>Responsavel</div>
-      </div>
-      <p style="margin-top:48px;font-size:13px;color:#94a3b8;">Ovelhas by Savio Cipriano</p>
-    </section>
-  </main>
-</body>
-</html>`;
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `certificado-${personName.toLowerCase().replaceAll(" ", "-")}.html`;
-  link.click();
-  URL.revokeObjectURL(url);
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const width = doc.internal.pageSize.getWidth();
+  const height = doc.internal.pageSize.getHeight();
+
+  doc.setDrawColor(6, 78, 59);
+  doc.setLineWidth(2);
+  doc.rect(10, 10, width - 20, height - 20);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(4, 120, 87);
+  doc.text(churchName.toUpperCase(), width / 2, 35, { align: "center" });
+
+  doc.setFontSize(36);
+  doc.setTextColor(15, 23, 42);
+  doc.text("Certificado", width / 2, 55, { align: "center" });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(14);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Certificamos que", width / 2, 75, { align: "center" });
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(28);
+  doc.setTextColor(6, 78, 59);
+  doc.text(personName, width / 2, 92, { align: "center" });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(14);
+  doc.setTextColor(51, 65, 85);
+  doc.text(`concluiu a trilha "${certificate.title}" no ${churchName}.`, width / 2, 108, { align: "center" });
+
+  const issuedDate = new Intl.DateTimeFormat("pt-BR").format(new Date(certificate.issuedAt));
+  doc.setFontSize(11);
+  doc.setTextColor(71, 85, 105);
+  doc.text(issuedDate, width / 2 - 40, height - 30, { align: "center" });
+  doc.text("Data", width / 2 - 40, height - 24, { align: "center" });
+  doc.text(certificate.issuedByName, width / 2 + 40, height - 30, { align: "center" });
+  doc.text("Responsavel", width / 2 + 40, height - 24, { align: "center" });
+
+  doc.setFontSize(9);
+  doc.setTextColor(148, 163, 184);
+  doc.text("Ovelhas by Savio Cipriano", width / 2, height - 14, { align: "center" });
+
+  doc.save(`certificado-${personName.toLowerCase().replaceAll(" ", "-")}.pdf`);
 }
 
 function materialIcon(type: LibraryMaterial["materialType"]) {
@@ -59,10 +78,10 @@ export default function LibraryPage() {
   const { tracks } = useDiscipleship();
   const { materials, addMaterial } = useLibraryMaterials(currentUser.churchId);
   const { certificates, issueCertificate } = useCertificates(currentUser.churchId);
+  const toast = useToast();
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const canManage = currentUser.role === "admin" || currentUser.role === "pastor";
   const canIssue = currentUser.role !== "member";
-  const [feedback, setFeedback] = useState("");
   const [selectedPersonId, setSelectedPersonId] = useState(visiblePeople[0]?.id ?? "");
   const [selectedTrackId, setSelectedTrackId] = useState(tracks[0]?.id ?? "");
   const visibleMaterials = materials.filter((material) => {
@@ -96,11 +115,11 @@ export default function LibraryPage() {
     });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui cadastrar material: ${result.error}`);
+      toast.error(`Nao consegui cadastrar material: ${result.error}`);
       return;
     }
 
-    setFeedback("Material cadastrado.");
+    toast.success("Material cadastrado.");
     event.currentTarget.reset();
   }
 
@@ -109,7 +128,7 @@ export default function LibraryPage() {
     const track = tracks.find((item) => item.id === selectedTrackId);
 
     if (!person || !track) {
-      setFeedback("Escolha pessoa e trilha para emitir certificado.");
+      toast.error("Escolha pessoa e trilha para emitir certificado.");
       return;
     }
 
@@ -124,11 +143,15 @@ export default function LibraryPage() {
     });
 
     if (!result.ok || !result.certificate) {
-      setFeedback(`Nao consegui emitir certificado: ${result.error}`);
+      toast.error(`Nao consegui emitir certificado: ${result.error}`);
       return;
     }
 
-    setFeedback(`Certificado emitido para ${person.name}.`);
+    toast.success(
+      result.alreadyIssued
+        ? `${person.name} ja tinha certificado desta trilha. Baixando novamente.`
+        : `Certificado emitido para ${person.name}.`,
+    );
     downloadCertificate(result.certificate, person.name);
   }
 
@@ -154,8 +177,6 @@ export default function LibraryPage() {
             <p className="text-sm text-slate-500">Trilhas</p>
           </div>
         </div>
-
-        {feedback && <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{feedback}</div>}
 
         <section className="grid gap-5 xl:grid-cols-[1fr_0.85fr]">
           <div className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">

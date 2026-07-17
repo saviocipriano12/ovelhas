@@ -73,6 +73,7 @@ export default function CheckInPage() {
               )}
               <p className="mt-4 text-sm font-bold text-emerald-200">{selectedCell?.name}</p>
               <p className="mt-1 break-all text-xs text-slate-300">{code}</p>
+              <p className="mt-2 text-xs font-semibold text-amber-200">Valido so para hoje. Gere um novo QR no proximo encontro.</p>
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">

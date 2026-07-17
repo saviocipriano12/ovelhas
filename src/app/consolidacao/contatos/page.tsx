@@ -5,6 +5,7 @@ import { CheckCircle2, Edit3, Filter, MapPin, MessageCircle, Route, Save, Search
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { getScopedCells } from "@/lib/access-control";
 import type { Cell, ConsolidationVisitor } from "@/lib/data";
 import { useCells, useConsolidationReports, useLocalPeople } from "@/lib/local-store";
@@ -95,7 +96,7 @@ export default function ConsolidationContactsPage() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "pending" | ConsolidationVisitor["decision"]>("pending");
   const [selectedVisitor, setSelectedVisitor] = useState<VisitorContact | null>(null);
-  const [feedback, setFeedback] = useState("");
+  const toast = useToast();
   const [saving, setSaving] = useState(false);
 
   const contacts = useMemo<VisitorContact[]>(
@@ -151,7 +152,12 @@ export default function ConsolidationContactsPage() {
     const selectedCell = visibleCells.find((cell) => cell.id === cellId) ?? suggestCell(visibleCells, neighborhood, address);
 
     if (!name || !phone) {
-      setFeedback("Informe nome e WhatsApp antes de salvar.");
+      toast.error("Informe nome e WhatsApp antes de salvar.");
+      return;
+    }
+
+    if (!selectedVisitor.personId && !selectedCell) {
+      toast.error("Cadastre uma celula antes de direcionar este contato para Pessoas.");
       return;
     }
 
@@ -176,7 +182,7 @@ export default function ConsolidationContactsPage() {
 
       if (!personResult.ok || !personResult.person) {
         setSaving(false);
-        setFeedback(`Nao consegui encaminhar para Pessoas: ${personResult.error}`);
+        toast.error(`Nao consegui encaminhar para Pessoas: ${personResult.error}`);
         return;
       }
 
@@ -201,13 +207,13 @@ export default function ConsolidationContactsPage() {
     setSaving(false);
 
     if (!updateResult.ok) {
-      setFeedback(`Nao consegui salvar contato: ${updateResult.error}`);
+      toast.error(`Nao consegui salvar contato: ${updateResult.error}`);
       return;
     }
 
     await Promise.all([refreshReports(), refreshPeople()]);
     setSelectedVisitor(null);
-    setFeedback(selectedCell ? `${name} foi direcionado para ${selectedCell.name}.` : `${name} foi atualizado.`);
+    toast.success(selectedCell ? `${name} foi direcionado para ${selectedCell.name}.` : `${name} foi atualizado.`);
   }
 
   return (
@@ -249,12 +255,6 @@ export default function ConsolidationContactsPage() {
             </div>
           </div>
         </section>
-
-        {feedback && (
-          <p className="rounded-3xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-bold text-emerald-900">
-            {feedback}
-          </p>
-        )}
 
         {reportLoadError && (
           <p className="rounded-3xl border border-rose-100 bg-rose-50 p-4 text-sm font-bold text-rose-800">

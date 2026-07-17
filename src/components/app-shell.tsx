@@ -22,6 +22,7 @@ import {
   Home,
   Eye,
   LayoutGrid,
+  MapPin,
   Menu,
   MoreHorizontal,
   QrCode,
@@ -40,6 +41,7 @@ import { NotificationBridge } from "@/components/notification-bridge";
 import { PwaStatus } from "@/components/pwa-status";
 import { canAccessRoute, getDefaultRoute } from "@/lib/access-control";
 import { roleLabels } from "@/lib/data";
+import { useChurchSettings } from "@/lib/local-store";
 import { usePastoralNotifications } from "@/lib/use-pastoral-notifications";
 
 const navItems: { href: string; label: string; icon: LucideIcon }[] = [
@@ -53,6 +55,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/checkin", label: "Check-in", icon: QrCode },
   { href: "/agenda", label: "Agenda", icon: CalendarDays },
   { href: "/cuidados", label: "Cuidados", icon: HeartHandshake },
+  { href: "/lar-de-paz", label: "Lar de Paz", icon: MapPin },
   { href: "/oracao", label: "Oracao", icon: Heart },
   { href: "/biblioteca", label: "Biblioteca", icon: BookOpen },
   { href: "/videos", label: "Videos", icon: Video },
@@ -70,7 +73,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
 const navGroups = [
   {
     label: "Cuidado",
-    hrefs: ["/dashboard", "/perfil", "/celulas", "/pessoas", "/consolidacao", "/consolidacao/contatos", "/presenca", "/checkin", "/agenda", "/cuidados"],
+    hrefs: ["/dashboard", "/perfil", "/celulas", "/pessoas", "/consolidacao", "/consolidacao/contatos", "/presenca", "/checkin", "/agenda", "/cuidados", "/lar-de-paz"],
   },
   {
     label: "Discipulado",
@@ -141,6 +144,7 @@ export function AppShell({
   const pathname = usePathname();
   const { currentUser, isDemoMode, signOut } = useAuth();
   const { unread } = usePastoralNotifications();
+  const { settings: churchSettings } = useChurchSettings(currentUser.churchId);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const visibleNavItems = navItems.filter((item) => canAccessRoute(currentUser, item.href));
   const groupedNavItems = navGroups
@@ -175,7 +179,9 @@ export function AppShell({
             <div className="min-w-0">
               <p className="text-lg font-semibold leading-tight text-slate-950">Ovelhas</p>
               <p className="text-xs font-medium text-slate-500">by Savio Cipriano</p>
-              <p className="text-xs font-bold text-emerald-700">{roleLabels[currentUser.role]}</p>
+              <p className="truncate text-xs font-bold text-emerald-700">
+                {roleLabels[currentUser.role]} · {churchSettings.churchName}
+              </p>
             </div>
           </Link>
         </div>
@@ -248,8 +254,8 @@ export function AppShell({
                   O
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-[10px] font-black uppercase text-emerald-200">
-                    {roleLabels[currentUser.role]}
+                  <span className="block truncate text-[10px] font-black uppercase text-emerald-200">
+                    {roleLabels[currentUser.role]} · {churchSettings.churchName}
                   </span>
                   <span className="block truncate text-[15px] font-semibold leading-tight">{currentUser.name}</span>
                   <span className="block truncate text-xs font-semibold text-slate-300">{currentPageLabel}</span>
@@ -286,7 +292,9 @@ export function AppShell({
         <header className="sticky top-3 z-30 mb-5 hidden rounded-lg border border-white/70 bg-white/85 p-3 shadow-sm backdrop-blur-xl lg:block">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-emerald-700">{roleLabels[currentUser.role]}</p>
+              <p className="truncate text-sm font-semibold text-emerald-700">
+                {roleLabels[currentUser.role]} · {churchSettings.churchName}
+              </p>
               <h1 className="truncate text-xl font-semibold text-slate-950 sm:text-2xl">Bom te ver, {currentUser.name}</h1>
             </div>
             <div className="flex items-center gap-2">

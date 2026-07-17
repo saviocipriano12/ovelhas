@@ -5,9 +5,11 @@ import { FormEvent, useState } from "react";
 import { CalendarCheck, CalendarClock, MapPin, Pencil, Plus, Save, Trash2, Users, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
+import { useConfirm } from "@/components/confirm-dialog";
 import { MetricCard } from "@/components/metric-card";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { canCreateCell, getScopedCells } from "@/lib/access-control";
 import { roleLabels } from "@/lib/data";
 import { useCells, useLocalPeople, useProfiles } from "@/lib/local-store";
@@ -18,9 +20,10 @@ export default function CellsPage() {
   const { people } = useLocalPeople();
   const { cells, addCell, updateCell, deleteCell, refreshCells, isLoadingCells, cellLoadError } = useCells();
   const { profiles } = useProfiles();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [editingCellId, setEditingCellId] = useState("");
-  const [feedback, setFeedback] = useState("");
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visibleCellIds = new Set(visibleCells.map((cell) => cell.id));
   const visiblePeople = people.filter((person) => visibleCellIds.has(person.cellId));
@@ -54,12 +57,12 @@ export default function CellsPage() {
     const leader = leaders.find((profile) => profile.id === leaderId);
 
     if (!name) {
-      setFeedback("Informe o nome da celula.");
+      toast.error("Informe o nome da celula.");
       return;
     }
 
     if (!meetingDay || !meetingTime) {
-      setFeedback("Informe o dia e o horario da reuniao da celula.");
+      toast.error("Informe o dia e o horario da reuniao da celula.");
       return;
     }
 
@@ -86,11 +89,11 @@ export default function CellsPage() {
         });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui salvar a celula: ${result.error}`);
+      toast.error(`Nao consegui salvar a celula: ${result.error}`);
       return;
     }
 
-    setFeedback(editingCell ? "Celula atualizada." : `${name} criada e pronta para receber pessoas.`);
+    toast.success(editingCell ? "Celula atualizada." : `${name} criada e pronta para receber pessoas.`);
     await refreshCells();
     setOpen(false);
     setEditingCellId("");
@@ -98,16 +101,26 @@ export default function CellsPage() {
   }
 
   async function handleDeleteCell(cellId: string, cellName: string) {
-    if (!window.confirm(`Apagar a celula ${cellName}? Ela sera arquivada e deixara de aparecer nas listas.`)) {
+    const confirmed = await confirm({
+      title: `Apagar a celula ${cellName}?`,
+      description: "Ela sera arquivada e deixara de aparecer nas listas.",
+      confirmLabel: "Apagar",
+      tone: "danger",
+    });
+
+    if (!confirmed) {
       return;
     }
 
     const result = await deleteCell(cellId, !isDemoMode);
-    setFeedback(result.ok ? "Celula apagada." : `Nao consegui apagar a celula: ${result.error}`);
 
-    if (result.ok) {
-      await refreshCells();
+    if (!result.ok) {
+      toast.error(`Nao consegui apagar a celula: ${result.error}`);
+      return;
     }
+
+    toast.success("Celula apagada.");
+    await refreshCells();
   }
 
   return (
@@ -130,7 +143,11 @@ export default function CellsPage() {
               <button
                 onClick={async () => {
                   const result = await refreshCells();
-                  setFeedback(result.ok ? "Celulas atualizadas." : `Nao consegui carregar celulas: ${result.error}`);
+                  if (result.ok) {
+                    toast.success("Celulas atualizadas.");
+                  } else {
+                    toast.error(`Nao consegui carregar celulas: ${result.error}`);
+                  }
                 }}
                 className="flex h-11 items-center justify-center rounded-2xl bg-emerald-50 px-3 text-xs font-bold text-emerald-800"
               >
@@ -155,12 +172,6 @@ export default function CellsPage() {
           <MetricCard icon={CalendarClock} label="Atencao" value={String(attention)} accent="bg-amber-500" />
           <MetricCard icon={MapPin} label="Bairros" value={String(new Set(visibleCells.map((cell) => cell.neighborhood)).size)} accent="bg-violet-500" />
         </div>
-
-        {feedback && (
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">
-            {feedback}
-          </div>
-        )}
 
         {cellLoadError && (
           <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-800">

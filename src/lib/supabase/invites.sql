@@ -37,6 +37,7 @@ $$;
 
 grant execute on function public.can_admin_church(uuid) to authenticated;
 
+drop function if exists public.can_create_invite(uuid, app_role, uuid);
 create or replace function public.can_create_invite(
   target_church_id uuid,
   target_role app_role,

@@ -112,6 +112,29 @@ export type VideoProgressRecord = {
   lastWatchedAt?: string;
 };
 
+export type ChurchSubscription = {
+  churchId: string;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  tier?: "pequena" | "media" | "grande";
+  status: "trialing" | "active" | "past_due" | "canceled" | "incomplete" | "incomplete_expired" | "unpaid";
+  trialEndsAt?: string;
+  currentPeriodEnd?: string;
+  cancelAtPeriodEnd: boolean;
+  updatedAt: string;
+};
+
+export type VideoReflection = {
+  id: string;
+  personId: string;
+  videoId: string;
+  videoTitle: string;
+  question: string;
+  answer: string;
+  createdAt: string;
+  updatedAt?: string;
+};
+
 export type Invite = {
   id: string;
   churchId: string;
@@ -169,6 +192,36 @@ export type PrayerRequest = {
   answeredNote?: string;
   createdAt: string;
   updatedAt?: string;
+};
+
+export type PeacePair = {
+  id: string;
+  churchId: string;
+  cellId: string;
+  name: string;
+  phone: string;
+  hasHouse: boolean;
+  houseId?: string;
+  createdBy: string;
+  createdAt: string;
+};
+
+export type PeaceHouse = {
+  id: string;
+  churchId: string;
+  cellId?: string;
+  fullName: string;
+  age?: number;
+  sex?: "feminino" | "masculino";
+  phone: string;
+  address: string;
+  houseNumber: string;
+  neighborhood: string;
+  city: string;
+  hasPair: boolean;
+  pairId?: string;
+  createdBy: string;
+  createdAt: string;
 };
 
 export type ChurchSettings = {

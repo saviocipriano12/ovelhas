@@ -6,6 +6,7 @@ import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { PersonCard } from "@/components/person-card";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { canManagePeople, getScopedCells, getScopedPeople } from "@/lib/access-control";
 import { useCells, useInvites, useLocalPeople } from "@/lib/local-store";
 import { whatsappLink } from "@/lib/whatsapp";
@@ -21,12 +22,12 @@ function inviteUrl(token: string) {
 export default function PeoplePage() {
   const { currentUser, isDemoMode } = useAuth();
   const { people, addPerson, refreshPeople, isLoadingPeople, peopleLoadError } = useLocalPeople();
-  const { cells, refreshCells } = useCells();
+  const { cells, refreshCells, isLoadingCells } = useCells();
   const { createInvite } = useInvites();
+  const toast = useToast();
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "visitor" | "discipleship" | "attention" | "baptism">("all");
   const [open, setOpen] = useState(false);
-  const [created, setCreated] = useState("");
   const [lastInviteLink, setLastInviteLink] = useState("");
   const [lastInviteName, setLastInviteName] = useState("");
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
@@ -69,12 +70,12 @@ export default function PeoplePage() {
     const selectedCell = visibleCells.find((cell) => cell.id === cellId);
 
     if (!name || !phone) {
-      setCreated("Informe nome e WhatsApp para continuar.");
+      toast.error("Informe nome e WhatsApp para continuar.");
       return;
     }
 
     if (!selectedCell) {
-      setCreated("Escolha uma celula valida antes de cadastrar a pessoa.");
+      toast.error("Escolha uma celula valida antes de cadastrar a pessoa.");
       return;
     }
 
@@ -96,11 +97,9 @@ export default function PeoplePage() {
     });
 
     if (!result.ok || !result.person) {
-      setCreated(`Nao consegui cadastrar: ${result.error}`);
+      toast.error(`Nao consegui cadastrar: ${result.error}`);
       return;
     }
-
-    setCreated(`${result.person.name} foi adicionado ao cuidado da celula.`);
 
     const inviteResult = await createInvite({
       churchId: currentUser.churchId,
@@ -116,9 +115,9 @@ export default function PeoplePage() {
     if (inviteResult.ok && inviteResult.invite) {
       setLastInviteLink(inviteUrl(inviteResult.invite.token));
       setLastInviteName(result.person.name);
-      setCreated(`${result.person.name} foi cadastrado. Convite pronto para enviar ao membro.`);
+      toast.success(`${result.person.name} foi cadastrado. Convite pronto para enviar ao membro.`);
     } else {
-      setCreated(`${result.person.name} foi cadastrado, mas nao consegui gerar convite: ${inviteResult.error}`);
+      toast.warning(`${result.person.name} foi cadastrado, mas nao consegui gerar convite: ${inviteResult.error}`);
     }
 
     await Promise.all([refreshPeople(), refreshCells()]);
@@ -128,7 +127,7 @@ export default function PeoplePage() {
 
   async function copyLastInvite() {
     await navigator.clipboard?.writeText(lastInviteLink);
-    setCreated("Link do convite copiado.");
+    toast.success("Link do convite copiado.");
   }
 
   async function shareLastInvite() {
@@ -140,14 +139,14 @@ export default function PeoplePage() {
     }
 
     await navigator.clipboard?.writeText(text);
-    setCreated("Mensagem do convite copiada.");
+    toast.success("Mensagem do convite copiada.");
   }
 
   async function generateInviteForPerson(personId: string) {
     const person = filteredPeople.find((item) => item.id === personId) ?? people.find((item) => item.id === personId);
 
     if (!person) {
-      setCreated("Pessoa nao encontrada para gerar convite.");
+      toast.error("Pessoa nao encontrada para gerar convite.");
       return;
     }
 
@@ -163,13 +162,13 @@ export default function PeoplePage() {
     });
 
     if (!result.ok || !result.invite) {
-      setCreated(`Nao consegui gerar convite para ${person.name}: ${result.error}`);
+      toast.error(`Nao consegui gerar convite para ${person.name}: ${result.error}`);
       return;
     }
 
     setLastInviteLink(inviteUrl(result.invite.token));
     setLastInviteName(person.name);
-    setCreated(`Convite de ${person.name} pronto para enviar, sem duplicar cadastro.`);
+    toast.success(`Convite de ${person.name} pronto para enviar, sem duplicar cadastro.`);
   }
 
   return (
@@ -184,8 +183,13 @@ export default function PeoplePage() {
             canManagePeople(currentUser) ? (
               <button
                 onClick={() => {
+                  if (isLoadingCells) {
+                    toast.warning("Aguarde as celulas carregarem antes de cadastrar pessoas.");
+                    return;
+                  }
+
                   if (visibleCells.length === 0) {
-                    setCreated("Crie ou atribua uma celula antes de cadastrar pessoas.");
+                    toast.error("Crie ou atribua uma celula antes de cadastrar pessoas.");
                     return;
                   }
 
@@ -231,12 +235,6 @@ export default function PeoplePage() {
             />
           </label>
         </div>
-
-        {created && (
-          <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">
-            {created}
-          </div>
-        )}
 
         {lastInviteLink && (
           <section className="rounded-[24px] border border-emerald-100 bg-white/95 p-4 shadow-sm">

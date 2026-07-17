@@ -11,6 +11,7 @@ import {
   Edit3,
   FileText,
   MapPin,
+  MessageCircleQuestion,
   Save,
   ShieldCheck,
   Trash2,
@@ -18,13 +19,15 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
+import { useConfirm } from "@/components/confirm-dialog";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { canViewPastoralNote, canViewPerson, canWritePastoralNote } from "@/lib/access-control";
 import { getCareScore, roleLabels } from "@/lib/data";
-import { useActivityEvents, useLocalPeople, usePastoralNotes } from "@/lib/local-store";
+import { useActivityEvents, useLocalPeople, usePastoralNotes, usePersonReflections } from "@/lib/local-store";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("pt-BR").format(new Date(value));
@@ -46,14 +49,17 @@ export default function PersonProfilePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { currentUser, isDemoMode } = useAuth();
-  const { people, updatePerson, deletePerson } = useLocalPeople();
+  const { people, updatePerson, deletePerson, isLoadingPeople, peopleLoadError, isPeopleHydrated } = useLocalPeople();
   const { notes, addNote } = usePastoralNotes();
   const { events, addEvent } = useActivityEvents();
+  const { reflections } = usePersonReflections(params.id);
+  const toast = useToast();
+  const confirm = useConfirm();
   const [editing, setEditing] = useState(false);
-  const [feedback, setFeedback] = useState("");
   const [noteText, setNoteText] = useState("");
   const [noteVisibility, setNoteVisibility] = useState<"leadership_private" | "pastor_private" | "member_visible">("leadership_private");
   const person = people.find((item) => item.id === params.id);
+  const isResolvingPerson = !isPeopleHydrated || (isLoadingPeople && people.length === 0);
 
   const personNotes = useMemo(() => {
     if (!person) {
@@ -74,12 +80,41 @@ export default function PersonProfilePage() {
     [events, person?.id],
   );
 
-  if (!person || !canViewPerson(currentUser, person)) {
+  if (isResolvingPerson) {
+    return (
+      <AppShell>
+        <section className="rounded-lg border border-sky-100 bg-sky-50 p-5 text-center shadow-sm">
+          <h2 className="text-xl font-semibold text-slate-950">Carregando pessoa</h2>
+          <p className="mt-2 text-sm text-slate-500">Estamos conferindo os dados do cadastro para abrir o perfil.</p>
+        </section>
+      </AppShell>
+    );
+  }
+
+  if (!person) {
     return (
       <AppShell>
         <section className="rounded-lg border border-white/80 bg-white/90 p-5 text-center shadow-sm">
           <h2 className="text-xl font-semibold text-slate-950">Pessoa nao encontrada</h2>
-          <p className="mt-2 text-sm text-slate-500">Volte para a lista e selecione alguem acompanhado.</p>
+          <p className="mt-2 text-sm text-slate-500">
+            {peopleLoadError
+              ? `Nao consegui carregar este cadastro agora: ${peopleLoadError}`
+              : "Volte para a lista e selecione alguem acompanhado."}
+          </p>
+          <Link href="/pessoas" className="mt-4 inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-900 px-4 text-sm font-bold text-white">
+            Voltar para pessoas
+          </Link>
+        </section>
+      </AppShell>
+    );
+  }
+
+  if (!canViewPerson(currentUser, person)) {
+    return (
+      <AppShell>
+        <section className="rounded-lg border border-white/80 bg-white/90 p-5 text-center shadow-sm">
+          <h2 className="text-xl font-semibold text-slate-950">Acesso indisponivel</h2>
+          <p className="mt-2 text-sm text-slate-500">Seu perfil nao tem permissao para abrir este cadastro no momento.</p>
           <Link href="/pessoas" className="mt-4 inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-900 px-4 text-sm font-bold text-white">
             Voltar para pessoas
           </Link>
@@ -112,7 +147,7 @@ export default function PersonProfilePage() {
     });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui salvar: ${result.error}`);
+      toast.error(`Nao consegui salvar: ${result.error}`);
       return;
     }
 
@@ -132,19 +167,26 @@ export default function PersonProfilePage() {
       persistToSupabase: !isDemoMode,
     });
 
-    setFeedback("Perfil atualizado.");
+    toast.success("Perfil atualizado.");
     setEditing(false);
   }
 
   async function handleDelete() {
-    if (!window.confirm(`Apagar ${activePerson.name}? Esta acao remove o cadastro e os registros vinculados a esta pessoa.`)) {
+    const confirmed = await confirm({
+      title: `Apagar ${activePerson.name}?`,
+      description: "Esta acao remove o cadastro e os registros vinculados a esta pessoa.",
+      confirmLabel: "Apagar",
+      tone: "danger",
+    });
+
+    if (!confirmed) {
       return;
     }
 
     const result = await deletePerson(activePerson.id, !isDemoMode);
 
     if (!result.ok) {
-      setFeedback(`Nao consegui apagar: ${result.error}`);
+      toast.error(`Nao consegui apagar: ${result.error}`);
       return;
     }
 
@@ -169,7 +211,7 @@ export default function PersonProfilePage() {
     });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui registrar nota: ${result.error}`);
+      toast.error(`Nao consegui registrar nota: ${result.error}`);
       return;
     }
 
@@ -190,7 +232,7 @@ export default function PersonProfilePage() {
     });
 
     setNoteText("");
-    setFeedback("Nota registrada.");
+    toast.success("Nota registrada.");
   }
 
   return (
@@ -251,8 +293,6 @@ export default function PersonProfilePage() {
         </div>
 
         <div className="space-y-5">
-          {feedback && <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{feedback}</div>}
-
           {editing && (
             <form onSubmit={handleUpdate} className="native-form rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm sm:p-5">
               <SectionHeader eyebrow="Dados" title="Editar perfil" />
@@ -293,6 +333,27 @@ export default function PersonProfilePage() {
                 </div>
               ))}
               {personEvents.length === 0 && <p className="rounded-lg bg-slate-50 p-4 text-sm font-semibold text-slate-500">A jornada aparecera conforme a lideranca registrar presenca, videos e cuidados.</p>}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+            <SectionHeader eyebrow="Discipulado" title="Reflexoes dos videos" />
+            <div className="space-y-3">
+              {reflections.map((reflection) => (
+                <article key={reflection.id} className="rounded-lg bg-slate-50 p-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <MessageCircleQuestion size={15} className="shrink-0 text-emerald-700" />
+                    <p className="text-sm font-bold text-slate-950">{reflection.videoTitle}</p>
+                  </div>
+                  <p className="text-sm leading-6 text-slate-600">{reflection.answer}</p>
+                  <p className="mt-2 text-xs font-semibold text-slate-400">{formatDate(reflection.createdAt)}</p>
+                </article>
+              ))}
+              {reflections.length === 0 && (
+                <p className="rounded-lg bg-slate-50 p-4 text-sm font-semibold text-slate-500">
+                  Nenhuma reflexao registrada ainda nos videos de discipulado.
+                </p>
+              )}
             </div>
           </section>
 

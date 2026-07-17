@@ -14,8 +14,10 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
+import { useConfirm } from "@/components/confirm-dialog";
 import { MetricCard } from "@/components/metric-card";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { getScopedCells } from "@/lib/access-control";
 import type { Cell, ConsolidationVisitor } from "@/lib/data";
 import { useActivityEvents, useCells, useConsolidationReports } from "@/lib/local-store";
@@ -141,7 +143,8 @@ export default function ConsolidationPage() {
   const [offeringNames, setOfferingNames] = useState("");
   const [notes, setNotes] = useState("");
   const [visitors, setVisitors] = useState<ConsolidationVisitor[]>([]);
-  const [feedback, setFeedback] = useState("");
+  const toast = useToast();
+  const confirm = useConfirm();
   const [saving, setSaving] = useState(false);
 
   const acceptedJesusCount = visitors.filter((visitor) => visitor.decision === "aceitou_jesus").length;
@@ -188,7 +191,7 @@ export default function ConsolidationPage() {
     const suggestedCell = suggestCell(visibleCells, neighborhood, address);
 
     if (!name || !phone) {
-      setFeedback("Informe nome e WhatsApp do visitante.");
+      toast.error("Informe nome e WhatsApp do visitante.");
       return;
     }
 
@@ -208,7 +211,7 @@ export default function ConsolidationPage() {
       },
       ...current,
     ]);
-    setFeedback(suggestedCell ? `${name} foi sugerido para a celula ${suggestedCell.name}.` : `${name} foi adicionado.`);
+    toast.success(suggestedCell ? `${name} foi sugerido para a celula ${suggestedCell.name}.` : `${name} foi adicionado.`);
     event.currentTarget.reset();
   }
 
@@ -218,7 +221,6 @@ export default function ConsolidationPage() {
     }
 
     setSaving(true);
-    setFeedback("");
 
     const reportResult = await addReport({
       churchId: currentUser.churchId,
@@ -248,7 +250,7 @@ export default function ConsolidationPage() {
 
     if (!reportResult.ok) {
       setSaving(false);
-      setFeedback(`Nao consegui salvar a consolidacao: ${reportResult.error}`);
+      toast.error(`Nao consegui salvar a consolidacao: ${reportResult.error}`);
       return;
     }
 
@@ -278,16 +280,27 @@ export default function ConsolidationPage() {
     setOfferingNames("");
     setPreacherName("");
     setSaving(false);
-    setFeedback("Consolidacao salva. Visitantes ficaram registrados para acompanhamento da lideranca.");
+    toast.success("Consolidacao salva. Visitantes ficaram registrados para acompanhamento da lideranca.");
   }
 
   async function handleDeleteReport(reportId: string, title: string) {
-    if (!window.confirm(`Apagar a consolidacao de ${title}?`)) {
+    const confirmed = await confirm({
+      title: `Apagar a consolidacao de ${title}?`,
+      confirmLabel: "Apagar",
+      tone: "danger",
+    });
+
+    if (!confirmed) {
       return;
     }
 
     const result = await deleteReport(reportId, !isDemoMode);
-    setFeedback(result.ok ? "Consolidacao apagada." : `Nao consegui apagar: ${result.error}`);
+
+    if (result.ok) {
+      toast.success("Consolidacao apagada.");
+    } else {
+      toast.error(`Nao consegui apagar: ${result.error}`);
+    }
   }
 
   return (
@@ -300,7 +313,11 @@ export default function ConsolidationPage() {
             <button
               onClick={async () => {
                 const result = await refreshReports();
-                setFeedback(result.ok ? "Consolidacao atualizada." : `Nao consegui atualizar: ${result.error}`);
+                if (result.ok) {
+                  toast.success("Consolidacao atualizada.");
+                } else {
+                  toast.error(`Nao consegui atualizar: ${result.error}`);
+                }
               }}
               className="rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-900"
             >
@@ -358,11 +375,6 @@ export default function ConsolidationPage() {
           </div>
         )}
 
-        {feedback && (
-          <div className="rounded-3xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-bold text-emerald-900">
-            {feedback}
-          </div>
-        )}
 
         {reportLoadError && (
           <div className="rounded-3xl border border-rose-100 bg-rose-50 p-4 text-sm font-bold text-rose-800">

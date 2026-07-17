@@ -98,6 +98,32 @@ type PrayerRequestPayload = {
   createdByName: string;
 };
 
+type PeacePairPayload = {
+  localId: string;
+  churchId: string;
+  cellId: string;
+  name: string;
+  phone: string;
+  houseId?: string;
+  createdBy: string;
+};
+
+type PeaceHousePayload = {
+  localId: string;
+  churchId: string;
+  cellId?: string;
+  fullName: string;
+  age?: number;
+  sex?: "feminino" | "masculino";
+  phone: string;
+  address: string;
+  houseNumber: string;
+  neighborhood: string;
+  city: string;
+  pairId?: string;
+  createdBy: string;
+};
+
 type OfflineQueueItem =
   | {
       id: string;
@@ -139,6 +165,18 @@ type OfflineQueueItem =
       id: string;
       type: "prayer-request";
       payload: PrayerRequestPayload;
+      createdAt: string;
+    }
+  | {
+      id: string;
+      type: "peace-pair";
+      payload: PeacePairPayload;
+      createdAt: string;
+    }
+  | {
+      id: string;
+      type: "peace-house";
+      payload: PeaceHousePayload;
       createdAt: string;
     };
 
@@ -399,6 +437,56 @@ async function sendPrayerRequest(payload: PrayerRequestPayload) {
   return { localId: payload.localId, syncedId: data.id as string, createdAt: data.created_at as string };
 }
 
+async function sendPeacePair(payload: PeacePairPayload) {
+  const { data, error } = await supabase
+    .from("peace_pairs")
+    .insert({
+      church_id: payload.churchId,
+      cell_id: payload.cellId,
+      name: payload.name,
+      phone: payload.phone || null,
+      has_house: Boolean(payload.houseId),
+      house_id: payload.houseId || null,
+      created_by: payload.createdBy,
+    })
+    .select("id, created_at")
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Nao foi possivel sincronizar a dupla agora.");
+  }
+
+  return { localId: payload.localId, syncedId: data.id as string, createdAt: data.created_at as string };
+}
+
+async function sendPeaceHouse(payload: PeaceHousePayload) {
+  const { data, error } = await supabase
+    .from("peace_houses")
+    .insert({
+      church_id: payload.churchId,
+      cell_id: payload.cellId || null,
+      full_name: payload.fullName,
+      age: payload.age ?? null,
+      sex: payload.sex || null,
+      phone: payload.phone || null,
+      address: payload.address,
+      house_number: payload.houseNumber || null,
+      neighborhood: payload.neighborhood || null,
+      city: payload.city || null,
+      has_pair: Boolean(payload.pairId),
+      pair_id: payload.pairId || null,
+      created_by: payload.createdBy,
+    })
+    .select("id, created_at")
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Nao foi possivel sincronizar a casa agora.");
+  }
+
+  return { localId: payload.localId, syncedId: data.id as string, createdAt: data.created_at as string };
+}
+
 export async function processOfflineQueue() {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     return { ok: false, processed: 0 };
@@ -423,7 +511,11 @@ export async function processOfflineQueue() {
                   ? await sendActivityEvent(item.payload)
                   : item.type === "pastoral-reminder"
                     ? await sendPastoralReminder(item.payload)
-                    : await sendPrayerRequest(item.payload);
+                    : item.type === "prayer-request"
+                      ? await sendPrayerRequest(item.payload)
+                      : item.type === "peace-pair"
+                        ? await sendPeacePair(item.payload)
+                        : await sendPeaceHouse(item.payload);
 
       emitSyncSuccess({
         type: item.type,

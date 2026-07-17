@@ -14,8 +14,10 @@ import {
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { WhatsAppButton } from "@/components/whatsapp-button";
 import { getScopedCareTasks, getScopedCells, getScopedPastoralReminders, getScopedPeople } from "@/lib/access-control";
+import { getNextMeetingDate } from "@/lib/cell-schedule";
 import type { PastoralReminder } from "@/lib/data";
 import { roleLabels } from "@/lib/data";
 import {
@@ -25,6 +27,7 @@ import {
   usePastoralReminders,
   useSupervisorVisits,
 } from "@/lib/local-store";
+import { daysUntilBirthday } from "@/lib/notifications";
 
 function toLocalInputDateTime(date = new Date()) {
   const offset = date.getTimezoneOffset() * 60000;
@@ -50,6 +53,11 @@ function isOverdue(value: string) {
   return new Date(value).getTime() < Date.now() && !isToday(value);
 }
 
+function toLocalDateKey(value: string | Date) {
+  const date = typeof value === "string" ? new Date(value) : value;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function typeLabel(type: PastoralReminder["reminderType"]) {
   const labels: Record<PastoralReminder["reminderType"], string> = {
     visita: "Visita",
@@ -69,8 +77,8 @@ export default function AgendaPage() {
   const { tasks } = useCareTasks();
   const { visits } = useSupervisorVisits();
   const { reminders, addReminder, completeReminder } = usePastoralReminders();
+  const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [feedback, setFeedback] = useState("");
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visibleTasks = getScopedCareTasks(currentUser, tasks, people, isDemoMode);
@@ -78,10 +86,17 @@ export default function AgendaPage() {
   const openReminders = visibleReminders.filter((reminder) => reminder.status === "open");
   const todayReminders = openReminders.filter((reminder) => isToday(reminder.dueAt));
   const overdueReminders = openReminders.filter((reminder) => isOverdue(reminder.dueAt));
-  const nextCells = visibleCells.slice(0, 3);
-  const birthdays = visiblePeople.filter((person) => person.birthday && person.birthday !== "--/--").slice(0, 4);
+  const nextCells = [...visibleCells]
+    .sort((a, b) => getNextMeetingDate(a.meetingDay).localeCompare(getNextMeetingDate(b.meetingDay)))
+    .slice(0, 3);
+  const birthdays = visiblePeople
+    .map((person) => ({ person, days: daysUntilBirthday(person.birthday) }))
+    .filter((item): item is { person: (typeof visiblePeople)[number]; days: number } => item.days !== null)
+    .sort((a, b) => a.days - b.days)
+    .slice(0, 4)
+    .map((item) => item.person);
   const pendingSupervision = visibleCells.filter(
-    (cell) => !visits.some((visit) => visit.cellId === cell.id && visit.createdAt.slice(0, 10) === new Date().toISOString().slice(0, 10)),
+    (cell) => !visits.some((visit) => visit.cellId === cell.id && toLocalDateKey(visit.createdAt) === toLocalDateKey(new Date())),
   );
   const selectedPeople = visiblePeople.slice(0, 12);
   const selectedCells = visibleCells.slice(0, 12);
@@ -131,13 +146,24 @@ export default function AgendaPage() {
     });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui criar o lembrete: ${result.error}`);
+      toast.error(`Nao consegui criar o lembrete: ${result.error}`);
       return;
     }
 
-    setFeedback("Lembrete criado na agenda.");
+    toast.success("Lembrete criado na agenda.");
     setOpen(false);
     event.currentTarget.reset();
+  }
+
+  async function handleCompleteReminder(reminderId: string) {
+    const result = await completeReminder(reminderId, !isDemoMode);
+
+    if (!result.ok) {
+      toast.error(`Nao consegui concluir o lembrete: ${result.error}`);
+      return;
+    }
+
+    toast.success("Lembrete concluido.");
   }
 
   return (
@@ -176,8 +202,6 @@ export default function AgendaPage() {
           </div>
         </div>
 
-        {feedback && <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{feedback}</div>}
-
         <section className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
             <SectionHeader eyebrow="Prioridade" title="Hoje e proximos passos" />
@@ -203,7 +227,7 @@ export default function AgendaPage() {
                       </div>
                       {item.kind === "reminder" && (
                         <button
-                          onClick={() => completeReminder(item.id, !isDemoMode)}
+                          onClick={() => handleCompleteReminder(item.id)}
                           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-700"
                           aria-label="Concluir lembrete"
                         >

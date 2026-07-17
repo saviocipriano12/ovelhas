@@ -5,6 +5,8 @@ import type {
   Cell,
   PastoralNote,
   PastoralReminder,
+  PeaceHouse,
+  PeacePair,
   Person,
   PrayerRequest,
   SupervisorVisit,
@@ -25,6 +27,8 @@ const roleRoutes: Record<UserRole, string[]> = {
     "/checkin",
     "/agenda",
     "/cuidados",
+    "/lar-de-paz",
+    "/lar-de-paz/duplas",
     "/oracao",
     "/biblioteca",
     "/notificacoes",
@@ -34,6 +38,7 @@ const roleRoutes: Record<UserRole, string[]> = {
     "/atividades",
     "/relatorios",
     "/relatorios/novo",
+    "/relatorios/tendencias",
     "/videos",
     "/configuracoes",
     "/instalar",
@@ -47,6 +52,8 @@ const roleRoutes: Record<UserRole, string[]> = {
     "/pessoas",
     "/agenda",
     "/cuidados",
+    "/lar-de-paz",
+    "/lar-de-paz/duplas",
     "/presenca",
     "/checkin",
     "/oracao",
@@ -58,6 +65,7 @@ const roleRoutes: Record<UserRole, string[]> = {
     "/atividades",
     "/relatorios",
     "/relatorios/novo",
+    "/relatorios/tendencias",
     "/videos",
     "/instalar",
     "/mais",
@@ -72,6 +80,8 @@ const roleRoutes: Record<UserRole, string[]> = {
     "/checkin",
     "/agenda",
     "/cuidados",
+    "/lar-de-paz",
+    "/lar-de-paz/duplas",
     "/oracao",
     "/biblioteca",
     "/notificacoes",
@@ -142,6 +152,10 @@ export function canAccessRoute(user: AppUser, pathname: string) {
   }
 
   if (pathname === "/") {
+    return true;
+  }
+
+  if (pathname === "/assinatura") {
     return true;
   }
 
@@ -482,6 +496,50 @@ export function getScopedPrayerRequests(
 ) {
   void isDemoMode;
   return getVisiblePrayerRequests(user, requests, cells, people);
+}
+
+export function canViewPeacePair(user: AppUser, pair: PeacePair, cells: Cell[]) {
+  if (user.role === "admin" || user.role === "pastor") {
+    return user.churchId === pair.churchId;
+  }
+
+  if (pair.createdBy === user.id) {
+    return true;
+  }
+
+  const relatedCell = cells.find((cell) => cell.id === pair.cellId);
+  return Boolean(relatedCell && canViewCell(user, relatedCell));
+}
+
+export function getVisiblePeacePairs(user: AppUser, pairs: PeacePair[], cells: Cell[]) {
+  return pairs.filter((pair) => canViewPeacePair(user, pair, cells));
+}
+
+export function getScopedPeacePairs(user: AppUser, pairs: PeacePair[], cells: Cell[], isDemoMode: boolean) {
+  void isDemoMode;
+  return getVisiblePeacePairs(user, pairs, cells);
+}
+
+export function canViewPeaceHouse(user: AppUser, house: PeaceHouse, cells: Cell[]) {
+  if (user.role === "admin" || user.role === "pastor") {
+    return user.churchId === house.churchId;
+  }
+
+  if (house.createdBy === user.id) {
+    return true;
+  }
+
+  const relatedCell = cells.find((cell) => cell.id === house.cellId);
+  return Boolean(relatedCell && canViewCell(user, relatedCell));
+}
+
+export function getVisiblePeaceHouses(user: AppUser, houses: PeaceHouse[], cells: Cell[]) {
+  return houses.filter((house) => canViewPeaceHouse(user, house, cells));
+}
+
+export function getScopedPeaceHouses(user: AppUser, houses: PeaceHouse[], cells: Cell[], isDemoMode: boolean) {
+  void isDemoMode;
+  return getVisiblePeaceHouses(user, houses, cells);
 }
 
 export function describeAccess(user: AppUser) {

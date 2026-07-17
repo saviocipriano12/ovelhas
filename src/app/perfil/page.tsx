@@ -1,11 +1,12 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { Camera, Save, UserRound } from "lucide-react";
+import { Camera, Info, Save, UserRound } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { PersonAvatar } from "@/components/person-avatar";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { roleLabels } from "@/lib/data";
 import type { Person } from "@/lib/data";
 import { useLocalPeople } from "@/lib/local-store";
@@ -56,9 +57,9 @@ function fallbackPerson(userName: string, photoUrl?: string): Person {
 export default function ProfilePage() {
   const { currentUser, isDemoMode } = useAuth();
   const { people, updatePerson } = useLocalPeople();
+  const toast = useToast();
   const person = people.find((item) => item.personUserId === currentUser.id || item.id === currentUser.personId);
   const [photoPreview, setPhotoPreview] = useState(person?.photoUrl || "");
-  const [feedback, setFeedback] = useState("");
   const displayPerson = person ? { ...person, photoUrl: photoPreview || person.photoUrl } : fallbackPerson(currentUser.name, photoPreview);
 
   async function handlePhotoChange(file?: File | null) {
@@ -67,22 +68,43 @@ export default function ProfilePage() {
     }
 
     if (!file.type.startsWith("image/")) {
-      setFeedback("Escolha uma imagem para a foto do perfil.");
+      toast.error("Escolha uma imagem para a foto do perfil.");
       return;
     }
 
-    if (file.size > 900 * 1024) {
-      setFeedback("Use uma foto menor que 900 KB para manter o app leve no celular.");
+    if (isDemoMode) {
+      if (file.size > 900 * 1024) {
+        toast.error("Use uma foto menor que 900 KB para manter o app leve no celular.");
+        return;
+      }
+
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
+        setPhotoPreview(dataUrl);
+        toast.success("Foto carregada. Toque em salvar para atualizar o perfil.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Nao consegui carregar a foto.");
+      }
       return;
     }
 
-    try {
-      const dataUrl = await readFileAsDataUrl(file);
-      setPhotoPreview(dataUrl);
-      setFeedback("Foto carregada. Toque em salvar para atualizar o perfil.");
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Nao consegui carregar a foto.");
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Use uma foto menor que 5 MB.");
+      return;
     }
+
+    const extension = file.name.split(".").pop() || "jpg";
+    const path = `${currentUser.id}/${Date.now()}.${extension}`;
+    const { error: uploadError } = await supabase.storage.from("profile-photos").upload(path, file, { upsert: true });
+
+    if (uploadError) {
+      toast.error(`Nao consegui enviar a foto: ${uploadError.message}`);
+      return;
+    }
+
+    const { data } = supabase.storage.from("profile-photos").getPublicUrl(path);
+    setPhotoPreview(data.publicUrl);
+    toast.success("Foto carregada. Toque em salvar para atualizar o perfil.");
   }
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
@@ -98,8 +120,14 @@ export default function ProfilePage() {
 
     if (!isDemoMode) {
       const rpcResult = await supabase.rpc("update_my_profile", { profile_name: name });
+
       if (rpcResult.error) {
-        await supabase.from("profiles").update({ name }).eq("id", currentUser.id);
+        const fallbackResult = await supabase.from("profiles").update({ name }).eq("id", currentUser.id);
+
+        if (fallbackResult.error) {
+          toast.error(`Nao consegui salvar seu nome: ${fallbackResult.error.message}`);
+          return;
+        }
       }
     }
 
@@ -116,11 +144,16 @@ export default function ProfilePage() {
         persistToSupabase: !isDemoMode,
       });
 
-      setFeedback(result.ok ? "Perfil atualizado." : `Nao consegui atualizar seu perfil: ${result.error}`);
+      if (!result.ok) {
+        toast.error(`Nao consegui atualizar seu perfil: ${result.error}`);
+        return;
+      }
+
+      toast.success("Perfil atualizado.");
       return;
     }
 
-    setFeedback("Nome atualizado. Para editar telefone, endereco e foto dentro do cuidado, vincule este usuario a uma pessoa cadastrada.");
+    toast.success("Nome atualizado.");
   }
 
   return (
@@ -141,12 +174,6 @@ export default function ProfilePage() {
           </div>
         </section>
 
-        {feedback && (
-          <div className="rounded-[22px] border border-emerald-100 bg-emerald-50 p-4 text-sm font-bold text-emerald-900">
-            {feedback}
-          </div>
-        )}
-
         <form onSubmit={saveProfile} className="native-form rounded-[28px] border border-white/80 bg-white/90 p-4 shadow-sm">
           <div className="mb-4 flex items-center gap-3">
             <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800">
@@ -158,25 +185,39 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <label className="mb-4 flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-emerald-200 bg-emerald-50 px-4 text-sm font-black text-emerald-900">
-            <Camera size={18} />
-            Enviar foto de perfil
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(event) => handlePhotoChange(event.target.files?.[0])}
-            />
-          </label>
+          {!person && (
+            <div className="mb-4 flex items-start gap-2 rounded-2xl bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900">
+              <Info size={16} className="mt-0.5 shrink-0" />
+              Sua conta ainda nao esta vinculada a um cadastro de pessoa. Por enquanto so o nome pode ser atualizado aqui;
+              fale com seu lider para vincular telefone, endereco e foto.
+            </div>
+          )}
+
+          {person && (
+            <label className="mb-4 flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-emerald-200 bg-emerald-50 px-4 text-sm font-black text-emerald-900">
+              <Camera size={18} />
+              Enviar foto de perfil
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => handlePhotoChange(event.target.files?.[0])}
+              />
+            </label>
+          )}
 
           <div className="grid gap-3">
             <input name="name" defaultValue={person?.name || currentUser.name} className="field-control" placeholder="Nome completo" />
-            <input name="phone" defaultValue={person?.phone} inputMode="tel" className="field-control" placeholder="WhatsApp" />
-            <input name="email" defaultValue={person?.email} type="email" className="field-control" placeholder="Email" />
-            <input name="birthDate" defaultValue={person?.birthDate} type="date" className="field-control" aria-label="Data de nascimento" />
-            <input name="neighborhood" defaultValue={person?.neighborhood} className="field-control" placeholder="Bairro" />
-            <input name="address" defaultValue={person?.address} className="field-control" placeholder="Endereco completo" />
-            <input name="familyPhone" defaultValue={person?.familyPhone} inputMode="tel" className="field-control" placeholder="Telefone de familiar" />
+            {person && (
+              <>
+                <input name="phone" defaultValue={person.phone} inputMode="tel" className="field-control" placeholder="WhatsApp" />
+                <input name="email" defaultValue={person.email} type="email" className="field-control" placeholder="Email" />
+                <input name="birthDate" defaultValue={person.birthDate} type="date" className="field-control" aria-label="Data de nascimento" />
+                <input name="neighborhood" defaultValue={person.neighborhood} className="field-control" placeholder="Bairro" />
+                <input name="address" defaultValue={person.address} className="field-control" placeholder="Endereco completo" />
+                <input name="familyPhone" defaultValue={person.familyPhone} inputMode="tel" className="field-control" placeholder="Telefone de familiar" />
+              </>
+            )}
           </div>
 
           <button className="primary-action mt-4">

@@ -5,6 +5,7 @@ import { CheckCircle2, Heart, LockKeyhole, MessageCircle, Plus, ShieldCheck, Spa
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { getScopedCells, getScopedPeople, getScopedPrayerRequests } from "@/lib/access-control";
 import type { PrayerRequest } from "@/lib/data";
 import { roleLabels } from "@/lib/data";
@@ -56,8 +57,8 @@ export default function PrayerPage() {
   const memberPerson =
     people.find((person) => person.personUserId === currentUser.id || person.id === currentUser.personId) ??
     visiblePeople[0];
+  const toast = useToast();
   const [open, setOpen] = useState(currentUser.role === "member");
-  const [feedback, setFeedback] = useState("");
   const openRequests = visibleRequests.filter((request) => request.status === "open");
   const prayedRequests = visibleRequests.filter((request) => request.status === "prayed");
   const answeredRequests = visibleRequests.filter((request) => request.status === "answered");
@@ -71,7 +72,11 @@ export default function PrayerPage() {
     const person = people.find((item) => item.id === personId);
 
     if (!person) {
-      setFeedback("Escolha uma pessoa para vincular o pedido.");
+      if (currentUser.role === "member") {
+        toast.error("Sua conta ainda nao esta vinculada a um cadastro de pessoa. Fale com seu lider para vincular.");
+      } else {
+        toast.error("Escolha uma pessoa para vincular o pedido.");
+      }
       return;
     }
 
@@ -88,7 +93,7 @@ export default function PrayerPage() {
     });
 
     if (!result.ok || !result.request) {
-      setFeedback(`Nao consegui registrar o pedido: ${result.error}`);
+      toast.error(`Nao consegui registrar o pedido: ${result.error}`);
       return;
     }
 
@@ -108,7 +113,7 @@ export default function PrayerPage() {
       persistToSupabase: !isDemoMode,
     });
 
-    setFeedback("Pedido de oracao registrado.");
+    toast.success("Pedido de oracao registrado.");
     setOpen(false);
     event.currentTarget.reset();
   }
@@ -121,11 +126,11 @@ export default function PrayerPage() {
     });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui atualizar: ${result.error}`);
+      toast.error(`Nao consegui atualizar: ${result.error}`);
       return;
     }
 
-    setFeedback(status === "answered" ? "Pedido marcado como respondido." : "Pedido marcado como orado.");
+    toast.success(status === "answered" ? "Pedido marcado como respondido." : "Pedido marcado como orado.");
   }
 
   return (
@@ -169,8 +174,6 @@ export default function PrayerPage() {
             <p className="text-sm text-slate-500">Respondidos</p>
           </div>
         </div>
-
-        {feedback && <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{feedback}</div>}
 
         {open && (
           <form onSubmit={handleSubmit} className="native-form rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">

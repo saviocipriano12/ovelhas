@@ -5,8 +5,10 @@ import type { FormEvent } from "react";
 import { BookOpenCheck, Edit3, Lock, Play, Plus, Save, Send, Trash2, Video, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
+import { useConfirm } from "@/components/confirm-dialog";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { canManagePeople, getScopedPeople } from "@/lib/access-control";
 import { useActivityEvents, useDiscipleship, useLocalPeople } from "@/lib/local-store";
 
@@ -20,6 +22,8 @@ export default function VideosPage() {
   const { people } = useLocalPeople();
   const { tracks, videos, accesses, progress, addTrack, addVideo, updateTrack, deleteTrack, updateVideo, deleteVideo, releaseTrack } = useDiscipleship();
   const { addEvent } = useActivityEvents();
+  const toast = useToast();
+  const confirm = useConfirm();
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const churchTracks = tracks.filter((track) => track.churchId === currentUser.churchId || isDemoMode);
   const [selectedTrackId, setSelectedTrackId] = useState(churchTracks[0]?.id ?? "");
@@ -28,7 +32,6 @@ export default function VideosPage() {
     .filter((video) => video.trackId === selectedTrack?.id && video.active)
     .sort((a, b) => a.orderIndex - b.orderIndex);
   const [selectedPersonId, setSelectedPersonId] = useState(visiblePeople[0]?.id ?? "");
-  const [feedback, setFeedback] = useState("");
   const [trackTitle, setTrackTitle] = useState("");
   const [trackDescription, setTrackDescription] = useState("");
   const [videoTitle, setVideoTitle] = useState("");
@@ -55,7 +58,7 @@ export default function VideosPage() {
 
   async function handleRelease() {
     if (!selectedTrack || !selectedPerson) {
-      setFeedback("Escolha uma pessoa e uma trilha antes de liberar.");
+      toast.error("Escolha uma pessoa e uma trilha antes de liberar.");
       return;
     }
 
@@ -67,7 +70,12 @@ export default function VideosPage() {
     });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui liberar a trilha: ${result.error}`);
+      toast.error(`Nao consegui liberar a trilha: ${result.error}`);
+      return;
+    }
+
+    if (result.alreadyReleased) {
+      toast.warning(`${selectedPerson.name} ja tinha acesso a ${selectedTrack.title}.`);
       return;
     }
 
@@ -87,14 +95,14 @@ export default function VideosPage() {
       persistToSupabase: !isDemoMode,
     });
 
-    setFeedback(`${selectedTrack.title} liberada para ${selectedPerson.name}.`);
+    toast.success(`${selectedTrack.title} liberada para ${selectedPerson.name}.`);
   }
 
   async function handleCreateTrack(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!trackTitle.trim()) {
-      setFeedback("Informe o nome da trilha.");
+      toast.error("Informe o nome da trilha.");
       return;
     }
 
@@ -106,21 +114,21 @@ export default function VideosPage() {
     });
 
     if (!result.ok || !result.track) {
-      setFeedback(`Nao consegui criar a trilha: ${result.error}`);
+      toast.error(`Nao consegui criar a trilha: ${result.error}`);
       return;
     }
 
     setSelectedTrackId(result.track.id);
     setTrackTitle("");
     setTrackDescription("");
-    setFeedback(`Trilha ${result.track.title} criada.`);
+    toast.success(`Trilha ${result.track.title} criada.`);
   }
 
   async function handleCreateVideo(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!selectedTrack || !videoTitle.trim() || !videoUrl.trim()) {
-      setFeedback("Escolha a trilha e informe titulo e URL do video.");
+      toast.error("Escolha a trilha e informe titulo e URL do video.");
       return;
     }
 
@@ -135,7 +143,7 @@ export default function VideosPage() {
     });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui cadastrar o video: ${result.error}`);
+      toast.error(`Nao consegui cadastrar o video: ${result.error}`);
       return;
     }
 
@@ -143,7 +151,7 @@ export default function VideosPage() {
     setVideoDescription("");
     setVideoUrl("");
     setVideoMinutes(10);
-    setFeedback("Video cadastrado na trilha.");
+    toast.success("Video cadastrado na trilha.");
   }
 
   async function handleUpdateTrack(event: FormEvent<HTMLFormElement>) {
@@ -158,7 +166,7 @@ export default function VideosPage() {
     const description = String(formData.get("description") || "").trim();
 
     if (!title) {
-      setFeedback("Informe o nome da trilha.");
+      toast.error("Informe o nome da trilha.");
       return;
     }
 
@@ -169,9 +177,11 @@ export default function VideosPage() {
       persistToSupabase: !isDemoMode,
     });
 
-    setFeedback(result.ok ? "Trilha atualizada." : `Nao consegui atualizar a trilha: ${result.error}`);
     if (result.ok) {
+      toast.success("Trilha atualizada.");
       setEditingTrack(false);
+    } else {
+      toast.error(`Nao consegui atualizar a trilha: ${result.error}`);
     }
   }
 
@@ -180,17 +190,27 @@ export default function VideosPage() {
       return;
     }
 
-    if (!window.confirm(`Apagar a trilha ${selectedTrack.title}? Os videos, liberacoes e progresso vinculados tambem serao removidos.`)) {
+    const confirmed = await confirm({
+      title: `Apagar a trilha ${selectedTrack.title}?`,
+      description: "Os videos, liberacoes e progresso vinculados tambem serao removidos.",
+      confirmLabel: "Apagar",
+      tone: "danger",
+    });
+
+    if (!confirmed) {
       return;
     }
 
     const result = await deleteTrack(selectedTrack.id, !isDemoMode);
-    setFeedback(result.ok ? "Trilha apagada." : `Nao consegui apagar a trilha: ${result.error}`);
 
-    if (result.ok) {
-      const nextTrack = churchTracks.find((track) => track.id !== selectedTrack.id);
-      setSelectedTrackId(nextTrack?.id ?? "");
+    if (!result.ok) {
+      toast.error(`Nao consegui apagar a trilha: ${result.error}`);
+      return;
     }
+
+    toast.success("Trilha apagada.");
+    const nextTrack = churchTracks.find((track) => track.id !== selectedTrack.id);
+    setSelectedTrackId(nextTrack?.id ?? "");
   }
 
   async function handleUpdateVideo(event: FormEvent<HTMLFormElement>) {
@@ -202,7 +222,7 @@ export default function VideosPage() {
     const durationSeconds = Math.max(1, Number(formData.get("minutes") || 1)) * 60;
 
     if (!title || !videoUrlValue) {
-      setFeedback("Informe titulo e URL do video.");
+      toast.error("Informe titulo e URL do video.");
       return;
     }
 
@@ -215,19 +235,33 @@ export default function VideosPage() {
       persistToSupabase: !isDemoMode,
     });
 
-    setFeedback(result.ok ? "Video atualizado." : `Nao consegui atualizar o video: ${result.error}`);
     if (result.ok) {
+      toast.success("Video atualizado.");
       setEditingVideoId("");
+    } else {
+      toast.error(`Nao consegui atualizar o video: ${result.error}`);
     }
   }
 
   async function handleDeleteVideo(videoId: string, videoTitleValue: string) {
-    if (!window.confirm(`Apagar o video ${videoTitleValue}? O progresso desse video tambem sera removido.`)) {
+    const confirmed = await confirm({
+      title: `Apagar o video ${videoTitleValue}?`,
+      description: "O progresso desse video tambem sera removido.",
+      confirmLabel: "Apagar",
+      tone: "danger",
+    });
+
+    if (!confirmed) {
       return;
     }
 
     const result = await deleteVideo(videoId, !isDemoMode);
-    setFeedback(result.ok ? "Video apagado." : `Nao consegui apagar o video: ${result.error}`);
+
+    if (result.ok) {
+      toast.success("Video apagado.");
+    } else {
+      toast.error(`Nao consegui apagar o video: ${result.error}`);
+    }
   }
 
   return (
@@ -329,11 +363,6 @@ export default function VideosPage() {
                 </div>
               )}
 
-              {feedback && (
-                <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">
-                  {feedback}
-                </div>
-              )}
             </div>
 
             {canCreateContent && (

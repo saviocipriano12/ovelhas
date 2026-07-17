@@ -51,7 +51,8 @@ export default function AccessPage() {
               <button
                 key={user.id}
                 onClick={() => setCurrentUserId(user.id)}
-                className={`rounded-lg border p-4 text-left shadow-sm ${
+                disabled={!isDemoMode}
+                className={`rounded-lg border p-4 text-left shadow-sm disabled:cursor-not-allowed ${
                   active
                     ? "border-emerald-300 bg-emerald-900 text-white"
                     : "border-white/80 bg-white/90 text-slate-900 hover:border-emerald-200"

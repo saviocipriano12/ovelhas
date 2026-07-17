@@ -5,8 +5,10 @@ import type { FormEvent } from "react";
 import { AlertTriangle, CheckCircle2, Crown, Eye, Save, ShieldCheck, Trash2, UserCog } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
+import { useConfirm } from "@/components/confirm-dialog";
 import { MetricCard } from "@/components/metric-card";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { canAssignCellResponsibility, getScopedCells, getScopedPeople, getScopedSupervisorVisits } from "@/lib/access-control";
 import { roleLabels, type UserRole } from "@/lib/data";
 import { useActivityEvents, useCells, useLocalPeople, useProfiles, useSupervisorVisits } from "@/lib/local-store";
@@ -45,12 +47,13 @@ export default function ManagementPage() {
   const { visits } = useSupervisorVisits();
   const { profiles, updateProfileRole, deleteProfileUser } = useProfiles();
   const { addEvent } = useActivityEvents();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [assignmentCellId, setAssignmentCellId] = useState("");
   const [assignmentSupervisorId, setAssignmentSupervisorId] = useState("");
   const [assignmentLeaderId, setAssignmentLeaderId] = useState("");
   const [roleUserId, setRoleUserId] = useState("");
   const [roleValue, setRoleValue] = useState<UserRole>("member");
-  const [feedback, setFeedback] = useState("");
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const visibleVisits = getScopedSupervisorVisits(currentUser, visits, cells, isDemoMode);
@@ -85,7 +88,7 @@ export default function ManagementPage() {
 
     const cell = selectedAssignmentCell;
     if (!cell) {
-      setFeedback("Escolha uma celula antes de salvar.");
+      toast.error("Escolha uma celula antes de salvar.");
       return;
     }
 
@@ -102,7 +105,7 @@ export default function ManagementPage() {
     });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui salvar no Supabase: ${result.error}`);
+      toast.error(`Nao consegui salvar no Supabase: ${result.error}`);
       return;
     }
 
@@ -121,7 +124,7 @@ export default function ManagementPage() {
       persistToSupabase: !isDemoMode,
     });
 
-    setFeedback(
+    toast.success(
       `Responsabilidades salvas: ${cell.name} com ${supervisor?.name ?? "supervisor mantido"} e ${leader?.name ?? "lider mantido"}.`,
     );
   }
@@ -130,8 +133,21 @@ export default function ManagementPage() {
     event.preventDefault();
 
     if (!roleUserId) {
-      setFeedback("Escolha um usuario para alterar o tipo de acesso.");
+      toast.error("Escolha um usuario para alterar o tipo de acesso.");
       return;
+    }
+
+    if (roleUserId === currentUser.id) {
+      const confirmed = await confirm({
+        title: "Alterar o proprio acesso?",
+        description: `Voce esta prestes a mudar seu proprio tipo de acesso para ${roleLabels[roleValue]}. Isso pode limitar o que voce consegue ver e fazer no app.`,
+        confirmLabel: "Alterar mesmo assim",
+        tone: "danger",
+      });
+
+      if (!confirmed) {
+        return;
+      }
     }
 
     const user = visibleProfiles.find((profile) => profile.id === roleUserId);
@@ -142,16 +158,16 @@ export default function ManagementPage() {
     });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui alterar o acesso no Supabase: ${result.error}`);
+      toast.error(`Nao consegui alterar o acesso no Supabase: ${result.error}`);
       return;
     }
 
-    setFeedback(`${user?.name ?? "Usuario"} agora esta como ${roleLabels[roleValue]}.`);
+    toast.success(`${user?.name ?? "Usuario"} agora esta como ${roleLabels[roleValue]}.`);
   }
 
   async function handleDeleteUser(userId: string, userName: string) {
     if (userId === currentUser.id) {
-      setFeedback("Voce nao pode excluir seu proprio usuario enquanto esta logado.");
+      toast.error("Voce nao pode excluir seu proprio usuario enquanto esta logado.");
       return;
     }
 
@@ -160,7 +176,7 @@ export default function ManagementPage() {
     );
 
     if (confirmation !== "EXCLUIR") {
-      setFeedback("Exclusao cancelada.");
+      toast.warning("Exclusao cancelada.");
       return;
     }
 
@@ -170,11 +186,11 @@ export default function ManagementPage() {
     });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui excluir o usuario: ${result.error}`);
+      toast.error(`Nao consegui excluir o usuario: ${result.error}`);
       return;
     }
 
-    setFeedback(`${userName} foi excluido definitivamente. O email pode ser usado novamente em um novo cadastro.`);
+    toast.success(`${userName} foi excluido definitivamente. O email pode ser usado novamente em um novo cadastro.`);
   }
 
   return (
@@ -197,7 +213,7 @@ export default function ManagementPage() {
         </div>
 
         {canAssignCells && (
-          <section className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+          <section id="atribuir-celulas" className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
             <form onSubmit={handleAssignmentSubmit} className="native-form rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
               <SectionHeader eyebrow={currentUser.role === "supervisor" ? "Supervisor" : "Lideranca"} title="Atribuir celulas" />
               <div className="grid gap-3 md:grid-cols-3">
@@ -308,12 +324,6 @@ export default function ManagementPage() {
           </section>
         )}
 
-        {feedback && (
-          <div className="rounded-lg border border-emerald-100 bg-white p-4 text-sm font-semibold text-emerald-800 shadow-sm">
-            {feedback}
-          </div>
-        )}
-
         <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
           <SectionHeader eyebrow="Papeis" title="Quem pode fazer o que" />
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -409,7 +419,9 @@ export default function ManagementPage() {
                     </div>
                     <div className="rounded-lg bg-white p-3">
                       <p className="text-xs font-bold uppercase text-slate-400">Lider</p>
-                      <p className="mt-1 truncate font-semibold text-slate-800">{cell.leaderName || "Sem lider"}</p>
+                      <p className="mt-1 truncate font-semibold text-slate-800">
+                        {leaders.find((user) => user.id === cell.leaderUserId)?.name ?? cell.leaderName ?? "Sem lider"}
+                      </p>
                     </div>
                     <div className="rounded-lg bg-white p-3">
                       <p className="text-xs font-bold uppercase text-slate-400">Membros</p>
@@ -417,7 +429,9 @@ export default function ManagementPage() {
                     </div>
                     <div className="rounded-lg bg-white p-3">
                       <p className="text-xs font-bold uppercase text-slate-400">Ultima supervisao</p>
-                      <p className="mt-1 truncate font-semibold text-slate-800">{lastVisit?.visitDate ?? "Pendente"}</p>
+                      <p className="mt-1 truncate font-semibold text-slate-800">
+                        {lastVisit ? new Intl.DateTimeFormat("pt-BR").format(new Date(lastVisit.visitDate)) : "Pendente"}
+                      </p>
                     </div>
                   </div>
                 </article>
@@ -430,14 +444,14 @@ export default function ManagementPage() {
           <SectionHeader eyebrow="Acoes" title="Lacunas que exigem decisao" />
           <div className="space-y-3">
             {cellsWithoutSupervisor > 0 && (
-              <div className="rounded-lg bg-rose-50 p-4 text-sm font-semibold text-rose-800">
-                Existem {cellsWithoutSupervisor} celulas sem supervisor. O administrador deve atribuir supervisao.
-              </div>
+              <a href={canAssignCells ? "#atribuir-celulas" : undefined} className="block rounded-lg bg-rose-50 p-4 text-sm font-semibold text-rose-800">
+                Existem {cellsWithoutSupervisor} celulas sem supervisor. {canAssignCells ? "Toque para atribuir." : "O administrador deve atribuir supervisao."}
+              </a>
             )}
             {cellsWithoutLeader > 0 && (
-              <div className="rounded-lg bg-rose-50 p-4 text-sm font-semibold text-rose-800">
-                Existem {cellsWithoutLeader} celulas sem lider. Isso impede acompanhamento direto dos membros.
-              </div>
+              <a href={canAssignCells ? "#atribuir-celulas" : undefined} className="block rounded-lg bg-rose-50 p-4 text-sm font-semibold text-rose-800">
+                Existem {cellsWithoutLeader} celulas sem lider. {canAssignCells ? "Toque para atribuir." : "Isso impede acompanhamento direto dos membros."}
+              </a>
             )}
             {peopleWithoutLeader > 0 && (
               <div className="rounded-lg bg-amber-50 p-4 text-sm font-semibold text-amber-900">

@@ -9,6 +9,7 @@ import { ChurchNoticeCard } from "@/components/church-notice-card";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
+import { useToast } from "@/components/toast-provider";
 import { getNextMeetingDate, rsvpLabel, rsvpTone, shouldAskForRsvp } from "@/lib/cell-schedule";
 import { getScopedActivityEvents, getScopedPrayerRequests } from "@/lib/access-control";
 import { isChurchNotice } from "@/lib/church-notices";
@@ -117,7 +118,7 @@ export default function MemberDiscipleshipPage() {
   const { events, addEvent } = useActivityEvents();
   const { requests, addPrayerRequest } = usePrayerRequests();
   const { rsvps, saveRsvp } = useCellRsvps(currentUser.churchId);
-  const [feedback, setFeedback] = useState("");
+  const toast = useToast();
   const [selectedVideoId, setSelectedVideoId] = useState("");
   const [reflection, setReflection] = useState("");
   const [rsvpNote, setRsvpNote] = useState("");
@@ -252,7 +253,7 @@ export default function MemberDiscipleshipPage() {
     });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui salvar seu progresso: ${result.error}`);
+      toast.error(`Nao consegui salvar seu progresso: ${result.error}`);
       return;
     }
 
@@ -274,7 +275,7 @@ export default function MemberDiscipleshipPage() {
       });
     }
 
-    setFeedback(progressPercent >= 100 ? `Aula concluida: ${video.title}.` : `Progresso salvo em ${progressPercent}%.`);
+    toast.success(progressPercent >= 100 ? `Aula concluida: ${video.title}.` : `Progresso salvo em ${progressPercent}%.`);
   }
 
   async function saveReflection() {
@@ -284,7 +285,7 @@ export default function MemberDiscipleshipPage() {
 
     if (isDemoMode && typeof window !== "undefined") {
       window.localStorage.setItem(`ovelhas:reflection:${member.id}:${selectedVideo.id}`, reflection);
-      setFeedback("Resposta salva no aparelho.");
+      toast.success("Resposta salva no aparelho.");
       return;
     }
 
@@ -294,12 +295,16 @@ export default function MemberDiscipleshipPage() {
       answer: reflection,
     });
 
-    setFeedback(result.ok ? "Resposta salva para sua lideranca acompanhar." : `Nao consegui salvar a resposta: ${result.error}`);
+    if (result.ok) {
+      toast.success("Resposta salva para sua lideranca acompanhar.");
+    } else {
+      toast.error(`Nao consegui salvar a resposta: ${result.error}`);
+    }
   }
 
   async function requestCare() {
     if (!member || !careText.trim()) {
-      setFeedback("Escreva o que esta acontecendo para sua lideranca te ajudar com clareza.");
+      toast.error("Escreva o que esta acontecendo para sua lideranca te ajudar com clareza.");
       return;
     }
 
@@ -317,7 +322,7 @@ export default function MemberDiscipleshipPage() {
     });
 
     if (!result.ok || !result.request) {
-      setFeedback(`Nao consegui registrar seu pedido de cuidado: ${result.error}`);
+      toast.error(`Nao consegui registrar seu pedido de cuidado: ${result.error}`);
       return;
     }
 
@@ -338,7 +343,7 @@ export default function MemberDiscipleshipPage() {
     });
 
     setCareText("");
-    setFeedback("Pedido de cuidado enviado para sua lideranca acompanhar.");
+    toast.success("Pedido de cuidado enviado para sua lideranca acompanhar.");
   }
 
   async function respondRsvp(response: "yes" | "no" | "maybe") {
@@ -358,7 +363,7 @@ export default function MemberDiscipleshipPage() {
     });
 
     if (!result.ok) {
-      setFeedback(`Nao consegui salvar sua confirmacao: ${result.error}`);
+      toast.error(`Nao consegui salvar sua confirmacao: ${result.error}`);
       return;
     }
 
@@ -378,7 +383,7 @@ export default function MemberDiscipleshipPage() {
       persistToSupabase: !isDemoMode,
     });
 
-    setFeedback(`Confirmacao salva: ${rsvpLabel(response)}.`);
+    toast.success(`Confirmacao salva: ${rsvpLabel(response)}.`);
     setRsvpPopupDismissed(true);
   }
 
@@ -394,17 +399,17 @@ export default function MemberDiscipleshipPage() {
     const email = String(formData.get("email") || member.email || "").trim();
 
     if (phone && phone.length < 10) {
-      setFeedback("Informe um WhatsApp valido com DDD.");
+      toast.error("Informe um WhatsApp valido com DDD.");
       return;
     }
 
     if (familyPhone && familyPhone.length < 10) {
-      setFeedback("Informe um telefone familiar valido com DDD ou deixe o campo vazio.");
+      toast.error("Informe um telefone familiar valido com DDD ou deixe o campo vazio.");
       return;
     }
 
     if (email && !isValidEmail(email)) {
-      setFeedback("Informe um email valido.");
+      toast.error("Informe um email valido.");
       return;
     }
 
@@ -419,7 +424,11 @@ export default function MemberDiscipleshipPage() {
       persistToSupabase: !isDemoMode,
     });
 
-    setFeedback(result.ok ? "Perfil atualizado." : `Nao consegui atualizar seu perfil: ${result.error}`);
+    if (result.ok) {
+      toast.success("Perfil atualizado.");
+    } else {
+      toast.error(`Nao consegui atualizar seu perfil: ${result.error}`);
+    }
   }
 
   return (
@@ -794,12 +803,6 @@ export default function MemberDiscipleshipPage() {
               Seu lider ainda nao liberou uma trilha de discipulado para voce.
             </p>
           </section>
-        )}
-
-        {feedback && (
-          <div className="mt-5 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">
-            {feedback}
-          </div>
         )}
 
         <div className="mt-3 flex items-center justify-center gap-2 text-xs font-semibold text-slate-400">

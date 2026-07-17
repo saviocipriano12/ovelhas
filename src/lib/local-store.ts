@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type {
   ActivityEvent,
   AppUser,
@@ -13,29 +13,32 @@ import type {
   CheckInEvent,
   ChurchSettings,
   CertificateRecord,
+  ChurchSubscription,
   DiscipleshipTrack,
   DiscipleshipVideo,
   Invite,
   LibraryMaterial,
   PastoralNote,
   PastoralReminder,
+  PeaceHouse,
+  PeacePair,
   Person,
   PersonTrackAccess,
   PrayerRequest,
   SupervisorVisit,
   UserRole,
   VideoProgressRecord,
+  VideoReflection,
 } from "@/lib/data";
 import {
   seedChurchSettings,
 } from "@/lib/data";
 import { supabase } from "@/lib/supabase/client";
-import { mapSupabaseCell, mapSupabasePerson } from "@/lib/supabase/mappers";
+import { birthdayFromDate, mapSupabaseCell, mapSupabasePeaceHouse, mapSupabasePeacePair, mapSupabasePerson } from "@/lib/supabase/mappers";
 import { enqueueOfflineAction, useOfflineSyncSuccess } from "@/lib/offline-queue";
 
 const PEOPLE_KEY = "ovelhas:people";
 const CELLS_KEY = "ovelhas:cells";
-const COMPLETED_CARE_KEY = "ovelhas:completed-care";
 const CELL_REPORTS_KEY = "ovelhas:cell-reports";
 const SUPERVISOR_VISITS_KEY = "ovelhas:supervisor-visits";
 const ACTIVITY_EVENTS_KEY = "ovelhas:activity-events";
@@ -49,6 +52,8 @@ const INVITES_KEY = "ovelhas:invites";
 const PASTORAL_NOTES_KEY = "ovelhas:pastoral-notes";
 const PASTORAL_REMINDERS_KEY = "ovelhas:pastoral-reminders";
 const PRAYER_REQUESTS_KEY = "ovelhas:prayer-requests";
+const PEACE_PAIRS_KEY = "ovelhas:peace-pairs";
+const PEACE_HOUSES_KEY = "ovelhas:peace-houses";
 const CHURCH_SETTINGS_KEY = "ovelhas:church-settings";
 const LIBRARY_MATERIALS_KEY = "ovelhas:library-materials";
 const CERTIFICATES_KEY = "ovelhas:certificates";
@@ -159,6 +164,17 @@ function isMissingColumn(message: string | undefined, columns: string[]) {
   return columns.some((column) => lower.includes(column.toLowerCase())) || lower.includes("schema cache");
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuid(id: string) {
+  return UUID_PATTERN.test(id);
+}
+
+function mergeUnsyncedLocal<T extends { id: string }>(current: T[], synced: T[]) {
+  const unsyncedLocal = current.filter((item) => !isUuid(item.id));
+  return [...unsyncedLocal, ...synced];
+}
+
 export function useLocalPeople() {
   const [items, setItems] = useState<Person[]>([]);
   const [isLoadingPeople, setIsLoadingPeople] = useState(false);
@@ -167,6 +183,7 @@ export function useLocalPeople() {
 
   useEffect(() => {
     queueMicrotask(() => {
+      setItems(readJson<Person[]>(PEOPLE_KEY, []));
       setHydrated(true);
     });
   }, []);
@@ -182,12 +199,11 @@ export function useLocalPeople() {
           .select("id, church_id, cell_id, person_user_id, created_by_user_id, leader_user_id, name, phone, email, birth_date, address, photo_url, family_phone, neighborhood, status, journey_stage, first_visit_date, notes")
       : Promise.resolve(peopleRpcResult);
 
-    const [initialPeopleResult, cellsRpcResult, profilesRpcResult, progressResult, meetingsResult, serviceResult] = await Promise.all([
+    const [initialPeopleResult, cellsRpcResult, profilesRpcResult, progressResult, serviceResult] = await Promise.all([
       peopleQuery,
       supabase.rpc("get_my_cells"),
       supabase.rpc("get_my_profiles"),
       supabase.from("video_progress").select("person_id, progress_percent"),
-      supabase.from("cell_meetings").select("id, meeting_date, cell_attendance(person_id, present)").order("meeting_date", { ascending: false }).limit(8),
       supabase.from("service_attendance").select("person_id, present, church_services(service_date)").order("created_at", { ascending: false }).limit(200),
     ]);
     let peopleResult = initialPeopleResult;
@@ -207,12 +223,27 @@ export function useLocalPeople() {
         : Promise.resolve(profilesRpcResult),
     ]);
 
-    setIsLoadingPeople(false);
-
     if (peopleResult.error) {
+      setIsLoadingPeople(false);
       setPeopleLoadError(peopleResult.error.message);
       return { ok: false, error: peopleResult.error.message };
     }
+
+    const peopleRows = (peopleResult.data ?? []) as Parameters<typeof mapSupabasePerson>[0][];
+    const cellIdsForAttendance = Array.from(
+      new Set(peopleRows.map((person) => person.cell_id).filter((cellId): cellId is string => Boolean(cellId))),
+    );
+
+    const meetingsResult = cellIdsForAttendance.length
+      ? await supabase
+          .from("cell_meetings")
+          .select("id, cell_id, meeting_date, cell_attendance(person_id, present)")
+          .in("cell_id", cellIdsForAttendance)
+          .order("meeting_date", { ascending: false })
+          .limit(cellIdsForAttendance.length * 12)
+      : { data: [] as { cell_id: string; meeting_date: string; cell_attendance?: { person_id: string; present: boolean }[] }[] };
+
+    setIsLoadingPeople(false);
 
     const cellRows = (cellsResult.data ?? []) as { id: string; name: string; leader_id?: string | null }[];
     const profileRows = (profilesResult.data ?? []) as { id: string; name: string }[];
@@ -227,16 +258,31 @@ export function useLocalPeople() {
       progressByPerson.set(item.person_id, values);
     });
 
-    const absenceStreaks = new Map<string, number>();
-    ((meetingsResult.data ?? []) as { cell_attendance?: { person_id: string; present: boolean }[] }[]).forEach((meeting) => {
-      (meeting.cell_attendance ?? []).forEach((attendance) => {
-        if (absenceStreaks.has(attendance.person_id)) {
-          return;
+    const meetingsByCell = new Map<string, { cell_attendance?: { person_id: string; present: boolean }[] }[]>();
+    ((meetingsResult.data ?? []) as { cell_id: string; cell_attendance?: { person_id: string; present: boolean }[] }[]).forEach(
+      (meeting) => {
+        const meetings = meetingsByCell.get(meeting.cell_id) ?? [];
+        meetings.push(meeting);
+        meetingsByCell.set(meeting.cell_id, meetings);
+      },
+    );
+
+    function computeAbsenceStreak(personId: string, cellId: string) {
+      const meetings = meetingsByCell.get(cellId) ?? [];
+      let streak = 0;
+
+      for (const meeting of meetings) {
+        const record = (meeting.cell_attendance ?? []).find((attendance) => attendance.person_id === personId);
+
+        if (!record || record.present) {
+          break;
         }
 
-        absenceStreaks.set(attendance.person_id, attendance.present ? 0 : 1);
-      });
-    });
+        streak += 1;
+      }
+
+      return streak;
+    }
 
     const servicePresence = new Map<string, boolean>();
     ((serviceResult.data ?? []) as { person_id: string; present: boolean }[]).forEach((attendance) => {
@@ -245,7 +291,7 @@ export function useLocalPeople() {
       }
     });
 
-    const mappedPeople = ((peopleResult.data ?? []) as Parameters<typeof mapSupabasePerson>[0][]).map((person) => {
+    const mappedPeople = peopleRows.map((person) => {
       const leaderId = person.leader_user_id ?? cellLeaders.get(person.cell_id ?? "") ?? "";
       const progressValues = progressByPerson.get(person.id) ?? [];
       const progress = progressValues.length
@@ -256,12 +302,12 @@ export function useLocalPeople() {
         cellName: cellNames.get(person.cell_id ?? "") ?? "Sem celula",
         leaderName: profileNames.get(leaderId) ?? "Sem lider",
         progress,
-        cellAbsences: absenceStreaks.get(person.id) ?? 0,
+        cellAbsences: computeAbsenceStreak(person.id, person.cell_id ?? ""),
         servicePresent: servicePresence.get(person.id) ?? false,
       });
     });
 
-    setItems(mappedPeople);
+    setItems((current) => mergeUnsyncedLocal(current, mappedPeople));
     return { ok: true, people: mappedPeople };
   }
 
@@ -306,12 +352,12 @@ export function useLocalPeople() {
       birthDate: input.birthDate || "",
       address: input.address || "",
       familyPhone: input.familyPhone?.replace(/\D/g, "") || "",
-      cell: input.cellName || "Casa da Paz",
-      leader: "Rafael Lima",
-      discipleshipLeader: "Rafael Lima",
+      cell: input.cellName || "Sem celula",
+      leader: "Sem lider",
+      discipleshipLeader: "Sem lider",
       neighborhood: input.neighborhood,
       firstVisit: new Intl.DateTimeFormat("pt-BR").format(new Date()),
-      birthday: "--/--",
+      birthday: birthdayFromDate(input.birthDate),
       progress: 0,
       cellAbsences: 0,
       servicePresent: false,
@@ -459,7 +505,17 @@ export function useLocalPeople() {
     return { ok: true };
   }
 
-  return { people: items, addPerson, updatePeople, updatePerson, deletePerson, refreshPeople, isLoadingPeople, peopleLoadError };
+  return {
+    people: items,
+    addPerson,
+    updatePeople,
+    updatePerson,
+    deletePerson,
+    refreshPeople,
+    isLoadingPeople,
+    peopleLoadError,
+    isPeopleHydrated: hydrated,
+  };
 }
 
 export function useCells() {
@@ -504,7 +560,8 @@ export function useCells() {
 
     const profileNames = new Map(((profilesResult.data ?? []) as { id: string; name: string }[]).map((profile) => [profile.id, profile.name]));
     const cellRows = (data ?? []) as Parameters<typeof mapSupabaseCell>[0][];
-    setItems(cellRows.map((cell) => mapSupabaseCell(cell, profileNames.get(cell.leader_id ?? "") ?? "Sem lider")));
+    const mappedCells = cellRows.map((cell) => mapSupabaseCell(cell, profileNames.get(cell.leader_id ?? "") ?? "Sem lider"));
+    setItems((current) => mergeUnsyncedLocal(current, mappedCells));
     return { ok: true, cells: cellRows };
   }
 
@@ -777,36 +834,10 @@ export function useProfiles() {
   return { profiles, updateProfileRole, deleteProfileUser };
 }
 
-export function useCompletedCare() {
-  const [completed, setCompleted] = useState<string[]>([]);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    queueMicrotask(() => {
-      setCompleted(readJson<string[]>(COMPLETED_CARE_KEY, []));
-      setHydrated(true);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (hydrated) {
-      writeJson(COMPLETED_CARE_KEY, completed);
-    }
-  }, [completed, hydrated]);
-
-  const completedSet = useMemo(() => new Set(completed), [completed]);
-
-  function toggleCompleted(taskId: string) {
-    setCompleted((current) =>
-      current.includes(taskId) ? current.filter((id) => id !== taskId) : [...current, taskId],
-    );
-  }
-
-  return { completedSet, toggleCompleted };
-}
-
 export function useCareTasks() {
   const [tasks, setTasks] = useState<CareTask[]>([]);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(true);
+  const [tasksLoadError, setTasksLoadError] = useState("");
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -823,6 +854,7 @@ export function useCareTasks() {
 
   useEffect(() => {
     async function loadSupabaseFollowUps() {
+      setIsLoadingTasks(true);
       const { data, error } = await supabase
         .from("follow_ups")
         .select("id, person_id, title, description, priority, due_date, status")
@@ -830,6 +862,7 @@ export function useCareTasks() {
         .order("created_at", { ascending: false });
 
       if (!error && data) {
+        setTasksLoadError("");
         setTasks(
           data.map((task) => ({
               id: task.id,
@@ -841,7 +874,11 @@ export function useCareTasks() {
               message: "Ola! Passando para saber como voce esta. Estamos aqui para caminhar com voce.",
             })),
         );
+      } else if (error) {
+        setTasksLoadError(error.message);
       }
+
+      setIsLoadingTasks(false);
     }
 
     loadSupabaseFollowUps();
@@ -899,7 +936,7 @@ export function useCareTasks() {
     return { ok: true };
   }
 
-  return { tasks, addCareTask, completeCareTask };
+  return { tasks, addCareTask, completeCareTask, isLoadingTasks, tasksLoadError };
 }
 
 export function useCellReports() {
@@ -1154,7 +1191,8 @@ export function useSupervisorVisits() {
       const [visitsResult, cellsResult, profilesResult] = await Promise.all([
         supabase
           .from("supervisor_visits")
-          .select("id, church_id, cell_id, supervisor_id, leader_id, visit_date, visit_type, leader_present, health_score, notes, next_steps, created_at"),
+          .select("id, church_id, cell_id, supervisor_id, leader_id, visit_date, visit_type, leader_present, health_score, notes, next_steps, created_at")
+          .order("visit_date", { ascending: false }),
         supabase.from("cells").select("id, name"),
         supabase.from("profiles").select("id, name"),
       ]);
@@ -1790,7 +1828,7 @@ export function useDiscipleship() {
   }) {
     const existing = accesses.find((access) => access.personId === input.personId && access.trackId === input.trackId);
     if (existing) {
-      return { ok: true, access: existing };
+      return { ok: true, access: existing, alreadyReleased: true };
     }
 
     const localAccess: PersonTrackAccess = {
@@ -1828,7 +1866,7 @@ export function useDiscipleship() {
     }
 
     setAccesses((current) => [localAccess, ...current]);
-    return { ok: true, access: localAccess };
+    return { ok: true, access: localAccess, alreadyReleased: false };
   }
 
   async function updateVideoProgress(input: {
@@ -2167,6 +2205,8 @@ export function usePastoralNotes() {
 
 export function usePastoralReminders() {
   const [reminders, setReminders] = useState<PastoralReminder[]>([]);
+  const [isLoadingReminders, setIsLoadingReminders] = useState(true);
+  const [remindersLoadError, setRemindersLoadError] = useState("");
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -2183,12 +2223,14 @@ export function usePastoralReminders() {
 
   useEffect(() => {
     async function loadSupabaseReminders() {
+      setIsLoadingReminders(true);
       const { data, error } = await supabase
         .from("pastoral_reminders")
         .select("id, church_id, assigned_to, title, description, reminder_type, due_at, status, person_id, cell_id, created_by, created_at, completed_at")
         .order("due_at", { ascending: true });
 
       if (!error && data) {
+        setRemindersLoadError("");
         setReminders(
           data.map((reminder) => ({
             id: reminder.id,
@@ -2206,7 +2248,11 @@ export function usePastoralReminders() {
             completedAt: reminder.completed_at ?? undefined,
           })),
         );
+      } else if (error) {
+        setRemindersLoadError(error.message);
       }
+
+      setIsLoadingReminders(false);
     }
 
     loadSupabaseReminders();
@@ -2362,11 +2408,13 @@ export function usePastoralReminders() {
     return { ok: true };
   }
 
-  return { reminders, addReminder, completeReminder };
+  return { reminders, addReminder, completeReminder, isLoadingReminders, remindersLoadError };
 }
 
 export function usePrayerRequests() {
   const [requests, setRequests] = useState<PrayerRequest[]>([]);
+  const [isLoadingRequests, setIsLoadingRequests] = useState(true);
+  const [requestsLoadError, setRequestsLoadError] = useState("");
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -2383,12 +2431,14 @@ export function usePrayerRequests() {
 
   useEffect(() => {
     async function loadSupabasePrayerRequests() {
+      setIsLoadingRequests(true);
       const { data, error } = await supabase
         .from("prayer_requests")
         .select("id, church_id, person_id, cell_id, title, request, visibility, status, created_by, created_by_name, answered_note, created_at, updated_at")
         .order("created_at", { ascending: false });
 
       if (!error && data) {
+        setRequestsLoadError("");
         setRequests(
           data.map((request) => ({
             id: request.id,
@@ -2406,7 +2456,11 @@ export function usePrayerRequests() {
             updatedAt: request.updated_at ?? undefined,
           })),
         );
+      } else if (error) {
+        setRequestsLoadError(error.message);
       }
+
+      setIsLoadingRequests(false);
     }
 
     loadSupabasePrayerRequests();
@@ -2571,7 +2625,401 @@ export function usePrayerRequests() {
     return { ok: true };
   }
 
-  return { requests, addPrayerRequest, updatePrayerStatus };
+  return { requests, addPrayerRequest, updatePrayerStatus, isLoadingRequests, requestsLoadError };
+}
+
+export function usePeacePairs() {
+  const [pairs, setPairs] = useState<PeacePair[]>([]);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setHydrated(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (hydrated) {
+      writeJson(PEACE_PAIRS_KEY, pairs);
+    }
+  }, [hydrated, pairs]);
+
+  useEffect(() => {
+    async function loadSupabasePeacePairs() {
+      const { data, error } = await supabase
+        .from("peace_pairs")
+        .select("id, church_id, cell_id, name, phone, has_house, house_id, created_by, created_at")
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        setPairs(data.map(mapSupabasePeacePair));
+      }
+    }
+
+    loadSupabasePeacePairs();
+  }, []);
+
+  useOfflineSyncSuccess((detail) => {
+    if (detail.type !== "peace-pair" || !detail.localId || !detail.syncedId) {
+      return;
+    }
+
+    setPairs((current) =>
+      current.map((pair) =>
+        pair.id === detail.localId
+          ? { ...pair, id: detail.syncedId ?? pair.id, createdAt: detail.createdAt ?? pair.createdAt }
+          : pair,
+      ),
+    );
+  });
+
+  async function addPeacePair(input: {
+    churchId: string;
+    cellId: string;
+    name: string;
+    phone: string;
+    houseId?: string;
+    createdBy: string;
+    persistToSupabase?: boolean;
+  }) {
+    const localPair: PeacePair = {
+      id: `peace-pair-${Date.now()}`,
+      churchId: input.churchId,
+      cellId: input.cellId,
+      name: input.name,
+      phone: input.phone,
+      hasHouse: Boolean(input.houseId),
+      houseId: input.houseId,
+      createdBy: input.createdBy,
+      createdAt: new Date().toISOString(),
+    };
+    setPairs((current) => [localPair, ...current]);
+
+    if (!input.persistToSupabase) {
+      return { ok: true, pair: localPair };
+    }
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      enqueueOfflineAction({
+        type: "peace-pair",
+        payload: {
+          localId: localPair.id,
+          churchId: input.churchId,
+          cellId: input.cellId,
+          name: input.name,
+          phone: input.phone,
+          houseId: input.houseId,
+          createdBy: input.createdBy,
+        },
+      });
+      return {
+        ok: false,
+        pair: localPair,
+        error: "Sem internet. A dupla ficou salva no aparelho e entrou na fila de sincronizacao.",
+      };
+    }
+
+    const { data, error } = await supabase
+      .from("peace_pairs")
+      .insert({
+        church_id: input.churchId,
+        cell_id: input.cellId,
+        name: input.name,
+        phone: input.phone || null,
+        has_house: Boolean(input.houseId),
+        house_id: input.houseId || null,
+        created_by: input.createdBy,
+      })
+      .select("id, created_at")
+      .single();
+
+    if (error) {
+      enqueueOfflineAction({
+        type: "peace-pair",
+        payload: {
+          localId: localPair.id,
+          churchId: input.churchId,
+          cellId: input.cellId,
+          name: input.name,
+          phone: input.phone,
+          houseId: input.houseId,
+          createdBy: input.createdBy,
+        },
+      });
+      return { ok: false, pair: localPair, error: error.message };
+    }
+
+    if (data) {
+      setPairs((current) =>
+        current.map((pair) =>
+          pair.id === localPair.id ? { ...pair, id: data.id, createdAt: data.created_at } : pair,
+        ),
+      );
+      return { ok: true, pair: { ...localPair, id: data.id, createdAt: data.created_at } };
+    }
+
+    return { ok: true, pair: localPair };
+  }
+
+  async function updatePeacePairLink(input: { pairId: string; houseId?: string; persistToSupabase?: boolean }) {
+    if (input.persistToSupabase) {
+      const { error } = await supabase
+        .from("peace_pairs")
+        .update({ has_house: Boolean(input.houseId), house_id: input.houseId || null })
+        .eq("id", input.pairId);
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setPairs((current) =>
+      current.map((pair) =>
+        pair.id === input.pairId ? { ...pair, hasHouse: Boolean(input.houseId), houseId: input.houseId } : pair,
+      ),
+    );
+
+    return { ok: true };
+  }
+
+  return { pairs, addPeacePair, updatePeacePairLink };
+}
+
+export function usePeaceHouses() {
+  const [houses, setHouses] = useState<PeaceHouse[]>([]);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setHydrated(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (hydrated) {
+      writeJson(PEACE_HOUSES_KEY, houses);
+    }
+  }, [hydrated, houses]);
+
+  useEffect(() => {
+    async function loadSupabasePeaceHouses() {
+      const { data, error } = await supabase
+        .from("peace_houses")
+        .select(
+          "id, church_id, cell_id, full_name, age, sex, phone, address, house_number, neighborhood, city, has_pair, pair_id, created_by, created_at",
+        )
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        setHouses(data.map(mapSupabasePeaceHouse));
+      }
+    }
+
+    loadSupabasePeaceHouses();
+  }, []);
+
+  useOfflineSyncSuccess((detail) => {
+    if (detail.type !== "peace-house" || !detail.localId || !detail.syncedId) {
+      return;
+    }
+
+    setHouses((current) =>
+      current.map((house) =>
+        house.id === detail.localId
+          ? { ...house, id: detail.syncedId ?? house.id, createdAt: detail.createdAt ?? house.createdAt }
+          : house,
+      ),
+    );
+  });
+
+  async function addPeaceHouse(input: {
+    churchId: string;
+    cellId?: string;
+    fullName: string;
+    age?: number;
+    sex?: PeaceHouse["sex"];
+    phone: string;
+    address: string;
+    houseNumber: string;
+    neighborhood: string;
+    city: string;
+    pairId?: string;
+    createdBy: string;
+    persistToSupabase?: boolean;
+  }) {
+    const localHouse: PeaceHouse = {
+      id: `peace-house-${Date.now()}`,
+      churchId: input.churchId,
+      cellId: input.cellId,
+      fullName: input.fullName,
+      age: input.age,
+      sex: input.sex,
+      phone: input.phone,
+      address: input.address,
+      houseNumber: input.houseNumber,
+      neighborhood: input.neighborhood,
+      city: input.city,
+      hasPair: Boolean(input.pairId),
+      pairId: input.pairId,
+      createdBy: input.createdBy,
+      createdAt: new Date().toISOString(),
+    };
+    setHouses((current) => [localHouse, ...current]);
+
+    if (!input.persistToSupabase) {
+      return { ok: true, house: localHouse };
+    }
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      enqueueOfflineAction({
+        type: "peace-house",
+        payload: {
+          localId: localHouse.id,
+          churchId: input.churchId,
+          cellId: input.cellId,
+          fullName: input.fullName,
+          age: input.age,
+          sex: input.sex,
+          phone: input.phone,
+          address: input.address,
+          houseNumber: input.houseNumber,
+          neighborhood: input.neighborhood,
+          city: input.city,
+          pairId: input.pairId,
+          createdBy: input.createdBy,
+        },
+      });
+      return {
+        ok: false,
+        house: localHouse,
+        error: "Sem internet. A casa ficou salva no aparelho e entrou na fila de sincronizacao.",
+      };
+    }
+
+    const { data, error } = await supabase
+      .from("peace_houses")
+      .insert({
+        church_id: input.churchId,
+        cell_id: input.cellId || null,
+        full_name: input.fullName,
+        age: input.age ?? null,
+        sex: input.sex || null,
+        phone: input.phone || null,
+        address: input.address,
+        house_number: input.houseNumber || null,
+        neighborhood: input.neighborhood || null,
+        city: input.city || null,
+        has_pair: Boolean(input.pairId),
+        pair_id: input.pairId || null,
+        created_by: input.createdBy,
+      })
+      .select("id, created_at")
+      .single();
+
+    if (error) {
+      enqueueOfflineAction({
+        type: "peace-house",
+        payload: {
+          localId: localHouse.id,
+          churchId: input.churchId,
+          cellId: input.cellId,
+          fullName: input.fullName,
+          age: input.age,
+          sex: input.sex,
+          phone: input.phone,
+          address: input.address,
+          houseNumber: input.houseNumber,
+          neighborhood: input.neighborhood,
+          city: input.city,
+          pairId: input.pairId,
+          createdBy: input.createdBy,
+        },
+      });
+      return { ok: false, house: localHouse, error: error.message };
+    }
+
+    if (data) {
+      setHouses((current) =>
+        current.map((house) =>
+          house.id === localHouse.id ? { ...house, id: data.id, createdAt: data.created_at } : house,
+        ),
+      );
+      return { ok: true, house: { ...localHouse, id: data.id, createdAt: data.created_at } };
+    }
+
+    return { ok: true, house: localHouse };
+  }
+
+  async function updatePeaceHouseLink(input: { houseId: string; pairId?: string; persistToSupabase?: boolean }) {
+    if (input.persistToSupabase) {
+      const { error } = await supabase
+        .from("peace_houses")
+        .update({ has_pair: Boolean(input.pairId), pair_id: input.pairId || null })
+        .eq("id", input.houseId);
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setHouses((current) =>
+      current.map((house) =>
+        house.id === input.houseId ? { ...house, hasPair: Boolean(input.pairId), pairId: input.pairId } : house,
+      ),
+    );
+
+    return { ok: true };
+  }
+
+  return { houses, addPeaceHouse, updatePeaceHouseLink };
+}
+
+export function useChurchSubscription(churchId: string) {
+  const [subscription, setSubscription] = useState<ChurchSubscription | null>(null);
+  const [isLoadingSubscription, setIsLoadingSubscription] = useState(true);
+
+  async function refreshSubscription() {
+    if (!churchId || churchId === "sem-igreja" || churchId === "igreja-central") {
+      setIsLoadingSubscription(false);
+      return;
+    }
+
+    setIsLoadingSubscription(true);
+    const { data, error } = await supabase
+      .from("church_subscriptions")
+      .select(
+        "church_id, stripe_customer_id, stripe_subscription_id, tier, status, trial_ends_at, current_period_end, cancel_at_period_end, updated_at",
+      )
+      .eq("church_id", churchId)
+      .maybeSingle();
+
+    setIsLoadingSubscription(false);
+
+    if (!error && data) {
+      setSubscription({
+        churchId: data.church_id,
+        stripeCustomerId: data.stripe_customer_id ?? undefined,
+        stripeSubscriptionId: data.stripe_subscription_id ?? undefined,
+        tier: (data.tier as ChurchSubscription["tier"]) ?? undefined,
+        status: data.status as ChurchSubscription["status"],
+        trialEndsAt: data.trial_ends_at ?? undefined,
+        currentPeriodEnd: data.current_period_end ?? undefined,
+        cancelAtPeriodEnd: data.cancel_at_period_end ?? false,
+        updatedAt: data.updated_at,
+      });
+    } else {
+      setSubscription(null);
+    }
+  }
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      refreshSubscription();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [churchId]);
+
+  return { subscription, isLoadingSubscription, refreshSubscription };
 }
 
 export function useChurchSettings(churchId: string) {
@@ -2815,7 +3263,7 @@ export function useCertificates(churchId: string) {
     );
 
     if (existing) {
-      return { ok: true, certificate: existing };
+      return { ok: true, certificate: existing, alreadyIssued: true };
     }
 
     const localCertificate: CertificateRecord = {
@@ -2850,7 +3298,7 @@ export function useCertificates(churchId: string) {
     }
 
     setCertificates((current) => [localCertificate, ...current]);
-    return { ok: true, certificate: localCertificate };
+    return { ok: true, certificate: localCertificate, alreadyIssued: false };
   }
 
   return { certificates, issueCertificate };
@@ -2939,6 +3387,15 @@ export function useCheckIns(churchId: string) {
       if (data) {
         localCheckIn.id = data.id;
         localCheckIn.createdAt = data.created_at;
+      }
+
+      if (input.personId) {
+        await supabase.rpc("record_checkin_attendance", {
+          p_cell_id: input.cellId,
+          p_person_id: input.personId,
+          p_checkin_type: input.checkinType,
+          p_checkin_date: input.checkinDate,
+        });
       }
     }
 
@@ -3458,6 +3915,70 @@ export async function saveVideoReflection(input: {
   }
 
   return { ok: true };
+}
+
+export function usePersonReflections(personId: string) {
+  const [reflections, setReflections] = useState<VideoReflection[]>([]);
+  const [isLoadingReflections, setIsLoadingReflections] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadReflections() {
+      if (!personId) {
+        setReflections([]);
+        return;
+      }
+
+      setIsLoadingReflections(true);
+      const { data, error } = await supabase
+        .from("video_reflections")
+        .select("id, person_id, video_id, question, answer, created_at, updated_at, discipleship_videos(title)")
+        .eq("person_id", personId)
+        .order("created_at", { ascending: false });
+
+      if (!active) {
+        return;
+      }
+
+      setIsLoadingReflections(false);
+
+      if (!error && data) {
+        setReflections(
+          (data as unknown as {
+            id: string;
+            person_id: string;
+            video_id: string;
+            question: string;
+            answer: string;
+            created_at: string;
+            updated_at: string | null;
+            discipleship_videos: { title: string } | { title: string }[] | null;
+          }[]).map((row) => {
+            const video = Array.isArray(row.discipleship_videos) ? row.discipleship_videos[0] : row.discipleship_videos;
+            return {
+              id: row.id,
+              personId: row.person_id,
+              videoId: row.video_id,
+              videoTitle: video?.title ?? "Video",
+              question: row.question,
+              answer: row.answer,
+              createdAt: row.created_at,
+              updatedAt: row.updated_at ?? undefined,
+            };
+          }),
+        );
+      }
+    }
+
+    loadReflections();
+
+    return () => {
+      active = false;
+    };
+  }, [personId]);
+
+  return { reflections, isLoadingReflections };
 }
 
 export async function saveCellAttendance(input: {
