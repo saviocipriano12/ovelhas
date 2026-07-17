@@ -173,15 +173,24 @@ export function AppShell({
       <aside className="fixed left-0 top-0 hidden h-screen w-72 border-r border-white/70 bg-white/75 shadow-sm backdrop-blur-xl lg:flex lg:flex-col">
         <div className="shrink-0 p-5 pb-3">
           <Link href={homeHref} className="flex items-center gap-3 rounded-2xl p-1 hover:bg-white/60">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-900 text-lg font-black text-white shadow-lg shadow-emerald-900/15">
-              O
-            </div>
+            {churchSettings.logoUrl ? (
+              <img
+                src={churchSettings.logoUrl}
+                alt={churchSettings.churchName}
+                className="h-11 w-11 shrink-0 rounded-2xl object-cover shadow-lg shadow-emerald-900/15"
+              />
+            ) : (
+              <div
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg font-black text-white shadow-lg shadow-emerald-900/15"
+                style={{ backgroundColor: churchSettings.primaryColor || "#064e3b" }}
+              >
+                {churchSettings.churchName.charAt(0).toUpperCase() || "O"}
+              </div>
+            )}
             <div className="min-w-0">
-              <p className="text-lg font-semibold leading-tight text-slate-950">Ovelhas</p>
-              <p className="text-xs font-medium text-slate-500">by Savio Cipriano</p>
-              <p className="truncate text-xs font-bold text-emerald-700">
-                {roleLabels[currentUser.role]} · {churchSettings.churchName}
-              </p>
+              <p className="truncate text-lg font-semibold leading-tight text-slate-950">{churchSettings.churchName}</p>
+              <p className="text-xs font-medium text-slate-500">Ovelhas</p>
+              <p className="truncate text-xs font-bold text-emerald-700">{roleLabels[currentUser.role]}</p>
             </div>
           </Link>
         </div>
@@ -237,6 +246,7 @@ export function AppShell({
               </button>
             )}
           </div>
+          <p className="mt-2 text-center text-[10px] font-semibold text-slate-400">Feito com Ovelhas</p>
         </div>
       </aside>
 
@@ -250,9 +260,17 @@ export function AppShell({
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,#34d39955_0,transparent_38%),linear-gradient(135deg,#02061700,#064e3b55)]" />
             <div className="relative flex items-center justify-between gap-3">
               <Link href={homeHref} className="flex min-w-0 items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-lg font-black text-emerald-950">
-                  O
-                </span>
+                {churchSettings.logoUrl ? (
+                  <img
+                    src={churchSettings.logoUrl}
+                    alt={churchSettings.churchName}
+                    className="h-10 w-10 shrink-0 rounded-2xl object-cover"
+                  />
+                ) : (
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-lg font-black text-emerald-950">
+                    {churchSettings.churchName.charAt(0).toUpperCase() || "O"}
+                  </span>
+                )}
                 <span className="min-w-0">
                   <span className="block truncate text-[10px] font-black uppercase text-emerald-200">
                     {roleLabels[currentUser.role]} · {churchSettings.churchName}

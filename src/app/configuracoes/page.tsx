@@ -1,12 +1,14 @@
 "use client";
 
-import { FormEvent, useMemo } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ClipboardCheck,
   CreditCard,
   Download,
   FileText,
+  ImageUp,
+  Loader2,
   MessageSquareText,
   Palette,
   ShieldCheck,
@@ -27,6 +29,7 @@ import {
   usePrayerRequests,
 } from "@/lib/local-store";
 import { SUBSCRIPTION_PLANS, isSubscriptionBlocked, type SubscriptionTier } from "@/lib/subscription-plans";
+import { supabase } from "@/lib/supabase/client";
 
 const SUBSCRIPTION_STATUS_LABELS: Record<string, string> = {
   trialing: "Em teste gratis",
@@ -62,10 +65,54 @@ export default function SettingsPage() {
   const { events } = useActivityEvents();
   const { requests } = usePrayerRequests();
   const toast = useToast();
+  const [logoPreview, setLogoPreview] = useState(settings.logoUrl);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visibleEvents = getScopedActivityEvents(currentUser, events, cells, people, isDemoMode);
   const canManage = currentUser.role === "admin" || currentUser.role === "pastor";
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setLogoPreview(settings.logoUrl);
+    });
+  }, [settings.logoUrl]);
+
+  async function handleLogoFile(file?: File | null) {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Escolha uma imagem para o logo.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Use uma imagem menor que 5 MB.");
+      return;
+    }
+
+    if (isDemoMode) {
+      const reader = new FileReader();
+      reader.onload = () => setLogoPreview(String(reader.result || ""));
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    setUploadingLogo(true);
+    const extension = file.name.split(".").pop() || "png";
+    const path = `${currentUser.churchId}/${Date.now()}.${extension}`;
+    const { error: uploadError } = await supabase.storage.from("church-logos").upload(path, file, { upsert: true });
+    setUploadingLogo(false);
+
+    if (uploadError) {
+      toast.error(`Nao consegui enviar o logo: ${uploadError.message}`);
+      return;
+    }
+
+    const { data } = supabase.storage.from("church-logos").getPublicUrl(path);
+    setLogoPreview(data.publicUrl);
+    toast.success("Logo carregado. Clique em salvar para confirmar.");
+  }
   const exportSummary = useMemo(
     () => ({
       church: settings.churchName,
@@ -201,7 +248,31 @@ export default function SettingsPage() {
           <SectionHeader eyebrow="Identidade" title="Marca e dados da igreja" />
           <div className="grid gap-3 md:grid-cols-2">
             <input name="churchName" defaultValue={settings.churchName} disabled={!canManage} className="field-control disabled:bg-slate-50" placeholder="Nome da igreja" />
-            <input name="logoUrl" defaultValue={settings.logoUrl} disabled={!canManage} className="field-control disabled:bg-slate-50" placeholder="URL do logo" />
+            <div className="flex items-center gap-2 md:col-span-2">
+              {logoPreview && (
+                <img src={logoPreview} alt="Logo da igreja" className="h-11 w-11 shrink-0 rounded-2xl object-cover" />
+              )}
+              <input
+                name="logoUrl"
+                value={logoPreview}
+                onChange={(event) => setLogoPreview(event.target.value)}
+                disabled={!canManage}
+                className="field-control flex-1 disabled:bg-slate-50"
+                placeholder="URL do logo (ou envie um arquivo)"
+              />
+              {canManage && (
+                <label className="flex min-h-12 shrink-0 cursor-pointer items-center gap-2 rounded-[18px] bg-slate-950 px-3 text-xs font-black text-white">
+                  {uploadingLogo ? <Loader2 size={16} className="animate-spin" /> : <ImageUp size={16} />}
+                  Enviar
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => handleLogoFile(event.target.files?.[0])}
+                  />
+                </label>
+              )}
+            </div>
             <input name="city" defaultValue={settings.city} disabled={!canManage} className="field-control disabled:bg-slate-50" placeholder="Cidade" />
             <input name="state" defaultValue={settings.state} disabled={!canManage} className="field-control disabled:bg-slate-50" placeholder="Estado" />
             <label className="flex min-h-14 items-center gap-3 rounded-[18px] border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700">

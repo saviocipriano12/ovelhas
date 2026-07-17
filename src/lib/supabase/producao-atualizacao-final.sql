@@ -1527,3 +1527,46 @@ using (
 );
 
 grant delete on public.peace_pairs to authenticated;
+
+-- Complemento 2026-07-17 (6): upload de logo real da igreja.
+
+insert into storage.buckets (id, name, public)
+values ('church-logos', 'church-logos', true)
+on conflict (id) do nothing;
+
+drop policy if exists "church_logos_public_read" on storage.objects;
+create policy "church_logos_public_read"
+on storage.objects
+for select
+using (bucket_id = 'church-logos');
+
+drop policy if exists "church_logos_insert_leadership" on storage.objects;
+create policy "church_logos_insert_leadership"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'church-logos'
+  and exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.role in ('admin', 'pastor')
+  )
+);
+
+drop policy if exists "church_logos_update_leadership" on storage.objects;
+create policy "church_logos_update_leadership"
+on storage.objects
+for update
+to authenticated
+using (bucket_id = 'church-logos')
+with check (
+  bucket_id = 'church-logos'
+  and exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.role in ('admin', 'pastor')
+  )
+);
