@@ -21,15 +21,24 @@ create policy "profile_photos_insert_own"
 on storage.objects
 for insert
 to authenticated
-with check (bucket_id = 'profile-photos');
+with check (
+  bucket_id = 'profile-photos'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
 
 drop policy if exists "profile_photos_update_own" on storage.objects;
 create policy "profile_photos_update_own"
 on storage.objects
 for update
 to authenticated
-using (bucket_id = 'profile-photos')
-with check (bucket_id = 'profile-photos');
+using (
+  bucket_id = 'profile-photos'
+  and (storage.foldername(name))[1] = auth.uid()::text
+)
+with check (
+  bucket_id = 'profile-photos'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
 
 drop policy if exists "notice_media_public_read" on storage.objects;
 create policy "notice_media_public_read"
@@ -44,6 +53,7 @@ for insert
 to authenticated
 with check (
   bucket_id = 'notice-media'
+  and (storage.foldername(name))[1] = public.current_app_church_id()::text
   and exists (
     select 1
     from public.profiles p

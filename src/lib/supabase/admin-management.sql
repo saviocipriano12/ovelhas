@@ -68,11 +68,14 @@ drop policy if exists "profiles_select_own_or_church_leadership" on public.profi
 drop policy if exists "profiles_select_supervisor_or_leader_names" on public.profiles;
 drop policy if exists "profiles_select_by_role_safe" on public.profiles;
 drop policy if exists "profiles_select_authenticated" on public.profiles;
-create policy "profiles_select_authenticated"
+create policy "profiles_select_by_church_safe"
 on public.profiles
 for select
 to authenticated
-using (true);
+using (
+  id = auth.uid()
+  or church_id = public.current_app_church_id()
+);
 
 drop policy if exists "cells_insert_admin_or_pastor" on public.cells;
 drop policy if exists "cells_insert_by_operational_leadership" on public.cells;

@@ -45,7 +45,8 @@ export async function POST(request: Request) {
   try {
     event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch (error) {
-    return NextResponse.json({ error: `Assinatura invalida: ${(error as Error).message}` }, { status: 400 });
+    console.error("[stripe/webhook] assinatura invalida:", error);
+    return NextResponse.json({ error: "Assinatura invalida." }, { status: 400 });
   }
 
   try {
@@ -121,7 +122,8 @@ export async function POST(request: Request) {
         break;
     }
   } catch (error) {
-    return NextResponse.json({ error: `Falha ao processar evento: ${(error as Error).message}` }, { status: 500 });
+    console.error("[stripe/webhook] falha ao processar evento:", event.type, error);
+    return NextResponse.json({ error: "Falha ao processar evento." }, { status: 500 });
   }
 
   return NextResponse.json({ received: true });

@@ -1397,7 +1397,9 @@ export function useActivityEvents() {
       setEventLoadError("");
       const { data, error } = await supabase
         .from("activity_events")
-        .select("id, church_id, actor_user_id, actor_name, actor_role, action, description, target_type, target_id, target_name, cell_id, person_id, visibility, target_roles, created_at");
+        .select("id, church_id, actor_user_id, actor_name, actor_role, action, description, target_type, target_id, target_name, cell_id, person_id, visibility, target_roles, created_at")
+        .order("created_at", { ascending: false })
+        .limit(500);
 
       setIsLoadingEvents(false);
 

@@ -233,11 +233,9 @@ $$;
 
 drop policy if exists "profiles_select_own_or_church_leadership" on public.profiles;
 drop policy if exists "profiles_select_authenticated" on public.profiles;
-create policy "profiles_select_authenticated"
-on public.profiles
-for select
-to authenticated
-using (true);
+-- Policy segura por igreja e criada em admin-management.sql (depois que
+-- current_app_church_id() existe). Ate la, profiles fica sem policy de select,
+-- ou seja, ninguem le a tabela por engano -- falha fechado, nao aberto.
 
 drop policy if exists "cells_select_by_role" on public.cells;
 create policy "cells_select_by_role"

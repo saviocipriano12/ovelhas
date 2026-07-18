@@ -1,10 +1,16 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { rateLimit } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requirePlatformAdmin } from "@/lib/supabase/platform-auth";
 
 export async function POST(request: Request) {
+  const limited = rateLimit(request, "plataforma-impersonate", 10, 5 * 60 * 1000);
+  if (!limited.ok) {
+    return NextResponse.json({ error: "Muitas tentativas. Aguarde um pouco e tente novamente." }, { status: 429 });
+  }
+
   const auth = await requirePlatformAdmin(request);
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -43,7 +49,8 @@ export async function POST(request: Request) {
   });
 
   if (linkError || !linkData?.properties?.hashed_token) {
-    return NextResponse.json({ error: linkError?.message ?? "Nao foi possivel gerar o acesso." }, { status: 500 });
+    console.error("[plataforma/impersonate] falha ao gerar link:", linkError);
+    return NextResponse.json({ error: "Nao foi possivel gerar o acesso." }, { status: 500 });
   }
 
   const anonClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
@@ -56,7 +63,8 @@ export async function POST(request: Request) {
   });
 
   if (sessionError || !sessionData.session) {
-    return NextResponse.json({ error: sessionError?.message ?? "Nao foi possivel iniciar o acesso." }, { status: 500 });
+    console.error("[plataforma/impersonate] falha ao iniciar sessao:", sessionError);
+    return NextResponse.json({ error: "Nao foi possivel iniciar o acesso." }, { status: 500 });
   }
 
   await supabaseAdmin.from("platform_audit_log").insert({

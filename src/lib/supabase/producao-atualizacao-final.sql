@@ -1568,6 +1568,7 @@ for insert
 to authenticated
 with check (
   bucket_id = 'church-logos'
+  and (storage.foldername(name))[1] = public.current_app_church_id()::text
   and exists (
     select 1
     from public.profiles p
@@ -1581,9 +1582,13 @@ create policy "church_logos_update_leadership"
 on storage.objects
 for update
 to authenticated
-using (bucket_id = 'church-logos')
+using (
+  bucket_id = 'church-logos'
+  and (storage.foldername(name))[1] = public.current_app_church_id()::text
+)
 with check (
   bucket_id = 'church-logos'
+  and (storage.foldername(name))[1] = public.current_app_church_id()::text
   and exists (
     select 1
     from public.profiles p
@@ -1829,3 +1834,82 @@ using (
   church_id = public.current_app_church_id()
   and (public.current_app_role()::text in ('admin', 'pastor') or public.current_app_has_role('consolidation'))
 );
+
+-- Complemento 2026-07-18 (1): correcao critica de seguranca em Storage.
+-- As policies antigas de profile-photos e notice-media (criadas por media-storage.sql)
+-- so checavam bucket_id, sem checar dono/igreja do objeto. Qualquer usuario autenticado
+-- de qualquer igreja podia sobrescrever a foto de perfil ou a midia de aviso de outra
+-- pessoa/igreja. Path convention ja usada pelo app: profile-photos/{userId}/arquivo,
+-- notice-media/{churchId}/arquivo, church-logos/{churchId}/arquivo.
+
+drop policy if exists "profile_photos_insert_own" on storage.objects;
+create policy "profile_photos_insert_own"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'profile-photos'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+drop policy if exists "profile_photos_update_own" on storage.objects;
+create policy "profile_photos_update_own"
+on storage.objects
+for update
+to authenticated
+using (
+  bucket_id = 'profile-photos'
+  and (storage.foldername(name))[1] = auth.uid()::text
+)
+with check (
+  bucket_id = 'profile-photos'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+drop policy if exists "notice_media_insert_leadership" on storage.objects;
+create policy "notice_media_insert_leadership"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'notice-media'
+  and (storage.foldername(name))[1] = public.current_app_church_id()::text
+  and exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and p.role in ('admin', 'pastor', 'supervisor', 'leader', 'communication')
+  )
+);
+
+-- Complemento 2026-07-18 (2): indices ausentes em tabelas que crescem por
+-- pessoa x evento (auditoria de performance). Sem esses indices, as policies
+-- de RLS que filtram por church_id/person_id/cell_id viram varreduras
+-- sequenciais conforme a base cresce.
+
+create index if not exists idx_follow_ups_church_id on public.follow_ups (church_id);
+create index if not exists idx_follow_ups_person_id on public.follow_ups (person_id);
+create index if not exists idx_follow_ups_assigned_to on public.follow_ups (assigned_to);
+
+create index if not exists idx_video_progress_person_id on public.video_progress (person_id);
+
+create index if not exists idx_checkins_church_id on public.checkins (church_id);
+create index if not exists idx_checkins_cell_id on public.checkins (cell_id);
+create index if not exists idx_checkins_person_id on public.checkins (person_id);
+create index if not exists idx_checkins_checkin_date on public.checkins (checkin_date);
+
+create index if not exists idx_cell_rsvps_cell_id on public.cell_rsvps (cell_id);
+
+create index if not exists idx_pastoral_notes_person_id on public.pastoral_notes (person_id);
+
+create index if not exists idx_pastoral_reminders_church_id on public.pastoral_reminders (church_id);
+create index if not exists idx_pastoral_reminders_person_id on public.pastoral_reminders (person_id);
+
+create index if not exists idx_prayer_requests_church_id on public.prayer_requests (church_id);
+
+create index if not exists idx_peace_pairs_church_id on public.peace_pairs (church_id);
+create index if not exists idx_peace_pairs_cell_id on public.peace_pairs (cell_id);
+
+create index if not exists idx_peace_houses_church_id on public.peace_houses (church_id);
+
+create index if not exists idx_person_track_access_person_id on public.person_track_access (person_id);

@@ -39,8 +39,9 @@ function buildDigestHtml(input: {
 }
 
 export async function GET(request: Request) {
+  const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
   }
 
@@ -48,7 +49,7 @@ export async function GET(request: Request) {
 
   const { data: churches, error: churchesError } = await supabaseAdmin.from("churches").select("id, name");
   if (churchesError || !churches) {
-    return NextResponse.json({ error: churchesError?.message ?? "Erro ao buscar igrejas." }, { status: 500 });
+    return NextResponse.json({ error: "Erro ao buscar igrejas." }, { status: 500 });
   }
 
   let sent = 0;
