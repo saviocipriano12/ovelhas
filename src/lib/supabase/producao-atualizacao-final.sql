@@ -448,6 +448,8 @@ $$;
 
 grant execute on function public.bootstrap_platform_admin() to authenticated;
 
+drop function if exists public.platform_list_churches();
+
 create or replace function public.platform_list_churches()
 returns table (
   church_id uuid,
@@ -1611,6 +1613,8 @@ as $$
 $$;
 
 grant execute on function public.current_app_has_role(app_role) to authenticated;
+
+drop function if exists public.current_app_user();
 
 create or replace function public.current_app_user()
 returns jsonb
