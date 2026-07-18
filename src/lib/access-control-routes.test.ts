@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canAccessRoute, getDefaultRoute, isPendingAccount } from "@/lib/access-control";
+import { canAccessRoute, getDefaultRoute, hasRole, isPendingAccount } from "@/lib/access-control";
 import type { AppUser } from "@/lib/data";
 
 function makeUser(overrides: Partial<AppUser>): AppUser {
@@ -85,5 +85,31 @@ describe("isolamento de rota da plataforma (admin geral)", () => {
   it("platformAdmin acessa /plataforma independente do papel", () => {
     const platformAdmin = makeUser({ role: "admin", churchId: "church-a", platformAdmin: true });
     expect(canAccessRoute(platformAdmin, "/plataforma")).toBe(true);
+  });
+});
+
+describe("multiplas funcoes por pessoa", () => {
+  it("hasRole reconhece a funcao principal", () => {
+    const leader = makeUser({ role: "leader" });
+    expect(hasRole(leader, "leader")).toBe(true);
+    expect(hasRole(leader, "communication")).toBe(false);
+  });
+
+  it("hasRole reconhece uma funcao adicional, sem substituir a principal", () => {
+    const leaderWithComms = makeUser({ role: "leader", additionalRoles: ["communication"] });
+    expect(hasRole(leaderWithComms, "leader")).toBe(true);
+    expect(hasRole(leaderWithComms, "communication")).toBe(true);
+    expect(hasRole(leaderWithComms, "admin")).toBe(false);
+  });
+
+  it("canAccessRoute libera rotas da funcao adicional, somadas as da principal", () => {
+    const leaderWithConsolidation = makeUser({ role: "leader", additionalRoles: ["consolidation"] });
+    expect(canAccessRoute(leaderWithConsolidation, "/celulas")).toBe(true);
+    expect(canAccessRoute(leaderWithConsolidation, "/consolidacao")).toBe(true);
+  });
+
+  it("pessoa sem a funcao adicional continua sem acesso as rotas dela", () => {
+    const leaderOnly = makeUser({ role: "leader" });
+    expect(canAccessRoute(leaderOnly, "/consolidacao")).toBe(false);
   });
 });

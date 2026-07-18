@@ -32,6 +32,7 @@ type CurrentAppUserProfile = {
   role?: UserRole | null;
   person_id?: string | null;
   cell_ids?: string[] | null;
+  additional_roles?: UserRole[] | null;
 };
 
 function isPublicRoute(pathname: string) {
@@ -102,13 +103,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           platformAdmin,
           cellIds: rpcProfile.cell_ids ?? [],
           personId: rpcProfile.person_id ?? undefined,
+          additionalRoles: rpcProfile.additional_roles ?? [],
         });
         return;
       }
 
       const { data } = await supabase
         .from("profiles")
-        .select("id, church_id, name, role")
+        .select("id, church_id, name, role, additional_roles")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -156,6 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         platformAdmin,
         cellIds,
         personId: personResult.data?.id,
+        additionalRoles: (data?.additional_roles as UserRole[] | null) ?? [],
       });
     }
 

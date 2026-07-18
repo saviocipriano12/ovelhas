@@ -24,7 +24,7 @@ import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
 import { useToast } from "@/components/toast-provider";
-import { getScopedCells } from "@/lib/access-control";
+import { getScopedCells, hasRole } from "@/lib/access-control";
 import { isImageMedia, isVideoMedia, parseNoticeDescription } from "@/lib/church-notices";
 import type { UserRole } from "@/lib/data";
 import { notificationsEnabled, requestDeviceNotificationPermission } from "@/lib/device-notifications";
@@ -107,9 +107,9 @@ export default function NotificationsPage() {
   const [mediaUrl, setMediaUrl] = useState("");
   const [noticeAudiences, setNoticeAudiences] = useState<string[]>(["member"]);
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
-  const canSendToChurch = ["admin", "pastor", "communication"].includes(currentUser.role);
+  const canSendToChurch = hasRole(currentUser, "admin") || hasRole(currentUser, "pastor") || hasRole(currentUser, "communication");
   const canSendNotice =
-    ["admin", "pastor", "supervisor", "leader", "communication"].includes(currentUser.role) &&
+    (["admin", "pastor", "supervisor", "leader", "communication"] as const).some((role) => hasRole(currentUser, role)) &&
     (visibleCells.length > 0 || canSendToChurch);
 
   async function enableDeviceNotifications() {

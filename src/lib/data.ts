@@ -9,6 +9,7 @@ export type AppUser = {
   platformAdmin?: boolean;
   cellIds?: string[];
   personId?: string;
+  additionalRoles?: UserRole[];
 };
 
 export type Cell = {

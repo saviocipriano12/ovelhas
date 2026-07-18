@@ -102,6 +102,10 @@ const roleRoutes: Record<UserRole, string[]> = {
   member: ["/meu-discipulado", "/perfil", "/oracao", "/biblioteca", "/notificacoes", "/instalar", "/mais"],
 };
 
+export function hasRole(user: AppUser, role: UserRole) {
+  return user.role === role || Boolean(user.additionalRoles?.includes(role));
+}
+
 export function isPendingAccount(user: AppUser) {
   if (user.platformAdmin) {
     return false;
@@ -159,7 +163,7 @@ export function canAccessRoute(user: AppUser, pathname: string) {
     return true;
   }
 
-  const allowedRoutes = roleRoutes[user.role];
+  const allowedRoutes = [user.role, ...(user.additionalRoles ?? [])].flatMap((role) => roleRoutes[role]);
   if (allowedRoutes.includes("*")) {
     return true;
   }

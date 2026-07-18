@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { AlertTriangle, CheckCircle2, Crown, Eye, Save, ShieldCheck, Trash2, UserCog } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Crown, Eye, Layers, Save, ShieldCheck, Trash2, UserCog } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { useConfirm } from "@/components/confirm-dialog";
@@ -45,7 +45,7 @@ export default function ManagementPage() {
   const { cells, updateCellAssignment } = useCells();
   const { people } = useLocalPeople();
   const { visits } = useSupervisorVisits();
-  const { profiles, updateProfileRole, deleteProfileUser } = useProfiles();
+  const { profiles, updateProfileRole, updateProfileAdditionalRoles, deleteProfileUser } = useProfiles();
   const { addEvent } = useActivityEvents();
   const toast = useToast();
   const confirm = useConfirm();
@@ -54,6 +54,9 @@ export default function ManagementPage() {
   const [assignmentLeaderId, setAssignmentLeaderId] = useState("");
   const [roleUserId, setRoleUserId] = useState("");
   const [roleValue, setRoleValue] = useState<UserRole>("member");
+  const [extraRoleUserId, setExtraRoleUserId] = useState("");
+  const [extraRolesDraft, setExtraRolesDraft] = useState<UserRole[]>([]);
+  const [savingExtraRoles, setSavingExtraRoles] = useState(false);
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const visibleVisits = getScopedSupervisorVisits(currentUser, visits, cells, isDemoMode);
@@ -163,6 +166,34 @@ export default function ManagementPage() {
     }
 
     toast.success(`${user?.name ?? "Usuario"} agora esta como ${roleLabels[roleValue]}.`);
+  }
+
+  function selectExtraRoleUser(userId: string) {
+    setExtraRoleUserId(userId);
+    const user = visibleProfiles.find((profile) => profile.id === userId);
+    setExtraRolesDraft(user?.additionalRoles ?? []);
+  }
+
+  async function saveExtraRoles() {
+    if (!extraRoleUserId) {
+      toast.error("Escolha um usuario.");
+      return;
+    }
+
+    setSavingExtraRoles(true);
+    const result = await updateProfileAdditionalRoles({
+      userId: extraRoleUserId,
+      additionalRoles: extraRolesDraft,
+      persistToSupabase: !isDemoMode,
+    });
+    setSavingExtraRoles(false);
+
+    if (!result.ok) {
+      toast.error(`Nao consegui salvar as funcoes adicionais: ${result.error}`);
+      return;
+    }
+
+    toast.success("Funcoes adicionais atualizadas. A pessoa ja tem acesso as duas funcoes.");
   }
 
   async function handleDeleteUser(userId: string, userName: string) {
@@ -323,6 +354,64 @@ export default function ManagementPage() {
                   Alterar acesso
                 </button>
               </form>
+            )}
+
+            {canManageRoles && (
+              <div className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
+                <SectionHeader eyebrow="Acesso" title="Funcoes adicionais" />
+                <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                  Alem da funcao principal, a pessoa pode acumular outras (ex: lider que tambem cuida de comunicacao). O app libera as funcionalidades de todas as funcoes marcadas.
+                </p>
+                <div className="mt-3 space-y-3">
+                  <select
+                    value={extraRoleUserId}
+                    onChange={(event) => selectExtraRoleUser(event.target.value)}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                  >
+                    <option value="">Escolher usuario</option>
+                    {visibleProfiles.map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.name} - {roleLabels[profile.role]}
+                      </option>
+                    ))}
+                  </select>
+
+                  {extraRoleUserId && (
+                    <div className="flex flex-wrap gap-2">
+                      {(["leader", "supervisor", "consolidation", "communication"] as UserRole[])
+                        .filter((role) => role !== visibleProfiles.find((p) => p.id === extraRoleUserId)?.role)
+                        .map((role) => {
+                          const checked = extraRolesDraft.includes(role);
+                          return (
+                            <button
+                              key={role}
+                              type="button"
+                              onClick={() =>
+                                setExtraRolesDraft((current) =>
+                                  checked ? current.filter((item) => item !== role) : [...current, role],
+                                )
+                              }
+                              className={`flex min-h-10 items-center gap-1.5 rounded-2xl px-3 text-xs font-black transition ${
+                                checked ? "bg-emerald-900 text-white" : "bg-slate-100 text-slate-500"
+                              }`}
+                            >
+                              {checked && <CheckCircle2 size={14} />}
+                              {roleLabels[role]}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={saveExtraRoles}
+                  disabled={!extraRoleUserId || savingExtraRoles}
+                  className="primary-action mt-4 disabled:opacity-60"
+                >
+                  <Layers size={18} />
+                  {savingExtraRoles ? "Salvando..." : "Salvar funcoes adicionais"}
+                </button>
+              </div>
             )}
           </section>
         )}

@@ -1589,3 +1589,239 @@ with check (
     and p.role in ('admin', 'pastor')
   )
 );
+
+-- Complemento 2026-07-17 (8): multiplas funcoes por pessoa (ex: lider + comunicacao).
+
+alter table public.profiles add column if not exists additional_roles app_role[] not null default '{}';
+
+create or replace function public.current_app_has_role(check_role app_role)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+set row_security = off
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+    and (p.role = check_role or check_role = any(p.additional_roles))
+  )
+$$;
+
+grant execute on function public.current_app_has_role(app_role) to authenticated;
+
+create or replace function public.current_app_user()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  result jsonb;
+begin
+  if auth.uid() is null then
+    return null;
+  end if;
+
+  select jsonb_build_object(
+    'id', p.id,
+    'church_id', p.church_id,
+    'name', p.name,
+    'role', p.role,
+    'additional_roles', coalesce(to_jsonb(p.additional_roles), '[]'::jsonb),
+    'person_id', person_record.id,
+    'cell_ids', coalesce(
+      (
+        select jsonb_agg(distinct cell_scope.cell_id)
+        from (
+          select c.id as cell_id
+          from public.cells c
+          where c.church_id = p.church_id
+            and (c.leader_id = p.id or c.supervisor_id = p.id)
+
+          union
+
+          select person_record.cell_id
+          where person_record.cell_id is not null
+        ) cell_scope
+      ),
+      '[]'::jsonb
+    )
+  )
+  into result
+  from public.profiles p
+  left join public.people person_record
+    on person_record.person_user_id = p.id
+    and person_record.church_id = p.church_id
+  where p.id = auth.uid()
+  limit 1;
+
+  return result;
+end;
+$$;
+
+grant execute on function public.current_app_user() to authenticated;
+
+drop function if exists public.get_my_profiles();
+
+create or replace function public.get_my_profiles()
+returns table (
+  id uuid,
+  church_id uuid,
+  name text,
+  role app_role,
+  additional_roles app_role[]
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  viewer public.profiles%rowtype;
+begin
+  select *
+  into viewer
+  from public.profiles
+  where profiles.id = auth.uid()
+  limit 1;
+
+  if viewer.id is null then
+    return;
+  end if;
+
+  if viewer.role::text = 'member' then
+    return query
+    select p.id, p.church_id, p.name, p.role, p.additional_roles
+    from public.profiles p
+    where p.id = viewer.id;
+    return;
+  end if;
+
+  return query
+  select p.id, p.church_id, p.name, p.role, p.additional_roles
+  from public.profiles p
+  where p.church_id = viewer.church_id
+  order by p.name;
+end;
+$$;
+
+grant execute on function public.get_my_profiles() to authenticated;
+
+create or replace function public.update_profile_additional_roles(
+  target_user_id uuid,
+  new_roles app_role[]
+)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  target_church_id uuid;
+begin
+  select church_id into target_church_id from public.profiles where id = target_user_id;
+
+  if target_church_id is null then
+    raise exception 'Usuario nao encontrado.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.church_id = target_church_id
+      and p.role in ('admin', 'pastor')
+  ) then
+    raise exception 'Apenas admin ou pastor podem alterar funcoes adicionais.';
+  end if;
+
+  update public.profiles
+  set additional_roles = coalesce(new_roles, '{}')
+  where id = target_user_id;
+end;
+$$;
+
+grant execute on function public.update_profile_additional_roles(uuid, app_role[]) to authenticated;
+
+drop policy if exists "consolidation_reports_select_by_role" on public.consolidation_reports;
+create policy "consolidation_reports_select_by_role"
+on public.consolidation_reports
+for select
+to authenticated
+using (
+  church_id = public.current_app_church_id()
+  and (public.current_app_role()::text in ('admin', 'pastor') or public.current_app_has_role('consolidation'))
+);
+
+drop policy if exists "consolidation_reports_insert_by_role" on public.consolidation_reports;
+create policy "consolidation_reports_insert_by_role"
+on public.consolidation_reports
+for insert
+to authenticated
+with check (
+  church_id = public.current_app_church_id()
+  and (public.current_app_role()::text in ('admin', 'pastor') or public.current_app_has_role('consolidation'))
+);
+
+drop policy if exists "consolidation_reports_delete_by_role" on public.consolidation_reports;
+create policy "consolidation_reports_delete_by_role"
+on public.consolidation_reports
+for delete
+to authenticated
+using (
+  church_id = public.current_app_church_id()
+  and (
+    public.current_app_role()::text in ('admin', 'pastor')
+    or created_by = auth.uid()
+  )
+);
+
+drop policy if exists "consolidation_visitors_select_by_role" on public.consolidation_visitors;
+create policy "consolidation_visitors_select_by_role"
+on public.consolidation_visitors
+for select
+to authenticated
+using (
+  church_id = public.current_app_church_id()
+  and (public.current_app_role()::text in ('admin', 'pastor') or public.current_app_has_role('consolidation'))
+);
+
+drop policy if exists "consolidation_visitors_insert_by_role" on public.consolidation_visitors;
+create policy "consolidation_visitors_insert_by_role"
+on public.consolidation_visitors
+for insert
+to authenticated
+with check (
+  church_id = public.current_app_church_id()
+  and (public.current_app_role()::text in ('admin', 'pastor') or public.current_app_has_role('consolidation'))
+);
+
+drop policy if exists "consolidation_visitors_update_by_role" on public.consolidation_visitors;
+create policy "consolidation_visitors_update_by_role"
+on public.consolidation_visitors
+for update
+to authenticated
+using (
+  church_id = public.current_app_church_id()
+  and (public.current_app_role()::text in ('admin', 'pastor') or public.current_app_has_role('consolidation'))
+)
+with check (
+  church_id = public.current_app_church_id()
+  and (public.current_app_role()::text in ('admin', 'pastor') or public.current_app_has_role('consolidation'))
+);
+
+drop policy if exists "consolidation_visitors_delete_by_role" on public.consolidation_visitors;
+create policy "consolidation_visitors_delete_by_role"
+on public.consolidation_visitors
+for delete
+to authenticated
+using (
+  church_id = public.current_app_church_id()
+  and (public.current_app_role()::text in ('admin', 'pastor') or public.current_app_has_role('consolidation'))
+);

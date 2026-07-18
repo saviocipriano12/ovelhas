@@ -776,18 +776,25 @@ export function useProfiles() {
       const { data, error } = rpcResult.error && isMissingRpc(rpcResult.error.message)
         ? await supabase
             .from("profiles")
-            .select("id, church_id, name, role")
+            .select("id, church_id, name, role, additional_roles")
             .order("name", { ascending: true })
         : rpcResult;
 
       if (!error && data) {
-        const profileRows = data as { id: string; church_id: string | null; name: string; role: UserRole }[];
+        const profileRows = data as {
+          id: string;
+          church_id: string | null;
+          name: string;
+          role: UserRole;
+          additional_roles: UserRole[] | null;
+        }[];
         setProfiles(
           profileRows.map((profile) => ({
             id: profile.id,
             name: profile.name,
             role: profile.role as UserRole,
             churchId: profile.church_id ?? "sem-igreja",
+            additionalRoles: profile.additional_roles ?? [],
           })),
         );
       }
@@ -816,6 +823,31 @@ export function useProfiles() {
     return { ok: true };
   }
 
+  async function updateProfileAdditionalRoles(input: {
+    userId: string;
+    additionalRoles: UserRole[];
+    persistToSupabase?: boolean;
+  }) {
+    if (input.persistToSupabase) {
+      const { error } = await supabase.rpc("update_profile_additional_roles", {
+        target_user_id: input.userId,
+        new_roles: input.additionalRoles,
+      });
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    setProfiles((current) =>
+      current.map((profile) =>
+        profile.id === input.userId ? { ...profile, additionalRoles: input.additionalRoles } : profile,
+      ),
+    );
+
+    return { ok: true };
+  }
+
   async function deleteProfileUser(input: {
     userId: string;
     persistToSupabase?: boolean;
@@ -832,7 +864,7 @@ export function useProfiles() {
     return { ok: true };
   }
 
-  return { profiles, updateProfileRole, deleteProfileUser };
+  return { profiles, updateProfileRole, updateProfileAdditionalRoles, deleteProfileUser };
 }
 
 export function useCareTasks() {
