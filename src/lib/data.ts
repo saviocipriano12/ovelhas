@@ -1138,14 +1138,6 @@ export const timeline = [
   "Contato pastoral realizado",
 ];
 
-export function getPerson(id: string) {
-  return people.find((person) => person.id === id);
-}
-
-export function getTaskPerson(task: CareTask) {
-  return getPerson(task.personId) ?? people[0];
-}
-
 export function getCareScore(person: Person) {
   const absencePenalty = person.cellAbsences * 18;
   const progressBonus = Math.round(person.progress * 0.45);

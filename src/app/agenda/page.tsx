@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import {
   Bell,
@@ -271,12 +272,24 @@ export default function AgendaPage() {
               <SectionHeader eyebrow="Pessoas" title="Aniversarios e cuidado" />
               <div className="space-y-3">
                 {birthdays.map((person) => (
-                  <div key={person.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 p-4">
-                    <span className="min-w-0">
-                      <span className="block truncate font-bold text-slate-950">{person.name}</span>
-                      <span className="text-sm text-slate-500">{person.birthday}</span>
-                    </span>
-                    <UserRound size={18} className="shrink-0 text-emerald-700" />
+                  <div key={person.id} className="rounded-lg bg-slate-50 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <Link href={`/pessoas/${person.id}`} className="min-w-0">
+                        <span className="block truncate font-bold text-emerald-800 hover:underline">{person.name}</span>
+                        <span className="text-sm text-slate-500">{person.birthday}</span>
+                      </Link>
+                      <UserRound size={18} className="shrink-0 text-emerald-700" />
+                    </div>
+                    {person.phone && (
+                      <div className="mt-3">
+                        <WhatsAppButton
+                          phone={person.phone}
+                          message={`Parabens, ${person.name}! Que Deus abencoe muito a sua vida nesse novo ano. Estamos na torcida por voce!`}
+                          label="Mandar parabens"
+                          className="w-full"
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

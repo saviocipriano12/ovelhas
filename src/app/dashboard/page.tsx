@@ -139,7 +139,7 @@ export default function DashboardPage() {
             <SectionHeader eyebrow="Acoes" title="Cuidados recomendados" />
             <div className="grid gap-3 lg:grid-cols-2">
               {visibleCareTasks.slice(0, 4).map((task) => (
-                <CareTaskCard key={task.id} task={task} />
+                <CareTaskCard key={task.id} task={task} person={visiblePeople.find((person) => person.id === task.personId)} />
               ))}
               {visibleCareTasks.length === 0 && (
                 <p className="rounded-lg bg-slate-50 p-4 text-sm font-medium text-slate-500">

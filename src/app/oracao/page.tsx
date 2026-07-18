@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { CheckCircle2, Heart, LockKeyhole, MessageCircle, Plus, ShieldCheck, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -230,7 +231,13 @@ export default function PrayerPage() {
                 </div>
 
                 <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-500">
-                  <p className="font-semibold text-slate-700">{person?.name ?? request.createdByName}</p>
+                  {person ? (
+                    <Link href={`/pessoas/${person.id}`} className="font-semibold text-emerald-800 hover:underline">
+                      {person.name}
+                    </Link>
+                  ) : (
+                    <p className="font-semibold text-slate-700">{request.createdByName}</p>
+                  )}
                   <p>{cell?.name ?? person?.cell ?? "Sem celula"} - {new Intl.DateTimeFormat("pt-BR").format(new Date(request.createdAt))}</p>
                 </div>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Copy, QrCode, Share2, UserCheck } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -101,7 +102,13 @@ export default function CheckInPage() {
                     <UserCheck size={18} />
                   </span>
                   <span>
-                    <span className="block font-bold text-slate-950">{checkin.personName}</span>
+                    {checkin.personId ? (
+                      <Link href={`/pessoas/${checkin.personId}`} className="block font-bold text-emerald-800 hover:underline">
+                        {checkin.personName}
+                      </Link>
+                    ) : (
+                      <span className="block font-bold text-slate-950">{checkin.personName}</span>
+                    )}
                     <span className="text-sm text-slate-500">{new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(new Date(checkin.createdAt))}</span>
                   </span>
                 </article>

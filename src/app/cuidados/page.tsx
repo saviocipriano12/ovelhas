@@ -53,7 +53,12 @@ export default function CarePage() {
         ) : (
           <div className="grid gap-3 lg:grid-cols-2">
             {pendingTasks.map((task) => (
-              <CareTaskCard key={task.id} task={task} onComplete={() => handleComplete(task.id)} />
+              <CareTaskCard
+                key={task.id}
+                task={task}
+                person={people.find((person) => person.id === task.personId)}
+                onComplete={() => handleComplete(task.id)}
+              />
             ))}
             {pendingTasks.length === 0 && (
               <EmptyState

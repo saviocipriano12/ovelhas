@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { CheckCircle2, Edit3, Filter, MapPin, MessageCircle, Route, Save, Search, UserRoundPlus, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -311,9 +312,12 @@ export default function ConsolidationContactsPage() {
                         {decisionLabels[visitor.decision]}
                       </span>
                       {visitor.personId ? (
-                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-800">
+                        <Link
+                          href={`/pessoas/${visitor.personId}`}
+                          className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-800 hover:bg-emerald-100"
+                        >
                           Encaminhado
-                        </span>
+                        </Link>
                       ) : (
                         <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black text-amber-900">
                           Pendente

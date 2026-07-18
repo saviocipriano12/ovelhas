@@ -1,5 +1,6 @@
 "use client";
 
+import NextLink from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import { Award, BookOpen, Download, FilePlus2, FileText, Link as LinkIcon, ShieldCheck } from "lucide-react";
@@ -258,7 +259,13 @@ export default function LibraryPage() {
             {certificateRows.map(({ certificate, person }) => (
               <article key={certificate.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 p-4">
                 <span className="min-w-0">
-                  <span className="block truncate font-bold text-slate-950">{person?.name ?? "Pessoa"}</span>
+                  {person ? (
+                    <NextLink href={`/pessoas/${person.id}`} className="block truncate font-bold text-emerald-800 hover:underline">
+                      {person.name}
+                    </NextLink>
+                  ) : (
+                    <span className="block truncate font-bold text-slate-950">Pessoa</span>
+                  )}
                   <span className="text-sm text-slate-500">{certificate.title}</span>
                 </span>
                 <button onClick={() => downloadCertificate(certificate, person?.name ?? "Pessoa")} className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-emerald-700" aria-label="Baixar certificado">
