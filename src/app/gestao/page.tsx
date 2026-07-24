@@ -108,7 +108,7 @@ export default function ManagementPage() {
     });
 
     if (!result.ok) {
-      toast.error(`Nao consegui salvar no Supabase: ${result.error}`);
+      toast.error(`Nao consegui salvar: ${result.error}`);
       return;
     }
 
@@ -161,7 +161,7 @@ export default function ManagementPage() {
     });
 
     if (!result.ok) {
-      toast.error(`Nao consegui alterar o acesso no Supabase: ${result.error}`);
+      toast.error(`Nao consegui alterar o acesso: ${result.error}`);
       return;
     }
 
@@ -204,7 +204,7 @@ export default function ManagementPage() {
 
     const confirmed = await confirm({
       title: `Excluir ${userName} definitivamente?`,
-      description: "Isso remove o login do Supabase e libera o email para um novo cadastro. Nao pode ser desfeito.",
+      description: "Isso remove o login e libera o email para um novo cadastro. Nao pode ser desfeito.",
       confirmLabel: "Excluir definitivamente",
       tone: "danger",
     });

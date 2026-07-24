@@ -170,7 +170,7 @@ export default function InvitesPage() {
 
         {inviteLoadError && (
           <div className="rounded-lg border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-800">
-            Nao consegui carregar convites do Supabase: {inviteLoadError}
+            Nao consegui carregar convites: {inviteLoadError}
           </div>
         )}
 

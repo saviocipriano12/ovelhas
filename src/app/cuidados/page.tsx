@@ -44,7 +44,7 @@ export default function CarePage() {
 
         {tasksLoadError && (
           <div className="rounded-lg border border-rose-100 bg-rose-50 p-3 text-sm font-semibold text-rose-800">
-            Nao consegui carregar cuidados do Supabase: {tasksLoadError}
+            Nao consegui carregar cuidados: {tasksLoadError}
           </div>
         )}
 

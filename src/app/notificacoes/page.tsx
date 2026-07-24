@@ -235,7 +235,7 @@ export default function NotificationsPage() {
     <AppShell>
       <section className="animate-enter space-y-5">
         <SectionHeader
-          eyebrow="Central inteligente"
+          eyebrow="Central de avisos"
           title="Notificacoes"
           action={
             <div className="grid grid-cols-2 gap-2">

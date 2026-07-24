@@ -175,7 +175,7 @@ export default function CellsPage() {
 
         {cellLoadError && (
           <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-800">
-            Nao consegui carregar celulas do Supabase: {cellLoadError}
+            Nao consegui carregar celulas: {cellLoadError}
           </div>
         )}
 

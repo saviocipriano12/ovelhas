@@ -382,7 +382,7 @@ export default function PeoplePage() {
 
         {peopleLoadError && (
           <div className="rounded-lg border border-rose-100 bg-rose-50 p-3 text-sm font-semibold text-rose-800">
-            Nao consegui carregar pessoas do Supabase: {peopleLoadError}
+            Nao consegui carregar pessoas: {peopleLoadError}
           </div>
         )}
 

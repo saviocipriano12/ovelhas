@@ -212,7 +212,7 @@ export default function PlatformPage() {
             <Crown size={34} className="text-emerald-200" />
             <h1 className="mt-5 text-3xl font-black leading-tight">Admin geral da plataforma</h1>
             <p className="mt-3 text-sm font-semibold leading-6 text-slate-300">
-              Essa camada cria novas igrejas, gera o primeiro admin de cada igreja e acompanha a base do Ovelhas como SaaS.
+              Esta area cria novas igrejas, gera o primeiro administrador de cada uma e acompanha todas as igrejas que usam o Ovelhas.
             </p>
           </div>
 

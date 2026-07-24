@@ -393,7 +393,7 @@ export default function ConsolidationContactsPage() {
           <form onSubmit={saveContact} className="form-screen animate-enter mx-auto w-full max-w-6xl">
               <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 bg-white/95 px-1 py-3 backdrop-blur sm:px-0">
                 <div>
-                  <p className="text-xs font-black uppercase text-emerald-700">Encaminhamento</p>
+                  <p className="text-xs font-black uppercase text-emerald-700">Contato</p>
                   <h2 className="text-xl font-black text-slate-950">Editar contato</h2>
                 </div>
                 <button

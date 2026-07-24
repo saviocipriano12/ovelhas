@@ -330,7 +330,7 @@ export default function ConsolidationPage() {
           <p className="text-xs font-black uppercase text-emerald-200">Porta de entrada</p>
           <h2 className="mt-1 text-2xl font-black leading-tight">Consolidacao com leitura de frequencia, contatos e decisoes</h2>
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            Aqui o foco nao e somar publico culto apos culto. O painel acompanha medias, queda de frequencia, visitantes do dia e contatos para retorno.
+            Acompanhe medias, queda de frequencia, visitantes do dia e contatos para retorno.
           </p>
           <div className="mt-4 grid grid-cols-3 gap-2">
             <div className="rounded-2xl bg-white/10 p-3">

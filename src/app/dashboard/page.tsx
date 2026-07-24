@@ -4,8 +4,8 @@ import Link from "next/link";
 import { Bell, BellRing, CalendarCheck, CalendarDays, CheckCircle2, FileText, HeartHandshake, LayoutGrid, PlayCircle, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
-import { CareTaskCard } from "@/components/care-task-card";
 import { ChurchNoticeCard } from "@/components/church-notice-card";
+import { DailyActionQueue } from "@/components/daily-action-queue";
 import { MetricCard } from "@/components/metric-card";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { ProgressBar } from "@/components/progress-bar";
@@ -135,19 +135,7 @@ export default function DashboardPage() {
         )}
 
         <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-          <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
-            <SectionHeader eyebrow="Acoes" title="Cuidados recomendados" />
-            <div className="grid gap-3 lg:grid-cols-2">
-              {visibleCareTasks.slice(0, 4).map((task) => (
-                <CareTaskCard key={task.id} task={task} person={visiblePeople.find((person) => person.id === task.personId)} />
-              ))}
-              {visibleCareTasks.length === 0 && (
-                <p className="rounded-lg bg-slate-50 p-4 text-sm font-medium text-slate-500">
-                  Nenhum cuidado pendente para este perfil.
-                </p>
-              )}
-            </div>
-          </section>
+          <DailyActionQueue />
 
           <section className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
             <SectionHeader eyebrow="Discipulado" title={`Progresso medio: ${averageProgress}%`} />

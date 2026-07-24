@@ -336,13 +336,16 @@ export function AppShell({
                   )}
                 </Link>
               ) : null}
-              <Link
-                href="/acesso"
-                className="hidden h-11 w-11 items-center justify-center rounded-lg bg-slate-950 text-white shadow-sm"
-                aria-label="Trocar acesso"
-              >
-                <ShieldCheck size={19} />
-              </Link>
+              {isDemoMode && (
+                <Link
+                  href="/acesso"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-950 text-white shadow-sm"
+                  aria-label="Trocar acesso"
+                  title="Simulador de acesso (modo demo)"
+                >
+                  <ShieldCheck size={19} />
+                </Link>
+              )}
               {isDemoMode ? (
                 <Link
                   href="/login"

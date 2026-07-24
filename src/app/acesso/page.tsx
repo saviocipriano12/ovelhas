@@ -29,7 +29,7 @@ export default function AccessPage() {
               .
             </p>
           ) : (
-            <p>Voce esta usando uma sessao real do Supabase.</p>
+            <p>Voce esta usando uma conta real.</p>
           )}
         </div>
 

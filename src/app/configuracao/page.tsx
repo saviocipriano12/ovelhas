@@ -60,7 +60,7 @@ export default function SetupPage() {
           <Building2 size={34} className="text-emerald-200" />
           <h1 className="mt-5 text-3xl font-semibold leading-tight">Configurar primeira igreja</h1>
           <p className="mt-3 text-sm leading-6 text-slate-300">
-            Esta etapa so funciona enquanto ainda nao existe nenhum administrador no banco.
+            Esta etapa so funciona enquanto a igreja ainda nao tem nenhum administrador cadastrado.
           </p>
         </section>
 

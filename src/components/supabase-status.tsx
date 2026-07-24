@@ -34,7 +34,7 @@ export function SupabaseStatus() {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-500">
         <Loader2 className="animate-spin" size={16} />
-        Verificando Supabase
+        Verificando conexao
       </div>
     );
   }
@@ -43,7 +43,7 @@ export function SupabaseStatus() {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800">
         <XCircle size={16} />
-        Supabase nao conectado
+        Sem conexao com o servidor
       </div>
     );
   }
@@ -51,7 +51,7 @@ export function SupabaseStatus() {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900">
       <CheckCircle2 size={16} />
-      Supabase configurado
+      Conectado
     </div>
   );
 }

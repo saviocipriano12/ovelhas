@@ -134,7 +134,7 @@ export default function ReportsPage() {
               <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-200">Visao da lideranca</p>
               <h2 className="mt-2 text-2xl font-bold leading-tight">Quem enviou, quem esta pendente e onde a supervisao precisa agir</h2>
               <p className="mt-2 text-sm leading-6 text-slate-300">
-                O relatorio da celula agora foca no encontro, no cuidado e nos proximos passos. Tudo que e culto fica concentrado na consolidacao.
+                Acompanhe o encontro, o cuidado com a celula e os proximos passos de cada lider.
               </p>
             </div>
             <div className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-semibold text-slate-100">

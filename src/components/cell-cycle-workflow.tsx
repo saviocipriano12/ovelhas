@@ -312,10 +312,10 @@ export default function TodayCellPage() {
         <div className="rounded-[28px] bg-slate-950 p-4 text-white shadow-xl shadow-slate-950/10">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-black uppercase text-emerald-200">Fluxo inteligente</p>
+              <p className="text-xs font-black uppercase text-emerald-200">Ciclo da celula</p>
               <h2 className="mt-1 text-2xl font-bold leading-tight">{selectedCell?.name ?? "Nenhuma celula"}</h2>
               <p className="mt-2 text-sm leading-6 text-slate-300">
-                Prepare, registre a reuniao e envie o resumo para a lideranca sem misturar o fluxo da consolidacao do culto.
+                Confirme presencas, registre visitantes e envie o resumo da reuniao para a lideranca.
               </p>
             </div>
             <CalendarCheck className="shrink-0 text-emerald-200" size={30} />
@@ -342,7 +342,7 @@ export default function TodayCellPage() {
               </select>
             </label>
             <label>
-              <span className="text-[11px] font-black uppercase text-slate-400">Celula</span>
+              <span className="text-[11px] font-black uppercase text-slate-400">Data</span>
               <input
                 type="date"
                 value={activeMeetingDate}

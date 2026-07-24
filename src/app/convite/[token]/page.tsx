@@ -20,7 +20,7 @@ function friendlyInviteAuthError(message: string) {
   }
 
   if (lower.includes("email not confirmed")) {
-    return "Seu email ainda nao foi confirmado. Abra o link enviado pelo Supabase e tente entrar novamente.";
+    return "Seu email ainda nao foi confirmado. Abra o link de confirmacao enviado por email e tente entrar novamente.";
   }
 
   if (lower.includes("already")) {
@@ -175,7 +175,7 @@ export default function InviteAcceptPage() {
     }
 
     if (!data.session) {
-      setMessage("Conta criada. Se o Supabase pedir confirmacao, abra o email recebido e depois volte neste convite usando a opcao Ja tenho conta.");
+      setMessage("Conta criada. Se for pedida uma confirmacao, abra o email recebido e depois volte neste convite usando a opcao Ja tenho conta.");
       setLoading(false);
       return;
     }
