@@ -12,7 +12,7 @@ const TIER_PRICE_ENV: Record<string, string | undefined> = {
 };
 
 export async function POST(request: Request) {
-  const limited = rateLimit(request, "stripe-checkout", 10, 5 * 60 * 1000);
+  const limited = await rateLimit(request, "stripe-checkout", 10, 5 * 60 * 1000);
   if (!limited.ok) {
     return NextResponse.json({ error: "Muitas tentativas. Aguarde um pouco e tente novamente." }, { status: 429 });
   }

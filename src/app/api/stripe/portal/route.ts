@@ -5,7 +5,7 @@ import { stripe } from "@/lib/stripe/client";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export async function POST(request: Request) {
-  const limited = rateLimit(request, "stripe-portal", 10, 5 * 60 * 1000);
+  const limited = await rateLimit(request, "stripe-portal", 10, 5 * 60 * 1000);
   if (!limited.ok) {
     return NextResponse.json({ error: "Muitas tentativas. Aguarde um pouco e tente novamente." }, { status: 429 });
   }

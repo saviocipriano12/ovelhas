@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
@@ -39,7 +40,7 @@ import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { NotificationBridge } from "@/components/notification-bridge";
 import { PwaStatus } from "@/components/pwa-status";
-import { canAccessRoute, getDefaultRoute } from "@/lib/access-control";
+import { canAccessRoute, getDefaultRoute, hasRole } from "@/lib/access-control";
 import { roleLabels } from "@/lib/data";
 import { useChurchSettings } from "@/lib/local-store";
 import { usePastoralNotifications } from "@/lib/use-pastoral-notifications";
@@ -153,12 +154,16 @@ export function AppShell({
       items: visibleNavItems.filter((item) => group.hrefs.includes(item.href)),
     }))
     .filter((group) => group.items.length > 0);
+  const hasLeadershipRole = ["admin", "pastor", "supervisor", "leader"].some((role) =>
+    hasRole(currentUser, role as "admin" | "pastor" | "supervisor" | "leader"),
+  );
+  const isMemberOnly = hasRole(currentUser, "member") && !hasLeadershipRole && !hasRole(currentUser, "consolidation") && !hasRole(currentUser, "communication");
   const mobileNavSource =
-    currentUser.role === "member"
+    isMemberOnly
       ? memberMobileNavItems
-      : currentUser.role === "consolidation"
+      : !hasLeadershipRole && hasRole(currentUser, "consolidation")
         ? consolidationMobileNavItems
-        : currentUser.role === "communication"
+        : !hasLeadershipRole && hasRole(currentUser, "communication")
           ? communicationMobileNavItems
           : mobileNavItems;
   const visibleMobileNavItems = mobileNavSource.filter((item) => canAccessRoute(currentUser, item.href));
@@ -174,9 +179,12 @@ export function AppShell({
         <div className="shrink-0 p-5 pb-3">
           <Link href={homeHref} className="flex items-center gap-3 rounded-2xl p-1 hover:bg-white/60">
             {churchSettings.logoUrl ? (
-              <img
+              <Image
                 src={churchSettings.logoUrl}
                 alt={churchSettings.churchName}
+                width={44}
+                height={44}
+                unoptimized
                 className="h-11 w-11 shrink-0 rounded-2xl object-cover shadow-lg shadow-emerald-900/15"
               />
             ) : (
@@ -261,9 +269,12 @@ export function AppShell({
             <div className="relative flex items-center justify-between gap-3">
               <Link href={homeHref} className="flex min-w-0 items-center gap-3">
                 {churchSettings.logoUrl ? (
-                  <img
+                  <Image
                     src={churchSettings.logoUrl}
                     alt={churchSettings.churchName}
+                    width={40}
+                    height={40}
+                    unoptimized
                     className="h-10 w-10 shrink-0 rounded-2xl object-cover"
                   />
                 ) : (
@@ -365,7 +376,7 @@ export function AppShell({
               )}
               <Link
                 href="/meu-discipulado"
-                className={`h-11 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white ${currentUser.role === "member" && canAccessRoute(currentUser, "/meu-discipulado") ? "hidden md:flex" : "hidden"}`}
+                className={`h-11 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white ${isMemberOnly && canAccessRoute(currentUser, "/meu-discipulado") ? "hidden md:flex" : "hidden"}`}
               >
                 <UserRound size={17} />
                 Membro

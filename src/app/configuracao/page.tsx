@@ -41,8 +41,8 @@ export default function SetupPage() {
     setMessage("Primeiro administrador criado. Reabrindo o painel com seu acesso atualizado...");
     setLoading(false);
     window.setTimeout(() => {
+      router.replace("/dashboard");
       router.refresh();
-      window.location.href = "/dashboard";
     }, 900);
   }
 

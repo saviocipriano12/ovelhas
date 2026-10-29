@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CheckCircle2, Circle, PartyPopper, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { getScopedCells, getScopedPeople } from "@/lib/access-control";
+import { getScopedCells, getScopedPeople, hasRole } from "@/lib/access-control";
 import { useCells, useChurchSettings, useChurchSubscription, useInvites, useLocalPeople } from "@/lib/local-store";
 import { isSubscriptionBlocked } from "@/lib/subscription-plans";
 
@@ -30,7 +30,7 @@ export function OnboardingChecklist() {
     });
   }, [currentUser.churchId]);
 
-  const canManage = currentUser.role === "admin" || currentUser.role === "pastor";
+  const canManage = hasRole(currentUser, "admin") || hasRole(currentUser, "pastor");
   if (!canManage || isDemoMode || dismissed) {
     return null;
   }

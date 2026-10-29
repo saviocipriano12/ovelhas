@@ -7,7 +7,7 @@ import { useAuth } from "@/components/auth-provider";
 import { PersonCard } from "@/components/person-card";
 import { SectionHeader } from "@/components/section-header";
 import { useToast } from "@/components/toast-provider";
-import { canManagePeople, getScopedCells, getScopedPeople } from "@/lib/access-control";
+import { canManagePeople, getScopedCells, getScopedPeople, hasRole } from "@/lib/access-control";
 import {
   guessColumnMapping,
   normalizeImportedDate,
@@ -103,7 +103,7 @@ export default function PeoplePage() {
       address,
       familyPhone,
       createdByUserId: currentUser.id,
-      leaderUserId: selectedCell.leaderUserId || (currentUser.role === "leader" ? currentUser.id : undefined),
+      leaderUserId: selectedCell.leaderUserId || (hasRole(currentUser, "leader") ? currentUser.id : undefined),
       churchId: currentUser.churchId,
       cellId: selectedCell.id,
       cellName: selectedCell.name,
@@ -245,7 +245,7 @@ export default function PeoplePage() {
         birthDate: normalizeImportedDate(birthDateRaw),
         address: importMapping.address !== undefined ? (row[importMapping.address] ?? "").trim() : undefined,
         createdByUserId: currentUser.id,
-        leaderUserId: selectedCell.leaderUserId || (currentUser.role === "leader" ? currentUser.id : undefined),
+        leaderUserId: selectedCell.leaderUserId || (hasRole(currentUser, "leader") ? currentUser.id : undefined),
         churchId: currentUser.churchId,
         cellId: selectedCell.id,
         cellName: selectedCell.name,

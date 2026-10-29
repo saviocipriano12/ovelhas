@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { roleLabels } from "@/lib/data";
 import { getImpersonationReturnSession, returnToPlatformAdmin } from "@/lib/platform/impersonate";
 
 export function ImpersonationBanner() {
+  const router = useRouter();
   const { currentUser, isDemoMode } = useAuth();
   const [hasReturnSession, setHasReturnSession] = useState(false);
   const [returning, setReturning] = useState(false);
@@ -31,7 +33,8 @@ export function ImpersonationBanner() {
     }
 
     window.setTimeout(() => {
-      window.location.href = "/plataforma";
+      router.replace("/plataforma");
+      router.refresh();
     }, 0);
   }
 

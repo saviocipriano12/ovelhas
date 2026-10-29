@@ -10,7 +10,7 @@ import { MetricCard } from "@/components/metric-card";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
 import { useToast } from "@/components/toast-provider";
-import { canCreateCell, getScopedCells } from "@/lib/access-control";
+import { canCreateCell, getScopedCells, hasRole } from "@/lib/access-control";
 import { roleLabels } from "@/lib/data";
 import { useCells, useLocalPeople, useProfiles } from "@/lib/local-store";
 import { getCellStats } from "@/lib/reports";
@@ -25,12 +25,13 @@ export default function CellsPage() {
   const [open, setOpen] = useState(false);
   const [editingCellId, setEditingCellId] = useState("");
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
+  const supervisorScoped = hasRole(currentUser, "supervisor") && !hasRole(currentUser, "admin") && !hasRole(currentUser, "pastor");
   const visibleCellIds = new Set(visibleCells.map((cell) => cell.id));
   const visiblePeople = people.filter((person) => visibleCellIds.has(person.cellId));
   const attention = visiblePeople.filter((person) => person.cellAbsences >= 2 || person.progress < 20).length;
   const visibleProfiles = profiles.filter((profile) => profile.churchId === currentUser.churchId || isDemoMode);
-  const supervisors = visibleProfiles.filter((profile) => profile.role === "supervisor");
-  const leaders = visibleProfiles.filter((profile) => profile.role === "leader");
+  const supervisors = visibleProfiles.filter((profile) => hasRole(profile, "supervisor"));
+  const leaders = visibleProfiles.filter((profile) => hasRole(profile, "leader"));
   const canCreateNewCell = canCreateCell(currentUser);
   const editingCell = cells.find((cell) => cell.id === editingCellId);
 
@@ -52,7 +53,7 @@ export default function CellsPage() {
     const meetingDay = String(formData.get("meetingDay") || "").trim();
     const meetingTime = String(formData.get("meetingTime") || "").trim();
     const supervisorId =
-      currentUser.role === "supervisor" ? currentUser.id : String(formData.get("supervisorId") || "");
+      supervisorScoped ? currentUser.id : String(formData.get("supervisorId") || "");
     const leaderId = String(formData.get("leaderId") || "");
     const leader = leaders.find((profile) => profile.id === leaderId);
 
@@ -307,7 +308,7 @@ export default function CellsPage() {
                     </summary>
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
                       <input name="address" defaultValue={editingCell?.address ?? ""} className="field-control sm:col-span-2" placeholder="Endereco" />
-                      {currentUser.role === "supervisor" ? (
+                      {supervisorScoped ? (
                         <div className="flex min-h-[3.5rem] items-center rounded-2xl border border-emerald-100 bg-emerald-50 px-3 text-sm font-bold text-emerald-900">
                           Supervisor: {currentUser.name}
                         </div>

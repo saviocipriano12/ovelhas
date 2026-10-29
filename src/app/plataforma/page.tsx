@@ -1,10 +1,12 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Building2, CheckCircle2, Copy, Crown, LifeBuoy, LogIn, Loader2, Plus, RefreshCcw, ScrollText, Send, ShieldCheck, Wallet } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
+import { hasRole } from "@/lib/access-control";
 import { impersonateChurchAdmin } from "@/lib/platform/impersonate";
 import { supabase } from "@/lib/supabase/client";
 import { AuditoriaTab } from "./auditoria-tab";
@@ -50,6 +52,7 @@ function inviteUrl(token: string) {
 }
 
 export default function PlatformPage() {
+  const router = useRouter();
   const { currentUser, isDemoMode } = useAuth();
   const [activeTab, setActiveTab] = useState<PlatformTab>("visao-geral");
   const [churches, setChurches] = useState<PlatformChurch[]>([]);
@@ -62,7 +65,7 @@ export default function PlatformPage() {
   const [lastInvite, setLastInvite] = useState<{ churchName: string; adminName: string; link: string } | null>(null);
   const totalPeople = useMemo(() => churches.reduce((sum, church) => sum + Number(church.people_count || 0), 0), [churches]);
   const totalCells = useMemo(() => churches.reduce((sum, church) => sum + Number(church.cells_count || 0), 0), [churches]);
-  const canBootstrap = currentUser.role === "admin" && !currentUser.platformAdmin;
+  const canBootstrap = hasRole(currentUser, "admin") && !currentUser.platformAdmin;
 
   const loadChurches = useCallback(async () => {
     if (!currentUser.platformAdmin || isDemoMode) {
@@ -175,7 +178,8 @@ export default function PlatformPage() {
     }
 
     window.setTimeout(() => {
-      window.location.href = "/dashboard";
+      router.replace("/dashboard");
+      router.refresh();
     }, 0);
   }
 

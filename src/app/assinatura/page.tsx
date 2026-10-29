@@ -7,7 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
 import { useToast } from "@/components/toast-provider";
-import { getScopedPeople } from "@/lib/access-control";
+import { getScopedPeople, hasRole } from "@/lib/access-control";
 import { roleLabels } from "@/lib/data";
 import { useChurchSubscription, useLocalPeople } from "@/lib/local-store";
 import { openBillingPortal, startCheckout } from "@/lib/stripe/actions";
@@ -80,7 +80,7 @@ export default function SubscriptionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  const canManageBilling = currentUser.role === "admin" || currentUser.role === "pastor";
+  const canManageBilling = hasRole(currentUser, "admin") || hasRole(currentUser, "pastor");
   const churchPeopleCount = getScopedPeople(currentUser, people, isDemoMode).length;
   const recommendedTier = suggestTier(churchPeopleCount);
   const blocked = isSubscriptionBlocked(subscription?.status);

@@ -8,8 +8,8 @@ import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
 import { useToast } from "@/components/toast-provider";
-import { getScopedPeople } from "@/lib/access-control";
-import type { CertificateRecord, LibraryMaterial } from "@/lib/data";
+import { getScopedPeople, hasRole } from "@/lib/access-control";
+import type { CertificateRecord, LibraryMaterial, UserRole } from "@/lib/data";
 import { roleLabels } from "@/lib/data";
 import {
   useCertificates,
@@ -81,15 +81,15 @@ export default function LibraryPage() {
   const { certificates, issueCertificate } = useCertificates(currentUser.churchId);
   const toast = useToast();
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
-  const canManage = currentUser.role === "admin" || currentUser.role === "pastor";
-  const canIssue = currentUser.role !== "member";
+  const canManage = hasRole(currentUser, "admin") || hasRole(currentUser, "pastor");
+  const canIssue = (["admin", "pastor", "supervisor", "leader"] as UserRole[]).some((role) => hasRole(currentUser, role));
   const [selectedPersonId, setSelectedPersonId] = useState(visiblePeople[0]?.id ?? "");
   const [selectedTrackId, setSelectedTrackId] = useState(tracks[0]?.id ?? "");
   const visibleMaterials = materials.filter((material) => {
     if (!material.active) return false;
-    if (currentUser.role === "member") return material.audience === "member";
-    if (currentUser.role === "leader") return material.audience === "member" || material.audience === "leader";
-    return true;
+    if ((["admin", "pastor", "supervisor"] as UserRole[]).some((role) => hasRole(currentUser, role))) return true;
+    if (hasRole(currentUser, "leader")) return material.audience === "member" || material.audience === "leader";
+    return hasRole(currentUser, "member") && material.audience === "member";
   });
   const certificateRows = useMemo(
     () =>

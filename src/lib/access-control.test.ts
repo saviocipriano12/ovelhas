@@ -130,3 +130,31 @@ describe("membro comum", () => {
     expect(visible.map((p) => p.id)).toEqual(["person-1"]);
   });
 });
+
+describe("multiplas funcoes no escopo de dados", () => {
+  it("papel adicional de admin amplia o escopo sem trocar o papel principal", () => {
+    const memberAdmin = makeUser({
+      role: "member",
+      additionalRoles: ["admin"],
+      churchId: "church-a",
+    });
+    const people = [
+      makePerson({ id: "p1", churchId: "church-a" }),
+      makePerson({ id: "p2", churchId: "church-b" }),
+    ];
+
+    expect(getScopedPeople(memberAdmin, people, false).map((person) => person.id)).toEqual(["p1"]);
+  });
+
+  it("papel adicional de comunicacao permite ver celulas da propria igreja", () => {
+    const leaderWithCommunication = makeUser({
+      role: "leader",
+      additionalRoles: ["communication"],
+      churchId: "church-a",
+      cellIds: [],
+    });
+
+    expect(canViewCell(leaderWithCommunication, makeCell({ churchId: "church-a", leaderUserId: "other" }))).toBe(true);
+    expect(canViewCell(leaderWithCommunication, makeCell({ churchId: "church-b", leaderUserId: "other" }))).toBe(false);
+  });
+});

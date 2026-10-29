@@ -26,17 +26,34 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 ```
 
-Para criar as tabelas e RLS, rode o SQL em:
+O schema e as regras RLS sao versionados em `supabase/migrations`. Com Docker ativo, recrie e valide o banco completo com:
 
-```txt
-src/lib/supabase/schema.sql
+```bash
+npm run db:check
 ```
 
-Depois rode:
+O fluxo manual antigo pelo SQL Editor continua documentado apenas para manutencao de instalacoes existentes:
 
 ```txt
-src/lib/supabase/signup-profile.sql
-src/lib/supabase/bootstrap.sql
+src/lib/supabase/SETUP_ORDEM.md
+```
+
+Pull requests que alteram `supabase/**` tambem executam migrations, lint e pgTAP no workflow `database-tests`.
+
+## Validacao tecnica
+
+```bash
+npm run lint
+npm test
+npm run build
+npm run audit:prod
+npm run native:doctor
+```
+
+O plano sequencial de evolucao e os criterios de conclusao estao em:
+
+```txt
+EXECUTION_PLAN.md
 ```
 
 Com uma conta logada, acesse:
@@ -73,6 +90,8 @@ Essa tela cria a primeira igreja e promove seu usuario para administrador.
 - Pastor
 - Supervisor
 - Lider
+- Consolidacao
+- Comunicacao
 - Membro
 
 ## App no telefone

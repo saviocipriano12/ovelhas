@@ -9,7 +9,7 @@ import { useConfirm } from "@/components/confirm-dialog";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
 import { useToast } from "@/components/toast-provider";
-import { canManagePeople, getScopedPeople } from "@/lib/access-control";
+import { canManagePeople, getScopedPeople, hasRole } from "@/lib/access-control";
 import { useActivityEvents, useDiscipleship, useLocalPeople } from "@/lib/local-store";
 
 function formatDuration(seconds: number) {
@@ -40,7 +40,7 @@ export default function VideosPage() {
   const [videoMinutes, setVideoMinutes] = useState(10);
   const [editingTrack, setEditingTrack] = useState(false);
   const [editingVideoId, setEditingVideoId] = useState("");
-  const canCreateContent = currentUser.role === "admin" || currentUser.role === "pastor";
+  const canCreateContent = hasRole(currentUser, "admin") || hasRole(currentUser, "pastor");
   const canRelease = canManagePeople(currentUser);
 
   const selectedPerson = visiblePeople.find((person) => person.id === selectedPersonId) ?? visiblePeople[0];

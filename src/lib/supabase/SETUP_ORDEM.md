@@ -2,7 +2,26 @@
 
 Use esta ordem sempre que criar ou corrigir um banco Supabase do Ovelhas.
 
-## Caminho recomendado
+## Caminho recomendado para desenvolvimento e novos ambientes
+
+As migrations oficiais ficam em `supabase/migrations`. Com Docker em execucao:
+
+```bash
+npm run db:start
+npm run db:reset
+npm run db:lint
+npm run db:test
+```
+
+`db:reset` recria o banco local e aplica todas as migrations na ordem. Nao edite uma migration que ja foi aplicada; crie uma nova migration para cada mudanca.
+
+O script abaixo confirma que as migrations de baseline continuam identicas aos SQLs historicos usados para cria-las:
+
+```bash
+npm run db:migrations:verify
+```
+
+## Caminho legado pelo SQL Editor
 
 Rode `full-setup.sql` no SQL Editor do Supabase para aplicar o nucleo da plataforma.
 
@@ -10,7 +29,7 @@ Depois rode `consolidation.sql` para aplicar o modulo de consolidacao e o papel 
 
 Depois rode `health-check.sql` para conferir se tabelas e funcoes essenciais existem.
 
-## Caminho manual
+## Caminho manual legado
 
 Se o Supabase reclamar por tamanho da consulta, rode um arquivo por vez nesta ordem, copiando o conteudo inteiro.
 

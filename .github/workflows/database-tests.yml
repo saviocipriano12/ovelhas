@@ -1,0 +1,63 @@
+name: Database tests
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/database-tests.yml"
+      - "supabase/**"
+      - "scripts/create-supabase-baseline.mjs"
+      - "package.json"
+      - "package-lock.json"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/database-tests.yml"
+      - "supabase/**"
+      - "scripts/create-supabase-baseline.mjs"
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+
+concurrency:
+  group: database-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify immutable migration baselines
+        run: npm run db:migrations:verify
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.120.0
+
+      - name: Start local Supabase
+        run: supabase start
+
+      - name: Recreate database from migrations
+        run: supabase db reset
+
+      - name: Lint database
+        run: supabase db lint --local --level warning --fail-on warning
+
+      - name: Run pgTAP tests
+        run: supabase test db
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup

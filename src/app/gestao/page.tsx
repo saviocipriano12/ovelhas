@@ -9,7 +9,7 @@ import { useConfirm } from "@/components/confirm-dialog";
 import { MetricCard } from "@/components/metric-card";
 import { SectionHeader } from "@/components/section-header";
 import { useToast } from "@/components/toast-provider";
-import { canAssignCellResponsibility, getScopedCells, getScopedPeople, getScopedSupervisorVisits } from "@/lib/access-control";
+import { canAssignCellResponsibility, getScopedCells, getScopedPeople, getScopedSupervisorVisits, hasRole } from "@/lib/access-control";
 import { roleLabels, type UserRole } from "@/lib/data";
 import { useActivityEvents, useCells, useLocalPeople, useProfiles, useSupervisorVisits } from "@/lib/local-store";
 import { getCellStats } from "@/lib/reports";
@@ -64,10 +64,12 @@ export default function ManagementPage() {
   const visibleLeaderIds = new Set(visibleCells.map((cell) => cell.leaderUserId).filter(Boolean));
   const visibleMemberUserIds = new Set(visiblePeople.map((person) => person.personUserId).filter(Boolean));
   const churchProfiles = profiles.filter((profile) => profile.churchId === currentUser.churchId || isDemoMode);
+  const churchLeadership = hasRole(currentUser, "admin") || hasRole(currentUser, "pastor");
+  const supervisorScoped = hasRole(currentUser, "supervisor") && !churchLeadership;
   const visibleProfiles =
-    currentUser.role === "admin" || currentUser.role === "pastor"
+    churchLeadership
       ? churchProfiles
-      : currentUser.role === "supervisor"
+      : supervisorScoped
         ? churchProfiles.filter(
             (profile) =>
               profile.id === currentUser.id ||
@@ -76,14 +78,16 @@ export default function ManagementPage() {
               profile.cellIds?.some((cellId) => visibleCellIds.has(cellId)),
           )
         : churchProfiles.filter((profile) => profile.id === currentUser.id);
-  const supervisors = visibleProfiles.filter((user) => user.role === "supervisor");
-  const leaders = visibleProfiles.filter((user) => user.role === "leader");
+  const supervisors = visibleProfiles.filter((user) => hasRole(user, "supervisor"));
+  const leaders = visibleProfiles.filter((user) => hasRole(user, "leader"));
   const cellsWithoutSupervisor = visibleCells.filter((cell) => !cell.supervisorUserId).length;
   const cellsWithoutLeader = visibleCells.filter((cell) => !cell.leaderUserId).length;
   const peopleWithoutLeader = visiblePeople.filter((person) => !person.leaderUserId).length;
-  const leadershipUsers = visibleProfiles.filter((user) => user.role !== "member").length;
+  const leadershipUsers = visibleProfiles.filter((user) =>
+    (["admin", "pastor", "supervisor", "leader", "consolidation", "communication"] as UserRole[]).some((role) => hasRole(user, role)),
+  ).length;
   const canAssignCells = canAssignCellResponsibility(currentUser);
-  const canManageRoles = currentUser.role === "admin";
+  const canManageRoles = hasRole(currentUser, "admin");
   const selectedAssignmentCell = visibleCells.find((cell) => cell.id === (assignmentCellId || visibleCells[0]?.id));
 
   async function handleAssignmentSubmit(event: FormEvent<HTMLFormElement>) {
@@ -97,7 +101,7 @@ export default function ManagementPage() {
 
     const leader = leaders.find((item) => item.id === assignmentLeaderId);
     const nextSupervisorId =
-      currentUser.role === "supervisor" ? currentUser.id : assignmentSupervisorId || cell.supervisorUserId;
+      supervisorScoped ? currentUser.id : assignmentSupervisorId || cell.supervisorUserId;
     const supervisor = supervisors.find((item) => item.id === nextSupervisorId);
     const result = await updateCellAssignment({
       cellId: cell.id,
@@ -249,7 +253,7 @@ export default function ManagementPage() {
         {canAssignCells && (
           <section id="atribuir-celulas" className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
             <form onSubmit={handleAssignmentSubmit} className="native-form rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
-              <SectionHeader eyebrow={currentUser.role === "supervisor" ? "Supervisor" : "Lideranca"} title="Atribuir celulas" />
+              <SectionHeader eyebrow={supervisorScoped ? "Supervisor" : "Lideranca"} title="Atribuir celulas" />
               <div className="grid gap-3 md:grid-cols-3">
                 <label className="space-y-2 text-sm font-semibold text-slate-700">
                   Celula
@@ -266,7 +270,7 @@ export default function ManagementPage() {
                   </select>
                 </label>
 
-                {currentUser.role === "supervisor" ? (
+                {supervisorScoped ? (
                   <div className="space-y-2 text-sm font-semibold text-slate-700">
                     Supervisor
                     <div className="flex min-h-12 items-center rounded-lg border border-emerald-100 bg-emerald-50 px-3 text-sm font-bold text-emerald-900">

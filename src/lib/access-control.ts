@@ -100,12 +100,17 @@ export function hasRole(user: AppUser, role: UserRole) {
   return user.role === role || Boolean(user.additionalRoles?.includes(role));
 }
 
+function hasAnyRole(user: AppUser, roles: UserRole[]) {
+  return roles.some((role) => hasRole(user, role));
+}
+
 export function isPendingAccount(user: AppUser) {
   if (user.platformAdmin) {
     return false;
   }
 
-  return user.churchId === "sem-igreja" || (user.role === "member" && !user.personId);
+  const hasOperationalRole = hasAnyRole(user, ["admin", "pastor", "supervisor", "leader", "consolidation", "communication"]);
+  return user.churchId === "sem-igreja" || (!hasOperationalRole && hasRole(user, "member") && !user.personId);
 }
 
 export function getDefaultRoute(user: AppUser) {
@@ -113,19 +118,23 @@ export function getDefaultRoute(user: AppUser) {
     return "/aguardando";
   }
 
-  if (user.role === "consolidation") {
-    return "/consolidacao";
-  }
-
-  if (user.role === "communication") {
-    return "/notificacoes";
-  }
-
   if (user.platformAdmin && user.churchId === "sem-igreja") {
     return "/plataforma";
   }
 
-  if (user.role === "member") {
+  if (hasAnyRole(user, ["admin", "pastor", "supervisor", "leader"])) {
+    return "/dashboard";
+  }
+
+  if (hasRole(user, "consolidation")) {
+    return "/consolidacao";
+  }
+
+  if (hasRole(user, "communication")) {
+    return "/notificacoes";
+  }
+
+  if (hasRole(user, "member")) {
     return "/meu-discipulado";
   }
 
@@ -138,11 +147,11 @@ export function canAccessRoute(user: AppUser, pathname: string) {
   }
 
   if (pathname === "/configuracao") {
-    return user.role === "admin" || isPendingAccount(user);
+    return hasRole(user, "admin") || isPendingAccount(user);
   }
 
   if (pathname === "/plataforma" || pathname.startsWith("/plataforma/")) {
-    return Boolean(user.platformAdmin) || (user.role === "admin" && user.churchId !== "sem-igreja");
+    return Boolean(user.platformAdmin) || (hasRole(user, "admin") && user.churchId !== "sem-igreja");
   }
 
   if (isPendingAccount(user)) {
@@ -166,36 +175,31 @@ export function canAccessRoute(user: AppUser, pathname: string) {
 }
 
 export function canManagePeople(user: AppUser) {
-  return (
-    user.role === "admin" ||
-    user.role === "pastor" ||
-    user.role === "supervisor" ||
-    user.role === "leader"
-  );
+  return hasAnyRole(user, ["admin", "pastor", "supervisor", "leader"]);
 }
 
 export function canCreateCell(user: AppUser) {
-  return user.role === "admin" || user.role === "pastor" || user.role === "supervisor";
+  return hasAnyRole(user, ["admin", "pastor", "supervisor"]);
 }
 
 export function canAssignCellResponsibility(user: AppUser) {
-  return user.role === "admin" || user.role === "pastor" || user.role === "supervisor";
+  return hasAnyRole(user, ["admin", "pastor", "supervisor"]);
 }
 
 export function getInviteableRoles(user: AppUser): UserRole[] {
-  if (user.role === "admin") {
+  if (hasRole(user, "admin")) {
     return ["admin", "pastor", "supervisor", "leader", "consolidation", "communication", "member"];
   }
 
-  if (user.role === "pastor") {
+  if (hasRole(user, "pastor")) {
     return ["supervisor", "leader", "consolidation", "communication", "member"];
   }
 
-  if (user.role === "supervisor") {
+  if (hasRole(user, "supervisor")) {
     return ["supervisor", "leader", "member"];
   }
 
-  if (user.role === "leader") {
+  if (hasRole(user, "leader")) {
     return ["member"];
   }
 
@@ -203,27 +207,30 @@ export function getInviteableRoles(user: AppUser): UserRole[] {
 }
 
 export function canViewPerson(user: AppUser, person: Person) {
-  if (user.role === "admin") {
-    return user.churchId === person.churchId;
+  if (user.churchId !== person.churchId) {
+    return false;
   }
 
-  if (user.role === "pastor") {
-    return user.churchId === person.churchId;
+  if (hasAnyRole(user, ["admin", "pastor"])) {
+    return true;
   }
 
-  if (user.role === "supervisor") {
-    return user.churchId === person.churchId && Boolean(user.cellIds?.includes(person.cellId));
+  if (hasRole(user, "supervisor") && user.cellIds?.includes(person.cellId)) {
+    return true;
   }
 
-  if (user.role === "leader") {
-    return person.leaderUserId === user.id || person.createdByUserId === user.id || user.cellIds?.includes(person.cellId);
+  if (
+    hasRole(user, "leader") &&
+    (person.leaderUserId === user.id || person.createdByUserId === user.id || Boolean(user.cellIds?.includes(person.cellId)))
+  ) {
+    return true;
   }
 
-  if (user.role === "consolidation" || user.role === "communication") {
-    return user.churchId === person.churchId && person.createdByUserId === user.id;
+  if (hasAnyRole(user, ["consolidation", "communication"]) && person.createdByUserId === user.id) {
+    return true;
   }
 
-  return person.personUserId === user.id || person.id === user.personId;
+  return hasRole(user, "member") && (person.personUserId === user.id || person.id === user.personId);
 }
 
 export function getVisiblePeople(user: AppUser, people: Person[]) {
@@ -236,20 +243,24 @@ export function getScopedPeople(user: AppUser, people: Person[], isDemoMode: boo
 }
 
 export function canViewCell(user: AppUser, cell: Cell) {
-  if (user.role === "admin" || user.role === "pastor") {
-    return user.churchId === cell.churchId;
+  if (user.churchId !== cell.churchId) {
+    return false;
   }
 
-  if (user.role === "supervisor") {
-    return user.churchId === cell.churchId && (cell.supervisorUserId === user.id || Boolean(user.cellIds?.includes(cell.id)));
+  if (hasAnyRole(user, ["admin", "pastor"])) {
+    return true;
   }
 
-  if (user.role === "leader") {
-    return cell.leaderUserId === user.id || Boolean(user.cellIds?.includes(cell.id));
+  if (hasRole(user, "supervisor") && (cell.supervisorUserId === user.id || Boolean(user.cellIds?.includes(cell.id)))) {
+    return true;
   }
 
-  if (user.role === "consolidation" || user.role === "communication") {
-    return user.churchId === cell.churchId;
+  if (hasRole(user, "leader") && (cell.leaderUserId === user.id || Boolean(user.cellIds?.includes(cell.id)))) {
+    return true;
+  }
+
+  if (hasAnyRole(user, ["consolidation", "communication"])) {
+    return true;
   }
 
   return false;
@@ -277,20 +288,16 @@ export function getScopedCareTasks(user: AppUser, tasks: CareTask[], people: Per
 export function getVisibleSupervisorVisits(user: AppUser, visits: SupervisorVisit[], cells: Cell[]) {
   const visibleCellIds = new Set(getVisibleCells(user, cells).map((cell) => cell.id));
 
-  if (user.role === "member") {
-    return [];
-  }
-
-  if (user.role === "consolidation" || user.role === "communication") {
+  if (!hasAnyRole(user, ["admin", "pastor", "supervisor", "leader"])) {
     return [];
   }
 
   return visits.filter((visit) => {
-    if (user.role === "admin" || user.role === "pastor") {
+    if (hasAnyRole(user, ["admin", "pastor"])) {
       return visit.churchId === user.churchId;
     }
 
-    if (user.role === "supervisor") {
+    if (hasRole(user, "supervisor")) {
       return visit.supervisorUserId === user.id || visibleCellIds.has(visit.cellId);
     }
 
@@ -315,17 +322,17 @@ export function getVisibleActivityEvents(user: AppUser, events: ActivityEvent[],
 
   return events.filter((event) => {
     if (event.targetRoles && event.targetRoles.length > 0) {
-      return event.churchId === user.churchId && event.targetRoles.includes(user.role);
+      return event.churchId === user.churchId && event.targetRoles.some((role) => hasRole(user, role));
     }
 
-    if (user.role === "admin" || user.role === "pastor") {
+    if (hasAnyRole(user, ["admin", "pastor"])) {
       return (
         event.churchId === user.churchId &&
         (event.visibility !== "member" || (!event.cellId && !event.personId))
       );
     }
 
-    if (user.role === "supervisor") {
+    if (hasRole(user, "supervisor")) {
       return (
         event.actorUserId === user.id ||
         Boolean(event.cellId && visibleCellIds.has(event.cellId)) ||
@@ -333,7 +340,7 @@ export function getVisibleActivityEvents(user: AppUser, events: ActivityEvent[],
       );
     }
 
-    if (user.role === "leader") {
+    if (hasRole(user, "leader")) {
       return (
         event.actorUserId === user.id ||
         Boolean(event.cellId && visibleCellIds.has(event.cellId)) ||
@@ -341,11 +348,11 @@ export function getVisibleActivityEvents(user: AppUser, events: ActivityEvent[],
       );
     }
 
-    if (user.role === "consolidation") {
+    if (hasRole(user, "consolidation")) {
       return event.actorUserId === user.id;
     }
 
-    if (user.role === "communication") {
+    if (hasRole(user, "communication")) {
       return event.actorUserId === user.id || (event.churchId === user.churchId && event.visibility === "member");
     }
 
@@ -382,33 +389,23 @@ export function canViewPastoralNote(user: AppUser, note: PastoralNote, person: P
   }
 
   if (note.visibility === "pastor_private") {
-    return user.role === "admin" || user.role === "pastor";
+    return hasAnyRole(user, ["admin", "pastor"]);
   }
 
   return (
-    user.role === "admin" ||
-    user.role === "pastor" ||
-    user.role === "supervisor" ||
-    user.role === "leader" ||
-    user.role === "consolidation" ||
-    user.role === "communication"
+    hasAnyRole(user, ["admin", "pastor", "supervisor", "leader", "consolidation", "communication"])
   );
 }
 
 export function canWritePastoralNote(user: AppUser, person: Person) {
   return (
     canViewPerson(user, person) &&
-    (user.role === "admin" ||
-      user.role === "pastor" ||
-      user.role === "supervisor" ||
-      user.role === "leader" ||
-      user.role === "consolidation" ||
-      user.role === "communication")
+    hasAnyRole(user, ["admin", "pastor", "supervisor", "leader", "consolidation", "communication"])
   );
 }
 
 export function canViewPastoralReminder(user: AppUser, reminder: PastoralReminder, cells: Cell[], people: Person[]) {
-  if (user.role === "admin" || user.role === "pastor") {
+  if (hasAnyRole(user, ["admin", "pastor"])) {
     return user.churchId === reminder.churchId;
   }
 
@@ -449,11 +446,28 @@ export function canViewPrayerRequest(user: AppUser, request: PrayerRequest, cell
   const person = people.find((item) => item.id === request.personId);
   const cell = cells.find((item) => item.id === request.cellId);
 
-  if (user.role === "admin" || user.role === "pastor") {
-    return user.churchId === request.churchId && request.visibility !== "leader_only";
+  if (user.churchId !== request.churchId) {
+    return false;
   }
 
   if (request.createdBy === user.id || person?.personUserId === user.id) {
+    return true;
+  }
+
+  if (hasAnyRole(user, ["admin", "pastor"]) && request.visibility !== "leader_only") {
+    return true;
+  }
+
+  if (hasRole(user, "supervisor") && cell && canViewCell(user, cell) && request.visibility === "leadership") {
+    return true;
+  }
+
+  if (
+    hasRole(user, "leader") &&
+    person &&
+    canViewPerson(user, person) &&
+    (request.visibility === "leader_only" || request.visibility === "leadership" || request.visibility === "cell_public")
+  ) {
     return true;
   }
 
@@ -461,23 +475,7 @@ export function canViewPrayerRequest(user: AppUser, request: PrayerRequest, cell
     return false;
   }
 
-  if (user.role === "supervisor") {
-    return Boolean(cell && canViewCell(user, cell) && request.visibility === "leadership");
-  }
-
-  if (user.role === "leader") {
-    return Boolean(
-      person &&
-        canViewPerson(user, person) &&
-        (request.visibility === "leader_only" || request.visibility === "leadership" || request.visibility === "cell_public"),
-    );
-  }
-
-  if (user.role === "consolidation") {
-    return request.createdBy === user.id;
-  }
-
-  return Boolean(person && request.visibility === "cell_public" && user.cellIds?.includes(person.cellId));
+  return Boolean(hasRole(user, "member") && person && request.visibility === "cell_public" && user.cellIds?.includes(person.cellId));
 }
 
 export function getVisiblePrayerRequests(
@@ -501,7 +499,7 @@ export function getScopedPrayerRequests(
 }
 
 export function canViewPeacePair(user: AppUser, pair: PeacePair, cells: Cell[]) {
-  if (user.role === "admin" || user.role === "pastor") {
+  if (hasAnyRole(user, ["admin", "pastor"])) {
     return user.churchId === pair.churchId;
   }
 
@@ -523,7 +521,7 @@ export function getScopedPeacePairs(user: AppUser, pairs: PeacePair[], cells: Ce
 }
 
 export function canViewPeaceHouse(user: AppUser, house: PeaceHouse, cells: Cell[]) {
-  if (user.role === "admin" || user.role === "pastor") {
+  if (hasAnyRole(user, ["admin", "pastor"])) {
     return user.churchId === house.churchId;
   }
 

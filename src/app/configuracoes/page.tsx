@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ClipboardCheck,
   CreditCard,
@@ -18,7 +19,7 @@ import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
 import { useToast } from "@/components/toast-provider";
-import { getScopedActivityEvents, getScopedCells, getScopedPeople } from "@/lib/access-control";
+import { getScopedActivityEvents, getScopedCells, getScopedPeople, hasRole } from "@/lib/access-control";
 import { roleLabels } from "@/lib/data";
 import {
   useActivityEvents,
@@ -70,7 +71,7 @@ export default function SettingsPage() {
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visibleEvents = getScopedActivityEvents(currentUser, events, cells, people, isDemoMode);
-  const canManage = currentUser.role === "admin" || currentUser.role === "pastor";
+  const canManage = hasRole(currentUser, "admin") || hasRole(currentUser, "pastor");
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -250,7 +251,14 @@ export default function SettingsPage() {
             <input name="churchName" defaultValue={settings.churchName} disabled={!canManage} className="field-control disabled:bg-slate-50" placeholder="Nome da igreja" />
             <div className="flex items-center gap-2 md:col-span-2">
               {logoPreview && (
-                <img src={logoPreview} alt="Logo da igreja" className="h-11 w-11 shrink-0 rounded-2xl object-cover" />
+                <Image
+                  src={logoPreview}
+                  alt="Logo da igreja"
+                  width={44}
+                  height={44}
+                  unoptimized
+                  className="h-11 w-11 shrink-0 rounded-2xl object-cover"
+                />
               )}
               <input
                 name="logoUrl"

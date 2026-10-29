@@ -8,7 +8,7 @@ import { MetricCard } from "@/components/metric-card";
 import { ProgressBar } from "@/components/progress-bar";
 import { SectionHeader } from "@/components/section-header";
 import { useToast } from "@/components/toast-provider";
-import { getScopedCells, getScopedSupervisorVisits } from "@/lib/access-control";
+import { getScopedCells, getScopedSupervisorVisits, hasRole } from "@/lib/access-control";
 import { useActivityEvents, useCells, useLocalPeople, useSupervisorVisits } from "@/lib/local-store";
 import { getCellStats } from "@/lib/reports";
 
@@ -33,8 +33,9 @@ export default function SupervisionPage() {
   const toast = useToast();
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visibleVisits = getScopedSupervisorVisits(currentUser, visits, cells, isDemoMode);
+  const supervisorScoped = hasRole(currentUser, "supervisor") && !hasRole(currentUser, "admin") && !hasRole(currentUser, "pastor");
   const supervisorCells = visibleCells.filter((cell) =>
-    currentUser.role === "supervisor" ? cell.supervisorUserId === currentUser.id || currentUser.cellIds?.includes(cell.id) : true,
+    supervisorScoped ? cell.supervisorUserId === currentUser.id || currentUser.cellIds?.includes(cell.id) : true,
   );
   const [selectedCellId, setSelectedCellId] = useState(supervisorCells[0]?.id ?? visibleCells[0]?.id ?? "");
 
@@ -163,7 +164,7 @@ export default function SupervisionPage() {
           </div>
         </section>
 
-        {currentUser.role !== "member" && (
+        {(hasRole(currentUser, "admin") || hasRole(currentUser, "pastor") || hasRole(currentUser, "supervisor") || hasRole(currentUser, "leader")) && (
           <form onSubmit={handleSubmit} className="rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
             <SectionHeader eyebrow="Registrar" title="Visita ou acompanhamento" />
             <div className="space-y-3">

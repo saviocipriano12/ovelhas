@@ -7,7 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
 import { useToast } from "@/components/toast-provider";
-import { getScopedCells, getScopedPeople, getScopedPrayerRequests } from "@/lib/access-control";
+import { getScopedCells, getScopedPeople, getScopedPrayerRequests, hasRole } from "@/lib/access-control";
 import type { PrayerRequest } from "@/lib/data";
 import { roleLabels } from "@/lib/data";
 import { useActivityEvents, useCells, useLocalPeople, usePrayerRequests } from "@/lib/local-store";
@@ -58,12 +58,16 @@ export default function PrayerPage() {
   const memberPerson =
     people.find((person) => person.personUserId === currentUser.id || person.id === currentUser.personId) ??
     visiblePeople[0];
+  const canCareForOthers = ["admin", "pastor", "supervisor", "leader"].some((role) =>
+    hasRole(currentUser, role as "admin" | "pastor" | "supervisor" | "leader"),
+  );
+  const isMemberOnly = hasRole(currentUser, "member") && !canCareForOthers;
   const toast = useToast();
-  const [open, setOpen] = useState(currentUser.role === "member");
+  const [open, setOpen] = useState(isMemberOnly);
   const openRequests = visibleRequests.filter((request) => request.status === "open");
   const prayedRequests = visibleRequests.filter((request) => request.status === "prayed");
   const answeredRequests = visibleRequests.filter((request) => request.status === "answered");
-  const peopleOptions = currentUser.role === "member" && memberPerson ? [memberPerson] : visiblePeople;
+  const peopleOptions = isMemberOnly && memberPerson ? [memberPerson] : visiblePeople;
   const sortedRequests = [...visibleRequests].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -73,7 +77,7 @@ export default function PrayerPage() {
     const person = people.find((item) => item.id === personId);
 
     if (!person) {
-      if (currentUser.role === "member") {
+      if (isMemberOnly) {
         toast.error("Sua conta ainda nao esta vinculada a um cadastro de pessoa. Fale com seu lider para vincular.");
       } else {
         toast.error("Escolha uma pessoa para vincular o pedido.");
@@ -180,7 +184,7 @@ export default function PrayerPage() {
           <form onSubmit={handleSubmit} className="native-form rounded-lg border border-white/80 bg-white/90 p-5 shadow-sm">
             <SectionHeader eyebrow="Novo pedido" title="Como podemos orar?" />
             <div className="space-y-3">
-              {currentUser.role !== "member" && (
+              {!isMemberOnly && (
                 <select name="personId" className="min-h-12 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700">
                   {peopleOptions.map((person) => (
                     <option key={person.id} value={person.id}>
@@ -209,7 +213,7 @@ export default function PrayerPage() {
           {sortedRequests.map((request) => {
             const person = people.find((item) => item.id === request.personId);
             const cell = visibleCells.find((item) => item.id === request.cellId);
-            const canUpdate = currentUser.role !== "member";
+            const canUpdate = canCareForOthers;
 
             return (
               <article key={request.id} className="rounded-lg border border-white/80 bg-white/90 p-4 shadow-sm">

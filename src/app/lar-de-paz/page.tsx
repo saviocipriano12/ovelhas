@@ -20,7 +20,7 @@ import { useConfirm } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { SectionHeader } from "@/components/section-header";
 import { useToast } from "@/components/toast-provider";
-import { getScopedCells, getScopedPeaceHouses, getScopedPeacePairs } from "@/lib/access-control";
+import { getScopedCells, getScopedPeaceHouses, getScopedPeacePairs, hasRole } from "@/lib/access-control";
 import { roleLabels, type PeaceHouse, type PeaceVisit } from "@/lib/data";
 import { useCells, usePeaceHouses, usePeacePairs, useProfiles } from "@/lib/local-store";
 
@@ -59,7 +59,7 @@ export default function PeaceHousesPage() {
   const visiblePairs = getScopedPeacePairs(currentUser, pairs, cells, isDemoMode);
   const toast = useToast();
   const confirm = useConfirm();
-  const canManageChurchWide = currentUser.role === "admin" || currentUser.role === "pastor";
+  const canManageChurchWide = hasRole(currentUser, "admin") || hasRole(currentUser, "pastor");
 
   const [tab, setTab] = useState<"casas" | "duplas">("casas");
   const [houseFormOpen, setHouseFormOpen] = useState(false);

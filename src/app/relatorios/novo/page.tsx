@@ -6,7 +6,7 @@ import { ArrowLeft, CalendarDays, ClipboardCheck, Eye, Sparkles, UserRoundPlus, 
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth-provider";
 import { SectionHeader } from "@/components/section-header";
-import { getScopedCells, getScopedPeople } from "@/lib/access-control";
+import { getScopedCells, getScopedPeople, hasRole } from "@/lib/access-control";
 import { useCellReports, useCells, useLocalPeople } from "@/lib/local-store";
 import { getCellStats } from "@/lib/reports";
 
@@ -42,7 +42,8 @@ export default function NewReportPage() {
   const { reports, addReport } = useCellReports();
   const visibleCells = getScopedCells(currentUser, cells, isDemoMode);
   const visiblePeople = getScopedPeople(currentUser, people, isDemoMode);
-  const writableCells = visibleCells.filter((cell) => currentUser.role !== "supervisor" || cell.supervisorUserId === currentUser.id);
+  const supervisorScoped = hasRole(currentUser, "supervisor") && !hasRole(currentUser, "admin") && !hasRole(currentUser, "pastor");
+  const writableCells = visibleCells.filter((cell) => !supervisorScoped || cell.supervisorUserId === currentUser.id);
   const [selectedCellId, setSelectedCellId] = useState(writableCells[0]?.id ?? visibleCells[0]?.id ?? "");
   const [saveFeedback, setSaveFeedback] = useState<{ tone: "success" | "warning"; message: string } | null>(null);
 

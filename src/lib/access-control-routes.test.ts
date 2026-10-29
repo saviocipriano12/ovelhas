@@ -49,6 +49,25 @@ describe("rota padrao apos login, por tipo de conta", () => {
     const user = makeUser({ role: "member", churchId: "church-a", personId: "person-1" });
     expect(getDefaultRoute(user)).toBe("/meu-discipulado");
   });
+
+  it("membro com papel adicional de lider vai para o dashboard operacional", () => {
+    const user = makeUser({
+      role: "member",
+      additionalRoles: ["leader"],
+      churchId: "church-a",
+      personId: "person-1",
+    });
+    expect(getDefaultRoute(user)).toBe("/dashboard");
+  });
+
+  it("papel adicional de consolidacao define a rota inicial quando nao ha papel de lideranca", () => {
+    const user = makeUser({
+      role: "member",
+      additionalRoles: ["consolidation"],
+      churchId: "church-a",
+    });
+    expect(getDefaultRoute(user)).toBe("/consolidacao");
+  });
 });
 
 describe("acesso bloqueado para conta pendente", () => {
@@ -106,6 +125,18 @@ describe("multiplas funcoes por pessoa", () => {
     const leaderWithConsolidation = makeUser({ role: "leader", additionalRoles: ["consolidation"] });
     expect(canAccessRoute(leaderWithConsolidation, "/celulas")).toBe(true);
     expect(canAccessRoute(leaderWithConsolidation, "/consolidacao")).toBe(true);
+  });
+
+  it("funcao operacional adicional impede que um membro sem personId seja tratado como pendente", () => {
+    const memberWithCommunication = makeUser({
+      role: "member",
+      additionalRoles: ["communication"],
+      churchId: "church-a",
+      personId: undefined,
+    });
+
+    expect(isPendingAccount(memberWithCommunication)).toBe(false);
+    expect(canAccessRoute(memberWithCommunication, "/notificacoes")).toBe(true);
   });
 
   it("pessoa sem a funcao adicional continua sem acesso as rotas dela", () => {
